@@ -64,13 +64,29 @@ jobs:
       run: |
         cp -r ${{ github.workspace }}/libs ${{ github.workspace }}/V2rayNG/app
 
+    
     - name: Fetch AndroidLibXrayLite tag
       run: |
         pushd AndroidLibXrayLite
-        CURRENT_TAG=$(git describe --tags --abbrev=0)
-        echo "Current tag in this repo: $CURRENT_TAG"
-        echo "CURRENT_TAG=$CURRENT_TAG" >> $GITHUB_ENV
+
+        git fetch --tags origin
+
+        CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+
+        if [ -z "$CURRENT_TAG" ]; then
+          CURRENT_TAG=$(git tag --sort=-version:refname | head -n 1)
+        fi
+
+        if [ -z "$CURRENT_TAG" ]; then
+          echo "::error::No tags found for AndroidLibXrayLite."
+          exit 1
+        fi
+
+        echo "Using AndroidLibXrayLite tag: $CURRENT_TAG"
+        echo "CURRENT_TAG=$CURRENT_TAG" >> "$GITHUB_ENV"
+
         popd
+
 
     - name: Download libv2ray
       uses: robinraju/release-downloader@v1.13
