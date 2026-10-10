@@ -24,7 +24,7 @@ object RemoteConfig {
      *
      * Empty lines and invalid lines are ignored automatically.
      */
-    const val SERVER_LIST_URL = "https://raw.githubusercontent.com/ralwaymahdi71/Parsconfig/refs/heads/main/confige"
+    const val SERVER_LIST_URL = "https://raw.githubusercontent.com/ralwaymahdi71/Parsconfig/refs/heads/main/confige.txt"
 
     /**
      * How many minutes a successfully downloaded server list stays valid.
