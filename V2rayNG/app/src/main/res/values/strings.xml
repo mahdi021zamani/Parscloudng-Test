@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">PattNG</string>
+    <string name="app_name" translatable="false">PARSCLOUD VPN</string>
     <string name="app_widget_name">Switch</string>
     <string name="app_tile_name">Switch</string>
     <string name="app_tile_first_use">Add a profile in the app before using this feature.</string>
@@ -549,7 +549,7 @@
     <string name="connection_test_empty_message">no details available</string>
     <string name="value_unknown">unknown</string>
 
-    <string name="simple_app_title">Free VPN</string>
+    <string name="simple_app_title">PARSCLOUD VPN</string>
     <string name="simple_refresh">Refresh</string>
     <string name="simple_status_disconnected">Status: Not connected</string>
     <string name="simple_status_connecting">Status: Connecting…</string>
