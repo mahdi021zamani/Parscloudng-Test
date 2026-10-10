@@ -24,7 +24,7 @@ object RemoteConfig {
      *
      * Empty lines and invalid lines are ignored automatically.
      */
-    const val SERVER_LIST_URL = "https://raw.githubusercontent.com/Idolvpn/Automate-V2ray-Config-Collector/main/configs/mix_sub.txt"
+    const val SERVER_LIST_URL = "https://raw.githubusercontent.com/patterniha/Free-Configs/main/configs.txt"
 
     /**
      * How many minutes a successfully downloaded server list stays valid.
