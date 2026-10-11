@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">PattNG</string>
+    <string name="app_name" translatable="false">PARSCLOUD VPN</string>
     <string name="app_widget_name">تعویض</string>
     <string name="app_tile_name">تعویض</string>
     <string name="app_tile_first_use">برای اولین استفاده از این قابلیت، لطفاً ابتدا از داخل برنامه یک سرور اضافه کنید</string>
@@ -549,7 +549,7 @@
     <string name="connection_test_empty_message">جزئیاتی در دسترس نیست</string>
     <string name="value_unknown">ناشناخته</string>
 
-    <string name="simple_app_title">Free VPN</string>
+    <string name="simple_app_title">PARSCLOUD VPN</string>
     <string name="simple_refresh">تازه‌سازی</string>
     <string name="simple_status_disconnected">وضعیت: متصل نیست</string>
     <string name="simple_status_connecting">وضعیت: در حال اتصال…</string>
