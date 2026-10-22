@@ -302,6 +302,16 @@
             </intent-filter>
         </receiver>
         <receiver
+            android:name=".receiver.SubscriptionRevocationReceiver"
+            android:enabled="true"
+            android:exported="false"
+            android:process=":RunSoLibV2RayDaemon">
+            <intent-filter>
+                <action android:name="${applicationId}.action.STOP_REVOKED_SUBSCRIPTION" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".receiver.BootReceiver"
             android:exported="true"
             android:label="BootReceiver">
