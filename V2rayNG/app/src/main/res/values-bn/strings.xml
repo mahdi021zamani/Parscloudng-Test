@@ -549,4 +549,16 @@
     <string name="connection_test_empty_message">কোনো বিবরণ পাওয়া যায়নি</string>
     <string name="value_unknown">অজানা</string>
 
+
+    <!-- PARSCLOUD subscription license -->
+    <string name="simple_license_title">PARSCLOUD সাবস্ক্রিপশন</string>
+    <string name="simple_license_prompt">VPN ব্যবহার চালু করতে আপনার পাওয়া সাবস্ক্রিপশন কী লিখুন।</string>
+    <string name="simple_license_key_hint">সাবস্ক্রিপশন কী</string>
+    <string name="simple_license_activate">সক্রিয় করুন</string>
+    <string name="simple_license_manage">সাবস্ক্রিপশন</string>
+    <string name="simple_license_invalid">সাবস্ক্রিপশন কীটি অবৈধ, মেয়াদোত্তীর্ণ বা বাতিল করা হয়েছে।</string>
+    <string name="simple_license_network_error">সাবস্ক্রিপশন যাচাই করা যায়নি। ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।</string>
+    <string name="simple_license_active">সাবস্ক্রিপশন সফলভাবে সক্রিয় হয়েছে।</string>
+    <string name="simple_license_checking">সাবস্ক্রিপশন যাচাই করা হচ্ছে…</string>
+    <string name="simple_license_key_required">আপনার সাবস্ক্রিপশন কী লিখুন।</string>
 </resources>
