@@ -9,15 +9,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
@@ -28,7 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -45,7 +50,7 @@ fun SimpleVpnScreen(
     viewModel: SimpleVpnViewModel,
     onConnectClick: () -> Unit,
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(uiState.message) {
@@ -55,11 +60,67 @@ fun SimpleVpnScreen(
         }
     }
 
+
+    if (uiState.licenseDialogVisible) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissLicenseDialog,
+            title = { Text(stringResource(R.string.simple_license_title)) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .imePadding(),
+                ) {
+                    Text(stringResource(R.string.simple_license_prompt))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = uiState.licenseKeyInput,
+                        onValueChange = viewModel::onLicenseKeyInputChanged,
+                        label = { Text(stringResource(R.string.simple_license_key_hint)) },
+                        enabled = !uiState.isValidatingLicense,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (uiState.isValidatingLicense) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(stringResource(R.string.simple_license_checking))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = viewModel::activateLicense,
+                    enabled = !uiState.isValidatingLicense && uiState.licenseKeyInput.isNotBlank(),
+                ) {
+                    Text(
+                        if (uiState.isValidatingLicense) {
+                            stringResource(R.string.simple_license_checking)
+                        } else {
+                            stringResource(R.string.simple_license_activate)
+                        }
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = viewModel::dismissLicenseDialog,
+                    enabled = !uiState.isValidatingLicense,
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.simple_app_title)) },
                 actions = {
+                    TextButton(onClick = { viewModel.showLicenseDialog() }) {
+                        Text(stringResource(R.string.simple_license_manage))
+                    }
                     TextButton(onClick = { viewModel.onRefresh() }, enabled = !uiState.isRefreshing) {
                         Text(stringResource(R.string.simple_refresh))
                     }
