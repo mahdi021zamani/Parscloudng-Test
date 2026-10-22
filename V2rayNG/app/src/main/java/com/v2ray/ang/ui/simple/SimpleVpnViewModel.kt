@@ -457,16 +457,15 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     }
 
                     SubscriptionLicenseWorker.schedule(app)
+                    _uiState.update {
+                        it.copy(
+                            isValidatingLicense = false,
+                            licenseValid = true,
+                            canConnect = true,
+                        )
+                    }
                     try {
                         LauncherManager.startService(app, guid)
-                        _uiState.update {
-                            it.copy(
-                                status = SimpleConnectionStatus.CONNECTING,
-                                isValidatingLicense = false,
-                                licenseValid = true,
-                                canConnect = true,
-                            )
-                        }
                     } catch (e: Exception) {
                         LogUtil.e(AppConfig.TAG, "SimpleVpnViewModel: failed to start service", e)
                         _uiState.update {
