@@ -72,6 +72,25 @@ object CoreServiceManager {
     fun isRunning() = coreController.isRunning
 
     /**
+     * Stops the active daemon service directly when a subscription is definitively revoked.
+     * Called by a manifest receiver running in this same daemon process.
+     */
+    fun stopActiveServiceForRevokedLicense(): Boolean {
+        val controller = serviceControl?.get()
+        if (controller == null) {
+            LogUtil.w(AppConfig.TAG, "Subscription monitor: no active service controller to stop")
+            return false
+        }
+        return try {
+            controller.stopService()
+            true
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Subscription monitor: failed to stop revoked session", e)
+            false
+        }
+    }
+
+    /**
      * Gets the name of the currently running server.
      * @return The name of the running server.
      */
