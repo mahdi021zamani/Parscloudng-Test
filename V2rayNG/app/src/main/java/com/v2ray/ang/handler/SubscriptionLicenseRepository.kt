@@ -92,20 +92,31 @@ object SubscriptionLicenseRepository {
         responseBody: String,
         nowMillis: Long,
     ): ValidationResult {
+        val rejectedStatuses = setOf("invalid", "expired", "revoked")
         if (httpCode !in 200..299) {
             if (httpCode !in 400..499) return ValidationResult.NetworkError
             val status = runCatching {
-                JsonParser.parseString(responseBody).asJsonObject.get("status")?.asString ?: "invalid"
-            }.getOrDefault("invalid")
-            return ValidationResult.Rejected(status)
+                JsonParser.parseString(responseBody).asJsonObject
+                    .get("status")?.takeUnless { it.isJsonNull }?.asString
+            }.getOrNull()
+            return if (status in rejectedStatuses) {
+                ValidationResult.Rejected(status!!)
+            } else {
+                ValidationResult.NetworkError
+            }
         }
 
         val json = runCatching { JsonParser.parseString(responseBody).asJsonObject }.getOrNull()
             ?: return ValidationResult.NetworkError
-        val status = json.get("status")?.takeUnless { it.isJsonNull }?.asString ?: "invalid"
-        val valid = json.get("valid")?.takeUnless { it.isJsonNull }?.asBoolean ?: false
-        if (!valid || status != "active") {
+        val status = json.get("status")?.takeUnless { it.isJsonNull }?.asString
+            ?: return ValidationResult.NetworkError
+        val valid = json.get("valid")?.takeUnless { it.isJsonNull }?.asBoolean
+            ?: return ValidationResult.NetworkError
+        if (!valid && status in rejectedStatuses) {
             return ValidationResult.Rejected(status)
+        }
+        if (!valid || status != "active") {
+            return ValidationResult.NetworkError
         }
 
         val expiry = runCatching {
