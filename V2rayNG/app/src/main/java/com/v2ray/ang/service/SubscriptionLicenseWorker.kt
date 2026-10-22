@@ -49,11 +49,18 @@ class SubscriptionLicenseWorker(
             }
 
             is SubscriptionLicenseRepository.ValidationResult.Rejected -> {
-                LogUtil.w(AppConfig.TAG, "Subscription monitor: server rejected saved license; requesting daemon stop")
+                LogUtil.w(AppConfig.TAG, "Subscription monitor: server rejected saved license; requesting stop through service message channel")
+                // Use the same MessageHelper/service-control path as the app's Disconnect
+                // button. A manifest receiver in the daemon process can be started in a
+                // fresh process where CoreServiceManager.serviceControl is still null.
+                LauncherManager.stopService(applicationContext)
+                LogUtil.w(AppConfig.TAG, "Subscription monitor: normal service stop request sent")
+
+                // Keep the daemon-side receiver as a second, independent stop attempt.
                 val stopIntent = Intent(SubscriptionRevocationReceiver.ACTION_STOP_REVOKED_SUBSCRIPTION)
                     .setPackage(AppConfig.ANG_PACKAGE)
                 applicationContext.sendBroadcast(stopIntent)
-                LogUtil.w(AppConfig.TAG, "Subscription monitor: revocation broadcast sent to package ${AppConfig.ANG_PACKAGE}")
+                LogUtil.w(AppConfig.TAG, "Subscription monitor: fallback revocation broadcast sent")
                 Result.success()
             }
 
