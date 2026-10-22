@@ -564,4 +564,16 @@
     <string name="simple_network_error_no_cache">Could not refresh the server list and the previous list has expired</string>
     <string name="simple_connect_failed">Failed to connect</string>
 
+
+    <!-- PARSCLOUD subscription license -->
+    <string name="simple_license_title">PARSCLOUD subscription</string>
+    <string name="simple_license_prompt">Enter the subscription key provided to you to enable VPN access.</string>
+    <string name="simple_license_key_hint">Subscription key</string>
+    <string name="simple_license_activate">Activate</string>
+    <string name="simple_license_manage">Subscription</string>
+    <string name="simple_license_invalid">This subscription key is invalid, expired, or revoked.</string>
+    <string name="simple_license_network_error">Could not verify the subscription. Check your internet connection and try again.</string>
+    <string name="simple_license_active">Subscription activated successfully.</string>
+    <string name="simple_license_checking">Verifying subscription…</string>
+    <string name="simple_license_key_required">Enter your subscription key.</string>
 </resources>
