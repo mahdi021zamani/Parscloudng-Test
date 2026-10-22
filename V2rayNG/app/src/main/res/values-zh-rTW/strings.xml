@@ -549,4 +549,16 @@
     <string name="connection_test_empty_message">沒有詳細資訊</string>
     <string name="value_unknown">未知</string>
 
+
+    <!-- PARSCLOUD subscription license -->
+    <string name="simple_license_title">PARSCLOUD 訂閱</string>
+    <string name="simple_license_prompt">請輸入您收到的訂閱金鑰以啟用 VPN 存取。</string>
+    <string name="simple_license_key_hint">訂閱金鑰</string>
+    <string name="simple_license_activate">啟用</string>
+    <string name="simple_license_manage">訂閱</string>
+    <string name="simple_license_invalid">訂閱金鑰無效、已過期或已遭撤銷。</string>
+    <string name="simple_license_network_error">無法驗證訂閱。請檢查網路連線後再試一次。</string>
+    <string name="simple_license_active">訂閱已成功啟用。</string>
+    <string name="simple_license_checking">正在驗證訂閱…</string>
+    <string name="simple_license_key_required">請輸入訂閱金鑰。</string>
 </resources>
