@@ -1,7 +1,11 @@
 package com.v2ray.ang.service
 
 import android.content.Context
+import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
@@ -11,11 +15,8 @@ import com.v2ray.ang.handler.SubscriptionLicenseRepository
 import java.util.concurrent.TimeUnit
 
 /**
- * Periodically revalidates the saved PARSCLOUD key so a revoked subscription can
- * stop an already-running VPN even when the launcher screen is not visible.
- *
- * WorkManager's periodic interval is best-effort (minimum 15 minutes), not an exact
- * timer. The app also validates online before each new connection.
+ * Revalidates the saved PARSCLOUD key. The periodic check is a fallback; network
+ * availability callbacks also enqueue an immediate check while the VPN service runs.
  */
 class SubscriptionLicenseWorker(
     appContext: Context,
@@ -50,6 +51,7 @@ class SubscriptionLicenseWorker(
 
     companion object {
         private const val WORK_NAME = "parscloud-subscription-license-monitor"
+        private const val RECONNECT_WORK_NAME = "parscloud-subscription-license-reconnect-check"
 
         fun schedule(context: Context) {
             val request = PeriodicWorkRequestBuilder<SubscriptionLicenseWorker>(
@@ -58,6 +60,30 @@ class SubscriptionLicenseWorker(
             WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
                 WORK_NAME,
                 ExistingPeriodicWorkPolicy.UPDATE,
+                request,
+            )
+        }
+
+        /**
+         * Queue a prompt revalidation after Android reports network availability.
+         * WorkManager waits for a usable network and retries temporary failures.
+         */
+        fun checkAfterNetworkAvailable(context: Context) {
+            val request = OneTimeWorkRequestBuilder<SubscriptionLicenseWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .setBackoffCriteria(
+                    androidx.work.BackoffPolicy.EXPONENTIAL,
+                    10,
+                    TimeUnit.SECONDS,
+                )
+                .build()
+            WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
+                RECONNECT_WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
                 request,
             )
         }
