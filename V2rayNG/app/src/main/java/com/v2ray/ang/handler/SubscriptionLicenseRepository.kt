@@ -43,7 +43,7 @@ object SubscriptionLicenseRepository {
         val raw = MmkvManager.decodeSettingsString(STORAGE_KEY).orEmpty()
         if (raw.isBlank()) return null
         val json = runCatching { JSONObject(raw) }.getOrNull() ?: return null
-        val key = json.optString("key").takeIf(keyPattern::matches) ?: return null
+        val key = json.optString("key").takeIf(::isValidKeyFormat) ?: return null
         val expiry = json.optLong("expiresAtMillis", 0L)
         if (expiry <= 0L) return null
         return StoredLicense(key, expiry)
