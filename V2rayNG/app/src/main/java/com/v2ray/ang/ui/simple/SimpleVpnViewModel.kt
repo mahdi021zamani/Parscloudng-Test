@@ -16,8 +16,10 @@ import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SimpleVpnRepository
 import com.v2ray.ang.handler.SimpleVpnRepository.SimpleServerUiModel
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.SubscriptionLicenseRepository
 import com.v2ray.ang.helper.MessageHelper
 import com.v2ray.ang.service.RealPingWorkerService
+import com.v2ray.ang.service.SubscriptionLicenseWorker
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +40,10 @@ data class SimpleVpnUiState(
     val isRefreshing: Boolean = false,
     val canConnect: Boolean = false,
     val message: String? = null,
+    val licenseDialogVisible: Boolean = false,
+    val licenseKeyInput: String = "",
+    val isValidatingLicense: Boolean = false,
+    val licenseValid: Boolean = false,
 )
 
 class SimpleVpnViewModel(application: Application) : AndroidViewModel(application) {
@@ -78,12 +84,22 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         MessageHelper.sendMsg2Service(application, AppConfig.MSG_REGISTER_CLIENT, "")
 
         viewModelScope.launch {
-    withContext(Dispatchers.IO) {
-        SettingsManager.initAssets(application, application.assets)
-    }
-    loadLocalState()
-    onRefresh()
-}
+            withContext(Dispatchers.IO) {
+                SettingsManager.initAssets(application, application.assets)
+            }
+            loadLocalState()
+
+            val storedLicense = withContext(Dispatchers.IO) {
+                SubscriptionLicenseRepository.getStoredLicense()
+            }
+            if (storedLicense == null) {
+                _uiState.update { it.copy(licenseDialogVisible = true) }
+            } else {
+                SubscriptionLicenseWorker.schedule(application)
+                validateStoredLicense(storedLicense.key, showDialogOnFailure = false)
+            }
+            onRefresh()
+        }
     }
 
     private fun loadLocalState() {
@@ -97,7 +113,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             it.copy(
                 servers = servers,
                 selectedGuid = selected,
-                canConnect = SimpleVpnRepository.canConnect(),
+                canConnect = SimpleVpnRepository.canConnect() && _uiState.value.licenseValid,
             )
         }
     }
@@ -149,7 +165,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     _uiState.update {
                         it.copy(
                             isRefreshing = false,
-                            canConnect = SimpleVpnRepository.canConnect(),
+                            canConnect = SimpleVpnRepository.canConnect() && _uiState.value.licenseValid,
                             message = app.getString(R.string.simple_network_error_using_cache),
                         )
                     }
@@ -207,7 +223,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         servers = SimpleVpnRepository.getServers(),
                         testingGuids = emptySet(),
                         isRefreshing = false,
-                        canConnect = SimpleVpnRepository.canConnect(),
+                        canConnect = SimpleVpnRepository.canConnect() && _uiState.value.licenseValid,
                     )
                 }
             }
@@ -228,12 +244,240 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             LauncherManager.stopService(app)
             return
         }
+        if (!state.licenseValid) {
+            _uiState.update {
+                it.copy(
+                    licenseDialogVisible = SubscriptionLicenseRepository.getStoredLicense() == null,
+                    message = if (SubscriptionLicenseRepository.getStoredLicense() == null) null
+                    else app.getString(R.string.simple_license_network_error),
+                )
+            }
+            return
+        }
         if (!state.canConnect || state.selectedGuid.isNullOrEmpty()) {
             _uiState.update { it.copy(message = app.getString(R.string.simple_no_servers_available)) }
             return
         }
-        _uiState.update { it.copy(status = SimpleConnectionStatus.CONNECTING) }
-        requestVpnPermission()
+
+        _uiState.update { it.copy(status = SimpleConnectionStatus.CONNECTING, isValidatingLicense = true) }
+        viewModelScope.launch {
+            val stored = withContext(Dispatchers.IO) {
+                SubscriptionLicenseRepository.getStoredLicense()
+            }
+            if (stored == null) {
+                _uiState.update {
+                    it.copy(
+                        status = SimpleConnectionStatus.DISCONNECTED,
+                        isValidatingLicense = false,
+                        licenseValid = false,
+                        canConnect = false,
+                        licenseDialogVisible = true,
+                    )
+                }
+                return@launch
+            }
+
+            when (val result = withContext(Dispatchers.IO) {
+                SubscriptionLicenseRepository.validate(stored.key)
+            }) {
+                is SubscriptionLicenseRepository.ValidationResult.Active -> {
+                    val saved = withContext(Dispatchers.IO) {
+                        SubscriptionLicenseRepository.saveActiveLicense(stored.key, result.expiresAtMillis)
+                    }
+                    if (!saved) {
+                        _uiState.update {
+                            it.copy(
+                                status = SimpleConnectionStatus.DISCONNECTED,
+                                isValidatingLicense = false,
+                                message = app.getString(R.string.simple_license_network_error),
+                            )
+                        }
+                        return@launch
+                    }
+                    SubscriptionLicenseWorker.schedule(app)
+                    val canConnect = SimpleVpnRepository.canConnect()
+                    _uiState.update {
+                        it.copy(
+                            status = SimpleConnectionStatus.CONNECTING,
+                            isValidatingLicense = false,
+                            licenseValid = true,
+                            canConnect = canConnect,
+                        )
+                    }
+                    if (canConnect) {
+                        requestVpnPermission()
+                    } else {
+                        _uiState.update {
+                            it.copy(
+                                status = SimpleConnectionStatus.DISCONNECTED,
+                                message = app.getString(R.string.simple_no_servers_available),
+                            )
+                        }
+                    }
+                }
+
+                is SubscriptionLicenseRepository.ValidationResult.Rejected -> {
+                    LauncherManager.stopService(app)
+                    _uiState.update {
+                        it.copy(
+                            status = SimpleConnectionStatus.DISCONNECTED,
+                            isValidatingLicense = false,
+                            licenseValid = false,
+                            canConnect = false,
+                            licenseDialogVisible = true,
+                            message = app.getString(R.string.simple_license_invalid),
+                        )
+                    }
+                }
+
+                SubscriptionLicenseRepository.ValidationResult.NetworkError -> {
+                    val expired = SubscriptionLicenseRepository.isExpired(stored)
+                    if (expired) LauncherManager.stopService(app)
+                    _uiState.update {
+                        it.copy(
+                            status = SimpleConnectionStatus.DISCONNECTED,
+                            isValidatingLicense = false,
+                            licenseValid = false,
+                            canConnect = false,
+                            message = app.getString(R.string.simple_license_network_error),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    fun onLicenseKeyInputChanged(value: String) {
+        _uiState.update { it.copy(licenseKeyInput = value) }
+    }
+
+    fun showLicenseDialog() {
+        _uiState.update { it.copy(licenseDialogVisible = true, message = null) }
+    }
+
+    fun dismissLicenseDialog() {
+        _uiState.update { it.copy(licenseDialogVisible = false) }
+    }
+
+    fun activateLicense() {
+        val app = getApplication<Application>()
+        val key = _uiState.value.licenseKeyInput.trim()
+        if (key.isBlank()) {
+            _uiState.update { it.copy(message = app.getString(R.string.simple_license_key_required)) }
+            return
+        }
+        if (_uiState.value.isValidatingLicense) return
+
+        _uiState.update { it.copy(isValidatingLicense = true, message = null) }
+        viewModelScope.launch {
+            when (val result = withContext(Dispatchers.IO) {
+                SubscriptionLicenseRepository.validate(key)
+            }) {
+                is SubscriptionLicenseRepository.ValidationResult.Active -> {
+                    val previous = withContext(Dispatchers.IO) {
+                        SubscriptionLicenseRepository.getStoredLicense()
+                    }
+                    val saved = withContext(Dispatchers.IO) {
+                        SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis)
+                    }
+                    if (!saved) {
+                        _uiState.update {
+                            it.copy(
+                                isValidatingLicense = false,
+                                message = app.getString(R.string.simple_license_network_error),
+                            )
+                        }
+                        return@launch
+                    }
+                    if (previous != null && previous.key != key) {
+                        LauncherManager.stopService(app)
+                    }
+                    SubscriptionLicenseWorker.schedule(app)
+                    val canConnect = SimpleVpnRepository.canConnect()
+                    _uiState.update {
+                        it.copy(
+                            licenseDialogVisible = false,
+                            licenseKeyInput = "",
+                            isValidatingLicense = false,
+                            licenseValid = true,
+                            canConnect = canConnect,
+                            message = app.getString(R.string.simple_license_active),
+                        )
+                    }
+                }
+
+                is SubscriptionLicenseRepository.ValidationResult.Rejected -> {
+                    _uiState.update {
+                        it.copy(
+                            isValidatingLicense = false,
+                            message = app.getString(R.string.simple_license_invalid),
+                        )
+                    }
+                }
+
+                SubscriptionLicenseRepository.ValidationResult.NetworkError -> {
+                    _uiState.update {
+                        it.copy(
+                            isValidatingLicense = false,
+                            message = app.getString(R.string.simple_license_network_error),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun validateStoredLicense(key: String, showDialogOnFailure: Boolean) {
+        _uiState.update { it.copy(isValidatingLicense = true) }
+        val stored = withContext(Dispatchers.IO) {
+            SubscriptionLicenseRepository.getStoredLicense()
+        }
+        when (val result = withContext(Dispatchers.IO) {
+            SubscriptionLicenseRepository.validate(key)
+        }) {
+            is SubscriptionLicenseRepository.ValidationResult.Active -> {
+                val saved = withContext(Dispatchers.IO) {
+                    SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis)
+                }
+                val canConnect = saved && SimpleVpnRepository.canConnect()
+                _uiState.update {
+                    it.copy(
+                        isValidatingLicense = false,
+                        licenseValid = saved,
+                        canConnect = canConnect,
+                        message = if (saved) null else getApplication<Application>().getString(R.string.simple_license_network_error),
+                    )
+                }
+            }
+
+            is SubscriptionLicenseRepository.ValidationResult.Rejected -> {
+                LauncherManager.stopService(getApplication())
+                _uiState.update {
+                    it.copy(
+                        isValidatingLicense = false,
+                        licenseValid = false,
+                        canConnect = false,
+                        licenseDialogVisible = showDialogOnFailure,
+                        message = getApplication<Application>().getString(R.string.simple_license_invalid),
+                    )
+                }
+            }
+
+            SubscriptionLicenseRepository.ValidationResult.NetworkError -> {
+                if (stored != null && SubscriptionLicenseRepository.isExpired(stored)) {
+                    LauncherManager.stopService(getApplication())
+                }
+                _uiState.update {
+                    it.copy(
+                        isValidatingLicense = false,
+                        licenseValid = false,
+                        canConnect = false,
+                        licenseDialogVisible = showDialogOnFailure,
+                        message = getApplication<Application>().getString(R.string.simple_license_network_error),
+                    )
+                }
+            }
+        }
     }
 
     /** Called when the user cancels/denies the VPN permission prompt. */
