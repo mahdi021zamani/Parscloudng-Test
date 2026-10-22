@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - main
+      - feature/parscloud-subscription-license
 
 permissions:
   contents: read
@@ -129,13 +130,6 @@ jobs:
           path: V2rayNG/app/build/outputs/apk/*/release/*arm64-v8a*.apk
 
       - name: Upload armeabi-v7a APK
-        if: success()
-        uses: actions/upload-artifact@v7
-        with:
-          name: armeabi-v7a
-          path: V2rayNG/app/build/outputs/apk/*/release/*armeabi-v7a*.apk
-
-      - name: Upload x86 APK
         if: success()
         uses: actions/upload-artifact@v7
         with:
