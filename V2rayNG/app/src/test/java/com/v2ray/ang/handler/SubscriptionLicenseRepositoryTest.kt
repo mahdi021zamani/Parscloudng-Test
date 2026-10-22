@@ -51,4 +51,18 @@ class SubscriptionLicenseRepositoryTest {
 
         assertEquals(SubscriptionLicenseRepository.ValidationResult.NetworkError, result)
     }
+    @Test
+    fun emptyOrMalformedKeysAreRejectedByFormatCheck() {
+        assertEquals(false, SubscriptionLicenseRepository.isValidKeyFormat(""))
+        assertEquals(false, SubscriptionLicenseRepository.isValidKeyFormat("pc_not-a-real-key"))
+        assertEquals(false, SubscriptionLicenseRepository.isValidKeyFormat("  "))
+    }
+
+    @Test
+    fun malformedSuccessBodyIsTreatedAsNetworkError() {
+        val result = SubscriptionLicenseRepository.parseValidationResponse(200, "not-json", now)
+
+        assertEquals(SubscriptionLicenseRepository.ValidationResult.NetworkError, result)
+    }
+
 }
