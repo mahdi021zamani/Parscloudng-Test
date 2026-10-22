@@ -29,6 +29,11 @@ class SimpleVpnActivity : BaseComponentActivity() {
             }
         }
 
+    override fun onResume() {
+        super.onResume()
+        viewModel.onAppResumed()
+    }
+
     private fun requestPermissionAndConnect() {
         if (!SettingsManager.isVpnMode()) {
             viewModel.confirmConnect()
