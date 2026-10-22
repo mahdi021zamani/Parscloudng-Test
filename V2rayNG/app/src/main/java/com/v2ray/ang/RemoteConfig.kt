@@ -26,6 +26,9 @@ object RemoteConfig {
      */
     const val SERVER_LIST_URL = "https://raw.githubusercontent.com/ralwaymahdi71/Repository-config-parsng/refs/heads/main/.txt"
 
+    /** HTTPS endpoint used to verify each customer subscription key. */
+    const val SUBSCRIPTION_VALIDATE_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/validate"
+
     /**
      * How many minutes a successfully downloaded server list stays valid.
      *
