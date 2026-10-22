@@ -43,14 +43,15 @@ object SubscriptionLicenseRepository {
     fun getStoredLicense(): StoredLicense? {
         val raw = MmkvManager.decodeSettingsString(STORAGE_KEY).orEmpty()
         if (raw.isBlank()) return null
-        return runCatching {
-            val json = JsonParser.parseString(raw).asJsonObject
-            val key = json.get("key")?.takeIf { !it.isJsonNull }?.asString
-                ?.takeIf(::isValidKeyFormat) ?: return null
-            val expiry = json.get("expiresAtMillis")?.takeIf { !it.isJsonNull }?.asLong ?: 0L
-            if (expiry <= 0L) return null
-            StoredLicense(key, expiry)
-        }.getOrNull()
+        val json = runCatching { JsonParser.parseString(raw).asJsonObject }.getOrNull() ?: return null
+        val key = runCatching {
+            json.get("key")?.takeIf { !it.isJsonNull }?.asString
+        }.getOrNull()?.takeIf(::isValidKeyFormat) ?: return null
+        val expiry = runCatching {
+            json.get("expiresAtMillis")?.takeIf { !it.isJsonNull }?.asLong ?: 0L
+        }.getOrDefault(0L)
+        if (expiry <= 0L) return null
+        return StoredLicense(key, expiry)
     }
 
     fun saveActiveLicense(key: String, expiresAtMillis: Long): Boolean {
@@ -103,7 +104,7 @@ object SubscriptionLicenseRepository {
                     .get("status")?.takeUnless { it.isJsonNull }?.asString
             }.getOrNull()
             return if (status != null && status in rejectedStatuses) {
-                ValidationResult.Rejected(status!!)
+                ValidationResult.Rejected(status)
             } else {
                 ValidationResult.NetworkError
             }
