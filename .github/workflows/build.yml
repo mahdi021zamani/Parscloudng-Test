@@ -133,6 +133,13 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v7
         with:
+          name: armeabi-v7a
+          path: V2rayNG/app/build/outputs/apk/*/release/*armeabi-v7a*.apk
+
+      - name: Upload x86 APK
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
           name: x86-apk
           path: V2rayNG/app/build/outputs/apk/*/release/*x86*.apk
 
