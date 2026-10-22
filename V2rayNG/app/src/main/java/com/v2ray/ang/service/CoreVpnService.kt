@@ -5,6 +5,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
 import android.net.Network
 import android.net.ProxyInfo
 import android.net.VpnService
@@ -33,6 +34,8 @@ class CoreVpnService : VpnService(), ServiceControl {
     private var isRunning = false
     private var tun2SocksService: Tun2SocksControl? = null
     private val isStartingLock = AtomicBoolean(false)
+    private var connectivityManager: ConnectivityManager? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -40,6 +43,40 @@ class CoreVpnService : VpnService(), ServiceControl {
         val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
         StrictMode.setThreadPolicy(policy)
         CoreServiceManager.serviceControl = SoftReference(this)
+        registerSubscriptionNetworkCallback()
+    }
+
+    /**
+     * Keep monitoring network changes while the VPN foreground service is alive.
+     * This allows a revoked subscription to be detected after connectivity returns,
+     * without requiring the user to reopen the launcher activity.
+     */
+    private fun registerSubscriptionNetworkCallback() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                LogUtil.i(AppConfig.TAG, "Subscription monitor: network available; queueing validation")
+                SubscriptionLicenseWorker.checkAfterNetworkAvailable(applicationContext)
+            }
+        }
+        try {
+            manager.registerDefaultNetworkCallback(callback)
+            connectivityManager = manager
+            networkCallback = callback
+        } catch (e: Exception) {
+            LogUtil.w(AppConfig.TAG, "Subscription monitor: unable to register network callback", e)
+        }
+    }
+
+    private fun unregisterSubscriptionNetworkCallback() {
+        val manager = connectivityManager
+        val callback = networkCallback
+        if (manager != null && callback != null) {
+            runCatching { manager.unregisterNetworkCallback(callback) }
+        }
+        connectivityManager = null
+        networkCallback = null
     }
 
     override fun onRevoke() {
@@ -53,6 +90,7 @@ class CoreVpnService : VpnService(), ServiceControl {
 //    }
 
     override fun onDestroy() {
+        unregisterSubscriptionNetworkCallback()
         super.onDestroy()
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service destroyed")
 
