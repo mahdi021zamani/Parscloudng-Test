@@ -549,4 +549,16 @@
     <string name="connection_test_empty_message">подробности отсутствуют</string>
     <string name="value_unknown">неизвестно</string>
 
+
+    <!-- PARSCLOUD subscription license -->
+    <string name="simple_license_title">Подписка PARSCLOUD</string>
+    <string name="simple_license_prompt">Введите полученный ключ подписки, чтобы включить доступ к VPN.</string>
+    <string name="simple_license_key_hint">Ключ подписки</string>
+    <string name="simple_license_activate">Активировать</string>
+    <string name="simple_license_manage">Подписка</string>
+    <string name="simple_license_invalid">Ключ подписки недействителен, срок действия истёк или подписка отозвана.</string>
+    <string name="simple_license_network_error">Не удалось проверить подписку. Проверьте подключение к интернету и повторите попытку.</string>
+    <string name="simple_license_active">Подписка успешно активирована.</string>
+    <string name="simple_license_checking">Проверка подписки…</string>
+    <string name="simple_license_key_required">Введите ключ подписки.</string>
 </resources>
