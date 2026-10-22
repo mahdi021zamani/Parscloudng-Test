@@ -549,4 +549,16 @@
     <string name="connection_test_empty_message">لا تتوفر تفاصيل</string>
     <string name="value_unknown">غير معروف</string>
 
+
+    <!-- PARSCLOUD subscription license -->
+    <string name="simple_license_title">اشتراك PARSCLOUD</string>
+    <string name="simple_license_prompt">أدخل مفتاح الاشتراك الذي حصلت عليه لتفعيل الوصول إلى VPN.</string>
+    <string name="simple_license_key_hint">مفتاح الاشتراك</string>
+    <string name="simple_license_activate">تفعيل</string>
+    <string name="simple_license_manage">الاشتراك</string>
+    <string name="simple_license_invalid">مفتاح الاشتراك غير صالح أو منتهي الصلاحية أو ملغى.</string>
+    <string name="simple_license_network_error">تعذر التحقق من الاشتراك. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.</string>
+    <string name="simple_license_active">تم تفعيل الاشتراك بنجاح.</string>
+    <string name="simple_license_checking">جارٍ التحقق من الاشتراك…</string>
+    <string name="simple_license_key_required">أدخل مفتاح الاشتراك.</string>
 </resources>
