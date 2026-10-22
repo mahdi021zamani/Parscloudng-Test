@@ -549,4 +549,16 @@
     <string name="connection_test_empty_message">دووسمندی نؽ</string>
     <string name="value_unknown">نا مؽخص</string>
 
+
+    <!-- PARSCLOUD subscription license -->
+    <string name="simple_license_title">اشتراک PARSCLOUD</string>
+    <string name="simple_license_prompt">سی فعال کردن دسترسی VPN، کلید اشتراکی که گرتنه‌اید وارد کنین.</string>
+    <string name="simple_license_key_hint">کلید اشتراک</string>
+    <string name="simple_license_activate">فعال کردن</string>
+    <string name="simple_license_manage">اشتراک</string>
+    <string name="simple_license_invalid">ای کلید اشتراک نا موئتبر هڌ، مهلتش سر اومده یا لغو بۊیه.</string>
+    <string name="simple_license_network_error">اشتراک بررسی نؽبی. اینترنت وارسۊی کنین و دوباره امتحان کنین.</string>
+    <string name="simple_license_active">اشتراک بموفقیت فعال بۊیه.</string>
+    <string name="simple_license_checking">اشتراک هونی بررسی ابۊ…</string>
+    <string name="simple_license_key_required">کلید اشتراک وارد کنین.</string>
 </resources>
