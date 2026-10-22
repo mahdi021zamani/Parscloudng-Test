@@ -43,11 +43,14 @@ object SubscriptionLicenseRepository {
     fun getStoredLicense(): StoredLicense? {
         val raw = MmkvManager.decodeSettingsString(STORAGE_KEY).orEmpty()
         if (raw.isBlank()) return null
-        val json = runCatching { JsonParser.parseString(raw).asJsonObject }.getOrNull() ?: return null
-        val key = json.get("key")?.takeIf { !it.isJsonNull }?.asString?.takeIf(::isValidKeyFormat) ?: return null
-        val expiry = json.get("expiresAtMillis")?.takeIf { !it.isJsonNull }?.asLong ?: 0L
-        if (expiry <= 0L) return null
-        return StoredLicense(key, expiry)
+        return runCatching {
+            val json = JsonParser.parseString(raw).asJsonObject
+            val key = json.get("key")?.takeIf { !it.isJsonNull }?.asString
+                ?.takeIf(::isValidKeyFormat) ?: return null
+            val expiry = json.get("expiresAtMillis")?.takeIf { !it.isJsonNull }?.asLong ?: 0L
+            if (expiry <= 0L) return null
+            StoredLicense(key, expiry)
+        }.getOrNull()
     }
 
     fun saveActiveLicense(key: String, expiresAtMillis: Long): Boolean {
