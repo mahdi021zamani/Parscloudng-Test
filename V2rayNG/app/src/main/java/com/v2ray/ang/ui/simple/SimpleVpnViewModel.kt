@@ -102,6 +102,33 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * Re-check the saved entitlement whenever the app returns to the foreground.
+     * This makes revocations take effect on resume instead of waiting for a user
+     * action or the best-effort periodic WorkManager check.
+     */
+    fun onAppResumed() {
+        if (_uiState.value.isValidatingLicense) return
+
+        viewModelScope.launch {
+            val stored = withContext(Dispatchers.IO) {
+                SubscriptionLicenseRepository.getStoredLicense()
+            }
+            if (stored == null) {
+                _uiState.update {
+                    it.copy(
+                        licenseValid = false,
+                        canConnect = false,
+                        licenseDialogVisible = true,
+                    )
+                }
+                return@launch
+            }
+
+            validateStoredLicense(stored.key, showDialogOnFailure = true)
+        }
+    }
+
     private fun loadLocalState() {
         SimpleVpnRepository.ensureSubscription()
         val servers = SimpleVpnRepository.getServers()
