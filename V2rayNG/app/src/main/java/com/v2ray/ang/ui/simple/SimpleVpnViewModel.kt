@@ -187,7 +187,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun runPingTest(guids: List<String>) {
         if (guids.isEmpty()) {
-            _uiState.update { it.copy(isRefreshing = false, canConnect = SimpleVpnRepository.canConnect()) }
+            _uiState.update { it.copy(isRefreshing = false, canConnect = SimpleVpnRepository.canConnect() && it.licenseValid) }
             return
         }
 
