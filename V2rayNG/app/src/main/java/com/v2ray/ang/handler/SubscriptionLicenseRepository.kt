@@ -31,6 +31,8 @@ object SubscriptionLicenseRepository {
 
     data class StoredLicense(val key: String, val expiresAtMillis: Long)
 
+    internal fun isValidKeyFormat(key: String): Boolean = keyPattern.matches(key)
+
     sealed class ValidationResult {
         data class Active(val expiresAtMillis: Long) : ValidationResult()
         data class Rejected(val status: String) : ValidationResult()
@@ -48,7 +50,7 @@ object SubscriptionLicenseRepository {
     }
 
     fun saveActiveLicense(key: String, expiresAtMillis: Long): Boolean {
-        if (!keyPattern.matches(key) || expiresAtMillis <= System.currentTimeMillis()) return false
+        if (!isValidKeyFormat(key) || expiresAtMillis <= System.currentTimeMillis()) return false
         val value = JSONObject()
             .put("key", key)
             .put("expiresAtMillis", expiresAtMillis)
@@ -60,7 +62,7 @@ object SubscriptionLicenseRepository {
         license.expiresAtMillis <= nowMillis
 
     fun validate(key: String): ValidationResult {
-        if (!keyPattern.matches(key)) return ValidationResult.Rejected("invalid")
+        if (!isValidKeyFormat(key)) return ValidationResult.Rejected("invalid")
 
         val requestBody = JSONObject()
             .put("subscriptionKey", key)
