@@ -99,7 +99,7 @@ object SubscriptionLicenseRepository {
                 JsonParser.parseString(responseBody).asJsonObject
                     .get("status")?.takeUnless { it.isJsonNull }?.asString
             }.getOrNull()
-            return if (status in rejectedStatuses) {
+            return if (status != null && status in rejectedStatuses) {
                 ValidationResult.Rejected(status!!)
             } else {
                 ValidationResult.NetworkError
