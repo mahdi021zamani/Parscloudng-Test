@@ -245,13 +245,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
         if (!state.licenseValid) {
-            _uiState.update {
-                it.copy(
-                    licenseDialogVisible = SubscriptionLicenseRepository.getStoredLicense() == null,
-                    message = if (SubscriptionLicenseRepository.getStoredLicense() == null) null
-                    else app.getString(R.string.simple_license_network_error),
-                )
-            }
+            _uiState.update { it.copy(licenseDialogVisible = true, message = null) }
             return
         }
         if (!state.canConnect || state.selectedGuid.isNullOrEmpty()) {
