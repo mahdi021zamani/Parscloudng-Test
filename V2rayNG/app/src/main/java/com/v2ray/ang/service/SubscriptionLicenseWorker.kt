@@ -53,10 +53,22 @@ class SubscriptionLicenseWorker(
                 // Use the same MessageHelper/service-control path as the app's Disconnect
                 // button. A manifest receiver in the daemon process can be started in a
                 // fresh process where CoreServiceManager.serviceControl is still null.
+                // First ask the existing service-message channel to stop gracefully.
                 LauncherManager.stopService(applicationContext)
                 LogUtil.w(AppConfig.TAG, "Subscription monitor: normal service stop request sent")
 
-                // Keep the daemon-side receiver as a second, independent stop attempt.
+                // Do not depend on an in-process SoftReference or a broadcast receiver
+                // being alive. stopService(Intent) addresses the actual Android service
+                // instance and forces VpnService teardown (including closing its TUN).
+                val vpnStopped = applicationContext.stopService(Intent(applicationContext, CoreVpnService::class.java))
+                val proxyStopped = applicationContext.stopService(Intent(applicationContext, CoreProxyOnlyService::class.java))
+                val rootStopped = applicationContext.stopService(Intent(applicationContext, CoreRootService::class.java))
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "Subscription monitor: direct stopService results vpn=$vpnStopped proxy=$proxyStopped root=$rootStopped"
+                )
+
+                // Keep the daemon-side receiver as an additional best-effort stop attempt.
                 val stopIntent = Intent(SubscriptionRevocationReceiver.ACTION_STOP_REVOKED_SUBSCRIPTION)
                     .setPackage(AppConfig.ANG_PACKAGE)
                 applicationContext.sendBroadcast(stopIntent)
