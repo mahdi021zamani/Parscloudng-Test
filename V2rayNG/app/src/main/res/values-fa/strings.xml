@@ -564,4 +564,16 @@
     <string name="simple_network_error_no_cache">دریافت لیست جدید ممکن نشد و اعتبار لیست قبلی به پایان رسیده است</string>
     <string name="simple_connect_failed">اتصال ناموفق بود</string>
 
+
+    <!-- PARSCLOUD subscription license -->
+    <string name="simple_license_title">اشتراک PARSCLOUD</string>
+    <string name="simple_license_prompt">برای فعال‌کردن دسترسی VPN، کلید اشتراکی را که دریافت کرده‌اید وارد کنید.</string>
+    <string name="simple_license_key_hint">کلید اشتراک</string>
+    <string name="simple_license_activate">فعال‌سازی</string>
+    <string name="simple_license_manage">اشتراک</string>
+    <string name="simple_license_invalid">این کلید اشتراک نامعتبر است، منقضی شده یا لغو شده است.</string>
+    <string name="simple_license_network_error">بررسی اشتراک انجام نشد. اتصال اینترنت را بررسی و دوباره تلاش کنید.</string>
+    <string name="simple_license_active">اشتراک با موفقیت فعال شد.</string>
+    <string name="simple_license_checking">در حال بررسی اشتراک…</string>
+    <string name="simple_license_key_required">کلید اشتراک را وارد کنید.</string>
 </resources>
