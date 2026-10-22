@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkRequest
 import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Build
@@ -61,7 +62,10 @@ class CoreVpnService : VpnService(), ServiceControl {
             }
         }
         try {
-            manager.registerDefaultNetworkCallback(callback)
+            val request = NetworkRequest.Builder()
+                .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            manager.registerNetworkCallback(request, callback)
             connectivityManager = manager
             networkCallback = callback
         } catch (e: Exception) {
