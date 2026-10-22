@@ -28,13 +28,22 @@ class SubscriptionLicenseWorker(
 ) : Worker(appContext, workerParams) {
 
     override fun doWork(): Result {
-        val license = SubscriptionLicenseRepository.getStoredLicense() ?: return Result.success()
+        LogUtil.w(AppConfig.TAG, "Subscription monitor: worker started; runAttemptCount=$runAttemptCount")
+        val license = SubscriptionLicenseRepository.getStoredLicense()
+        if (license == null) {
+            LogUtil.w(AppConfig.TAG, "Subscription monitor: worker has no stored license; nothing to validate")
+            return Result.success()
+        }
+        LogUtil.w(AppConfig.TAG, "Subscription monitor: stored license found; validating with server")
 
         return when (val result = SubscriptionLicenseRepository.validate(license.key)) {
             is SubscriptionLicenseRepository.ValidationResult.Active -> {
+                LogUtil.w(AppConfig.TAG, "Subscription monitor: server validation ACTIVE")
                 if (SubscriptionLicenseRepository.saveActiveLicense(license.key, result.expiresAtMillis)) {
+                    LogUtil.w(AppConfig.TAG, "Subscription monitor: active license expiry saved")
                     Result.success()
                 } else {
+                    LogUtil.w(AppConfig.TAG, "Subscription monitor: failed to save active license; retrying")
                     Result.retry()
                 }
             }
@@ -44,11 +53,14 @@ class SubscriptionLicenseWorker(
                 val stopIntent = Intent(SubscriptionRevocationReceiver.ACTION_STOP_REVOKED_SUBSCRIPTION)
                     .setPackage(AppConfig.ANG_PACKAGE)
                 applicationContext.sendBroadcast(stopIntent)
+                LogUtil.w(AppConfig.TAG, "Subscription monitor: revocation broadcast sent to package ${AppConfig.ANG_PACKAGE}")
                 Result.success()
             }
 
             SubscriptionLicenseRepository.ValidationResult.NetworkError -> {
+                LogUtil.w(AppConfig.TAG, "Subscription monitor: validation ended with NETWORK_ERROR")
                 if (SubscriptionLicenseRepository.isExpired(license)) {
+                    LogUtil.w(AppConfig.TAG, "Subscription monitor: saved license is expired during network error; requesting service stop")
                     LauncherManager.stopService(applicationContext)
                 }
                 Result.retry()
@@ -61,6 +73,7 @@ class SubscriptionLicenseWorker(
         private const val RECONNECT_WORK_NAME = "parscloud-subscription-license-reconnect-check"
 
         fun schedule(context: Context) {
+            LogUtil.w(AppConfig.TAG, "Subscription monitor: scheduling periodic validation")
             val request = PeriodicWorkRequestBuilder<SubscriptionLicenseWorker>(
                 15, TimeUnit.MINUTES
             ).build()
@@ -76,6 +89,7 @@ class SubscriptionLicenseWorker(
          * WorkManager waits for a usable network and retries temporary failures.
          */
         fun checkAfterNetworkAvailable(context: Context) {
+            LogUtil.w(AppConfig.TAG, "Subscription monitor: network callback requested one-time validation")
             val request = OneTimeWorkRequestBuilder<SubscriptionLicenseWorker>()
                 .setConstraints(
                     Constraints.Builder()
