@@ -1,6 +1,7 @@
 package com.v2ray.ang.service
 
 import android.content.Context
+import android.content.Intent
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -10,7 +11,10 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import com.v2ray.ang.AppConfig
 import com.v2ray.ang.core.LauncherManager
+import com.v2ray.ang.receiver.SubscriptionRevocationReceiver
+import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.handler.SubscriptionLicenseRepository
 import java.util.concurrent.TimeUnit
 
@@ -36,7 +40,10 @@ class SubscriptionLicenseWorker(
             }
 
             is SubscriptionLicenseRepository.ValidationResult.Rejected -> {
-                LauncherManager.stopService(applicationContext)
+                LogUtil.w(AppConfig.TAG, "Subscription monitor: server rejected saved license; requesting daemon stop")
+                val stopIntent = Intent(SubscriptionRevocationReceiver.ACTION_STOP_REVOKED_SUBSCRIPTION)
+                    .setPackage(AppConfig.ANG_PACKAGE)
+                applicationContext.sendBroadcast(stopIntent)
                 Result.success()
             }
 
