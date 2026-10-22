@@ -549,4 +549,16 @@
     <string name="connection_test_empty_message">không có thông tin chi tiết</string>
     <string name="value_unknown">không xác định</string>
 
+
+    <!-- PARSCLOUD subscription license -->
+    <string name="simple_license_title">Gói đăng ký PARSCLOUD</string>
+    <string name="simple_license_prompt">Nhập khóa đăng ký bạn nhận được để bật quyền truy cập VPN.</string>
+    <string name="simple_license_key_hint">Khóa đăng ký</string>
+    <string name="simple_license_activate">Kích hoạt</string>
+    <string name="simple_license_manage">Gói đăng ký</string>
+    <string name="simple_license_invalid">Khóa đăng ký không hợp lệ, đã hết hạn hoặc bị thu hồi.</string>
+    <string name="simple_license_network_error">Không thể xác minh gói đăng ký. Hãy kiểm tra kết nối Internet rồi thử lại.</string>
+    <string name="simple_license_active">Đã kích hoạt gói đăng ký thành công.</string>
+    <string name="simple_license_checking">Đang xác minh gói đăng ký…</string>
+    <string name="simple_license_key_required">Vui lòng nhập khóa đăng ký.</string>
 </resources>
