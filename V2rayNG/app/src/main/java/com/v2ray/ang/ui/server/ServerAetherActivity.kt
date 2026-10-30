@@ -60,7 +60,6 @@ class ServerAetherActivity : BaseServerActivity() {
                 listOf("v4", "v6", "both"), { state.aetherIpVersion = it })
             FormTextField(stringResource(R.string.aether_editor_dns), state.aetherDns, { state.aetherDns = it })
             FormTextField(stringResource(R.string.aether_editor_exit_loc), state.aetherExitLoc, { state.aetherExitLoc = it })
-            FormTextField(stringResource(R.string.aether_editor_exit_node), state.aetherExitNode, { state.aetherExitNode = it })
             FormDropdownField(stringResource(R.string.aether_editor_psiphon), state.aetherPsiphon,
                 listOf("off", "chain", "reverse", "only"), { state.aetherPsiphon = it })
             if (state.aetherPsiphon != "off") {
@@ -84,6 +83,10 @@ class ServerAetherActivity : BaseServerActivity() {
     }
 
     override fun validateProtocolConfig(config: ProfileItem): Boolean {
+        if (!config.aetherExitNode.isNullOrBlank() || !config.finalMask.isNullOrBlank() || !config.dialMode.isNullOrBlank()) {
+            toast(R.string.aether_exit_settings_unsupported)
+            return false
+        }
         if (AetherFmt.normalize(config) != null) {
             toast(R.string.aether_profile_invalid)
             return false

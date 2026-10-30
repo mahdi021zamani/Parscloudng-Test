@@ -623,4 +623,5 @@
     <string name="aether_editor_tor_relays">Tor relays</string>
     <string name="aether_editor_command">Advanced Aether command</string>
     <string name="aether_profile_invalid">Aether settings are invalid. Check the endpoint and advanced options.</string>
+    <string name="aether_exit_settings_unsupported">Exit-node routing is not available in this build yet.</string>
 </resources>

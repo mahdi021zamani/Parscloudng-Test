@@ -810,21 +810,15 @@ object AetherCoreManager {
         keysDir: File? = null,
         configuration: String? = null,
         block: suspend (output: ReceiveChannel<String>) -> T?,
-    ): T? = throughExit(
-        turns = exitTurns,
-        open = {
-            val logLevel = MmkvManager.decodeSettingsString(AppConfig.PREF_LOGLEVEL) ?: DEFAULT_XRAY_LOG_LEVEL
-            val exitConfiguration = exitConfiguration(exit, configuration, logLevel)
-            if (exitConfiguration == null) {
-                LogUtil.w(AppConfig.TAG, "AetherCore: the exit-node $source dials out through gives no outbound: no profile or several have its name, it gives none, or its ECH outbound is unusable; no core runs")
-                null
-            } else {
-                openExit(context, exitConfiguration, source)
-            }
-        },
-        close = { CoreNativeManager.closeExit() },
-    ) { exitPort ->
-        coroutineScope { runCore(context, standaloneArguments(arguments, exitPort), source, onOutput, keysDir, block) }
+    ): T? {
+        // The current bundled libv2ray.aar does not expose the auxiliary Xray exit API.
+        // Run Aether's own scan/renewal core directly, and refuse profile exit overrides rather than
+        // silently bypassing the requested route.
+        if (exit.node != null || !exit.finalMask.isNullOrBlank() || !exit.dialMode.isNullOrBlank()) {
+            LogUtil.w(AppConfig.TAG, "AetherCore: $source needs an exit-node route that this build does not support")
+            return null
+        }
+        return coroutineScope { runCore(context, arguments, source, onOutput, keysDir, block) }
     }
 
     /** One core of its own at a time in this process, as the exit of its Xray takes; see [withProcess]. */
@@ -899,18 +893,6 @@ object AetherCoreManager {
      */
     internal fun standaloneArguments(arguments: List<String>, exitPort: Int): List<String> =
         AetherCore(withoutOption(arguments, UPSTREAM)).through(exitPort).arguments
-
-    /**
-     * The port of the exit of this process's Xray, opened for [source] with the exit-node of
-     * [configuration], see [CoreNativeManager.openExit]; null, with the reason in the log, when it
-     * does not open.
-     */
-    private fun openExit(context: Context, configuration: String, source: String): Int? = try {
-        CoreNativeManager.openExit(context, configuration)
-    } catch (e: Exception) {
-        LogUtil.e(AppConfig.TAG, "AetherCore: the Xray $source dials out through did not open", e)
-        null
-    }
 
     /**
      * The configuration the exit of a core of its own opens with, whose outbound tagged exit-node the
