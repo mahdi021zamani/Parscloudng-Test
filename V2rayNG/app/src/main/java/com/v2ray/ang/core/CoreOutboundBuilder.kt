@@ -38,7 +38,7 @@ object CoreOutboundBuilder {
         }
 
         outbound ?: return null
-        if (profileItem.configType != EConfigType.AETHER) applyDialMode(outbound, profileItem)
+        if (profileItem.configType != EConfigType.AETHER) applyDialMode(outbound, profileItem.dialMode)
         val ret = updateOutboundWithGlobalSettings(outbound)
         if (!ret) return null
         return outbound
