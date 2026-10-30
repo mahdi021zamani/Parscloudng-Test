@@ -206,6 +206,7 @@ object AppConfig {
     const val VLESS = "vless://"
     const val TROJAN = "trojan://"
     const val WIREGUARD = "wireguard://"
+    const val AETHER = "aether://"
     const val TUIC = "tuic://"
     const val HYSTERIA = "hysteria://"
     const val HYSTERIA2 = "hysteria2://"
