@@ -205,16 +205,11 @@ object SimpleVpnRepository {
             return RefreshOutcome.Updated(getServerGuids().size)
         }
 
-        val anyCached = allConfiguredSources().any { sourceGuids(it).isNotEmpty() }
         if (sawNetworkError) {
             // A stale cache may remain visible for diagnostics, but it must never
             // be treated as a usable offline cache after its expiry window.
             LauncherManager.stopService(context)
-            return if (anyCached) {
-                RefreshOutcome.CacheUnavailableAfterNetworkError
-            } else {
-                RefreshOutcome.CacheUnavailableAfterNetworkError
-            }
+            return RefreshOutcome.CacheUnavailableAfterNetworkError
         }
 
         // Empty/invalid feeds are cleared per-source. Do not disconnect if another
