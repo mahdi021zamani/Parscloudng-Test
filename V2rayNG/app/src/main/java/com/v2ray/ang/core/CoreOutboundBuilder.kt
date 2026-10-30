@@ -31,6 +31,7 @@ object CoreOutboundBuilder {
             EConfigType.TROJAN -> toOutboundTrojan(profileItem)
             EConfigType.WIREGUARD -> toOutboundWireguard(profileItem)
             EConfigType.HYSTERIA2 -> toOutboundHysteria2(profileItem)
+            EConfigType.AETHER -> toOutboundAether(profileItem)
             EConfigType.HTTP -> toOutboundHttp(profileItem)
             else -> null
         }
@@ -38,6 +39,14 @@ object CoreOutboundBuilder {
         outbound ?: return null
         val ret = updateOutboundWithGlobalSettings(outbound)
         if (!ret) return null
+        return outbound
+    }
+
+    /** Aether is hosted by its own local core; Xray reaches it through loopback SOCKS. */
+    private fun toOutboundAether(profileItem: ProfileItem): OutboundBean? {
+        val outbound = createInitOutbound(EConfigType.SOCKS) ?: return null
+        outbound.settings?.address = AppConfig.LOOPBACK
+        outbound.settings?.port = AetherCore.of(profileItem).port
         return outbound
     }
 

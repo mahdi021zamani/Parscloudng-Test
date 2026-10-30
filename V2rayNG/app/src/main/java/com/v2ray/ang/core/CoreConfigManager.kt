@@ -6,6 +6,7 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.dto.ConfigResult
+import com.v2ray.ang.core.AetherCore
 import com.v2ray.ang.dto.CoreConfigContext
 import com.v2ray.ang.dto.V2rayConfig
 import com.v2ray.ang.dto.entities.ProfileItem
@@ -42,7 +43,10 @@ object CoreConfigManager {
             if (configContext.isCustom) {
                 return buildV2rayCustomConfig(configContext)
             }
-            return toConfigResult(configContext, buildUnifiedConfig(configContext))
+            val v2rayConfig = buildUnifiedConfig(configContext)
+            val selectedProfile = MmkvManager.decodeServerConfig(guid)
+            val aetherCore = selectedProfile?.takeIf { it.configType == EConfigType.AETHER }?.let { AetherCore.of(it) }
+            return toConfigResult(configContext, v2rayConfig, aetherCore)
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to get V2ray config", e)
             return ConfigResult(
@@ -452,11 +456,12 @@ object CoreConfigManager {
     /**
      * Serialize a runtime configuration into a standard result object.
      */
-    private fun toConfigResult(configContext: CoreConfigContext, v2rayConfig: V2rayConfig): ConfigResult {
+    private fun toConfigResult(configContext: CoreConfigContext, v2rayConfig: V2rayConfig, aetherCore: AetherCore? = null): ConfigResult {
         return ConfigResult(
             status = true,
             guid = configContext.guid,
-            content = JsonUtil.toJsonPretty(v2rayConfig) ?: ""
+            content = JsonUtil.toJsonPretty(v2rayConfig) ?: "",
+            aetherCore = aetherCore
         )
     }
 

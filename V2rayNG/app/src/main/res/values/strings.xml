@@ -576,4 +576,20 @@
     <string name="simple_license_active">Subscription activated successfully.</string>
     <string name="simple_license_checking">Verifying subscription…</string>
     <string name="simple_license_key_required">Enter your subscription key.</string>
+    <string name="toast_profile_name_not_found">No profile named "%1$s" was found</string>
+    <string name="toast_profile_name_duplicate">Two profiles named "%1$s" were found; please rename one</string>
+    <string name="aether_exit_node_unusable">The exit-node profile "%1$s" gives no outbound; choose another one, or freedom</string>
+    <string name="aether_exit_node_ech_unusable">The echOutbound of the exit-node profile "%1$s" cannot be used; fix it in that profile, or choose another one, or freedom</string>
+    <string name="aether_listen_port_invalid">The Aether command tells the core to listen on %1$d, which is no port (1 to 65535)</string>
+    <string name="aether_listen_address_invalid">The Aether command gives %1$s an address the core does not take; use an IP address and port</string>
+    <string name="aether_listen_address_unreachable">The Aether command gives %1$s an address the app cannot reach; use 127.0.0.1 or 0.0.0.0</string>
+    <string name="aether_listen_port_shared">The Aether command tells the core to listen on %1$d with two listeners; give each its own port</string>
+    <string name="aether_listen_port_taken">Port %1$d, which the Aether core listens on, is taken by an inbound</string>
+    <string name="aether_secondary_port_in_use">Port %1$d, three above the Aether listen port, is in use</string>
+    <string name="aether_listen_port_in_use">Port %1$d, which the Aether core listens on, is in use</string>
+    <string name="aether_core_stopped_chain_ended">Tor or Psiphon inside the Aether tunnel ended: %1$s</string>
+    <string name="aether_core_stopped_no_ech_key">The Aether core stopped: ECH is on, but no usable ECH key was found.</string>
+    <string name="aether_core_stopped">The Aether core stopped running</string>
+    <string name="aether_unsupported_abi">Aether is not supported on this device architecture.</string>
+    <string name="aether_core_connecting">Aether is connecting…</string>
 </resources>

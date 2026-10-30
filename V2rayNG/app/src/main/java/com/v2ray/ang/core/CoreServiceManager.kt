@@ -12,6 +12,7 @@ import android.os.ParcelFileDescriptor
 import android.system.OsConstants
 import androidx.core.content.ContextCompat
 import com.v2ray.ang.AppConfig
+import com.v2ray.ang.R
 import com.v2ray.ang.contracts.IDialerService
 import com.v2ray.ang.contracts.ServiceControl
 import com.v2ray.ang.dto.ConnectionTestResult
@@ -172,6 +173,13 @@ object CoreServiceManager {
             error("Core failed to start")
         }
 
+        result.aetherCore?.let { aether ->
+            if (!AetherCoreManager.isSupported(service)) error(service.getString(R.string.aether_unsupported_abi))
+            AetherCoreManager.start(service, aether) {
+                CoroutineScope(Dispatchers.Main).launch { stopCoreLoop() }
+            }
+        }
+
         if (browserDialer != null) {
             browserDialer!!.stop()
             browserDialer = null
@@ -205,6 +213,7 @@ object CoreServiceManager {
     fun stopCoreLoop(): Boolean {
         val service = getService() ?: return false
 
+        AetherCoreManager.stop()
         networkMonitor?.unregister()
         networkMonitor = null
         currentVpnInterface = null
