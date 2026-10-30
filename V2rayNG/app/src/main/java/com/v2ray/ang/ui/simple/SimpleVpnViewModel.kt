@@ -194,10 +194,15 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             when (val outcome = SimpleVpnRepository.refresh(app)) {
                 is SimpleVpnRepository.RefreshOutcome.Updated -> {
                     val guids = SimpleVpnRepository.getServerGuids()
+                    val selected = MmkvManager.getSelectServer()
+                        ?.takeIf { it in guids }
+                        ?: guids.firstOrNull()
+                    selected?.let(MmkvManager::setSelectServer)
                     withContext(Dispatchers.Main) {
                         _uiState.update {
                             it.copy(
                                 servers = guids.mapNotNull(SimpleVpnRepository::getServerUiModel),
+                                selectedGuid = selected,
                                 testingGuids = guids.toSet(),
                             )
                         }
