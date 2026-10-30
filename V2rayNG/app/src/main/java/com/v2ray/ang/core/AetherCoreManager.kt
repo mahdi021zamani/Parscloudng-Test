@@ -814,11 +814,13 @@ object AetherCoreManager {
         // The current bundled libv2ray.aar does not expose the auxiliary Xray exit API.
         // Run Aether's own scan/renewal core directly, and refuse profile exit overrides rather than
         // silently bypassing the requested route.
-        if (exit.node != null || !exit.finalMask.isNullOrBlank() || !exit.dialMode.isNullOrBlank()) {
+        if (exit.node != null || exit.nodeContent != null || exit.hops != null ||
+            !exit.finalMask.isNullOrBlank() || !exit.dialMode.isNullOrBlank()
+        ) {
             LogUtil.w(AppConfig.TAG, "AetherCore: $source needs an exit-node route that this build does not support")
             return null
         }
-        return coroutineScope { runCore(context, arguments, source, onOutput, keysDir, block) }
+        return exitTurns.withLock { coroutineScope { runCore(context, arguments, source, onOutput, keysDir, block) } }
     }
 
     /** One core of its own at a time in this process, as the exit of its Xray takes; see [withProcess]. */
