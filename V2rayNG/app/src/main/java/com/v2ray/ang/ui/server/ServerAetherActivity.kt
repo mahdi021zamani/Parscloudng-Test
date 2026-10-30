@@ -33,9 +33,11 @@ class ServerAetherActivity : BaseServerActivity() {
                 FormDropdownField(stringResource(R.string.aether_editor_transport), state.aetherTransport,
                     listOf("h3", "h2"), { state.aetherTransport = it })
                 FormTextField(stringResource(R.string.aether_editor_sni), state.aetherMasqueSni, { state.aetherMasqueSni = it })
-                SettingsSwitchItem(title = stringResource(R.string.aether_editor_fragment), checked = state.aetherFragment,
-                    onCheckedChange = { state.aetherFragment = it })
-                if (state.aetherFragment) {
+                if (state.aetherTransport == "h2") {
+                    SettingsSwitchItem(title = stringResource(R.string.aether_editor_fragment), checked = state.aetherFragment,
+                        onCheckedChange = { state.aetherFragment = it })
+                }
+                if (state.aetherTransport == "h2" && state.aetherFragment) {
                     FormTextField(stringResource(R.string.aether_editor_fragment_size), state.aetherFragmentSize, { state.aetherFragmentSize = it })
                     FormTextField(stringResource(R.string.aether_editor_fragment_delay), state.aetherFragmentDelay, { state.aetherFragmentDelay = it })
                 }
@@ -74,7 +76,7 @@ class ServerAetherActivity : BaseServerActivity() {
                 listOf("off", "chain", "reverse", "only"), { state.aetherTor = it })
             if (state.aetherTor != "off") {
                 FormDropdownField(stringResource(R.string.aether_editor_tor_bridges), state.aetherTorBridges,
-                    listOf("auto", "first", "never"), { state.aetherTorBridges = it })
+                    listOf("auto", "first", "never", "own"), { state.aetherTorBridges = it })
                 FormTextField(stringResource(R.string.aether_editor_tor_bridge_lines), state.aetherTorBridgeLines, { state.aetherTorBridgeLines = it })
                 FormTextField(stringResource(R.string.aether_editor_tor_relays), state.aetherTorRelays, { state.aetherTorRelays = it })
             }
