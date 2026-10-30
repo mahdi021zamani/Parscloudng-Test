@@ -12,6 +12,7 @@ import com.v2ray.ang.AppConfig.GEOSITE_PRIVATE
 import com.v2ray.ang.AppConfig.TAG_DIRECT
 import com.v2ray.ang.AppConfig.VPN
 import com.v2ray.ang.dto.V2rayConfig
+import com.v2ray.ang.dto.ByName
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.dto.entities.RulesetItem
 import com.v2ray.ang.dto.entities.SubscriptionItem
@@ -231,6 +232,13 @@ object SettingsManager {
     /**
      * Collects non-empty profile remarks while excluding specific config types.
      */
+
+    /** Resolve a profile name while detecting missing and duplicate matches. */
+    fun findServerViaRemarks(remarks: String?, accepts: (ProfileItem) -> Boolean): ByName<ProfileItem> {
+        val candidates = decodeAllServerList().asSequence().mapNotNull { guid -> decodeServerConfig(guid) }.filter(accepts)
+        return ByName.find(remarks, candidates) { it.remarks }
+    }
+
     fun getProfileRemarks(excludeConfigTypes: Set<EConfigType> = setOf(EConfigType.CUSTOM)): List<String> {
         return decodeAllServerList()
             .asSequence()

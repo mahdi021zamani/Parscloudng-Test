@@ -56,6 +56,9 @@ object CoreConfigContextBuilder {
         )
     }
 
+    /** Whether a profile can be used as a proxy-chain hop. */
+    internal fun takesAsHop(profile: ProfileItem): Boolean = !profile.configType.isComplexType()
+
     /**
      * Resolve one outbound target into a normalized outbound entry.
      *

@@ -50,6 +50,32 @@ object CoreOutboundBuilder {
         return outbound
     }
 
+
+    /** Builds the Xray-side exit used by an Aether core. Named profile exits are refused until
+     * the full profile-chain exit resolver is integrated; silently falling back would leak traffic. */
+    fun toOutboundAetherExit(exit: AetherExit, nodeOutbound: (String) -> ExitNodeOutbound = ::toOutboundOfNode): OutboundBean? {
+        exit.node?.let { name -> return (nodeOutbound(name) as? ExitNodeOutbound.Built)?.outbound }
+        val outbound = OutboundBean(tag = AppConfig.TAG_EXIT_NODE, protocol = "freedom", mux = null)
+        if (!exit.finalMask.isNullOrBlank()) {
+            outbound.streamSettings = OutboundBean.StreamSettingsBean(network = null)
+            JsonUtil.parseString(exit.finalMask)?.let { outbound.streamSettings?.finalmask = it }
+        }
+        exit.dialMode?.takeIf { it.isNotBlank() }?.let { mode ->
+            if (outbound.streamSettings == null) outbound.streamSettings = OutboundBean.StreamSettingsBean(network = null)
+            val current = outbound.streamSettings?.sockopt ?: OutboundBean.StreamSettingsBean.SockoptBean()
+            current.dialMode = mode
+            outbound.streamSettings?.sockopt = current
+        }
+        return outbound
+    }
+
+    fun toOutboundOfNode(name: String): ExitNodeOutbound = ExitNodeOutbound.NotFound
+
+    internal fun nodeOutboundOf(outbound: OutboundBean?): ExitNodeOutbound =
+        if (outbound == null) ExitNodeOutbound.NoOutbound
+        else if (!EchOutbound.takes(outbound, setOf(AppConfig.TAG_EXIT_NODE))) ExitNodeOutbound.EchUnusable
+        else ExitNodeOutbound.Built(outbound)
+
     /** Applies global outbound options (mux, protocol-specific tweaks, etc.). */
     private fun updateOutboundWithGlobalSettings(outbound: OutboundBean): Boolean {
         try {

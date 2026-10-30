@@ -69,7 +69,8 @@ data class V2rayConfig(
         var settings: OutSettingsBean? = null,
         var streamSettings: StreamSettingsBean? = null,
         val sendThrough: String? = null,
-        var mux: MuxBean? = MuxBean(false)
+        var mux: MuxBean? = MuxBean(false),
+        var targetStrategy: String? = null
     ) {
         data class OutSettingsBean(
             /*Common */
@@ -202,6 +203,7 @@ data class V2rayConfig(
                 var dialerProxy: String? = null,
                 var domainStrategy: String? = null,
                 var happyEyeballs: HappyEyeballsBean? = null,
+                var dialMode: String? = null,
             )
 
             data class HappyEyeballsBean(
@@ -224,6 +226,8 @@ data class V2rayConfig(
                 val disableSystemRoot: Boolean? = null,
                 val enableSessionResumption: Boolean? = null,
                 var echConfigList: String? = null,
+                var echOutbound: String? = null,
+                var echSockopt: SockoptBean? = null,
                 var verifyPeerCertByName: String? = null,
                 var pinnedPeerCertSha256: String? = null,
                 // REALITY settings
