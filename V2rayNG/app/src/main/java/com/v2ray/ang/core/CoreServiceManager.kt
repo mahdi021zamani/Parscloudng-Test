@@ -77,6 +77,7 @@ object CoreServiceManager {
      * Called by a manifest receiver running in this same daemon process.
      */
     fun stopActiveServiceForRevokedLicense(): Boolean {
+        AetherCoreManager.stop()
         val controller = serviceControl?.get()
         if (controller == null) {
             LogUtil.w(AppConfig.TAG, "Subscription monitor: no active service controller to stop")
@@ -167,17 +168,21 @@ object CoreServiceManager {
         if (dialerAddr.isNotNullEmpty()) {
             CoreNativeManager.reconcileBrowserDialer(dialerAddr)
         }
-        coreController.startLoop(result.content, tunFd)
-
-        if (!isRunning()) {
-            error("Core failed to start")
-        }
-
-        result.aetherCore?.let { aether ->
+        val aetherCore = result.aetherCore
+        if (aetherCore != null) {
             if (!AetherCoreManager.isSupported(service)) error(service.getString(R.string.aether_unsupported_abi))
-            AetherCoreManager.start(service, aether) {
+            // Start the local Aether listener before Xray begins accepting traffic through its SOCKS outbound.
+            AetherCoreManager.start(service, aetherCore) {
                 CoroutineScope(Dispatchers.Main).launch { stopCoreLoop() }
             }
+        }
+
+        try {
+            coreController.startLoop(result.content, tunFd)
+            if (!isRunning()) error("Core failed to start")
+        } catch (e: Exception) {
+            if (aetherCore != null) AetherCoreManager.stop()
+            throw e
         }
 
         if (browserDialer != null) {
@@ -211,9 +216,9 @@ object CoreServiceManager {
      * @return True if the core was stopped successfully, false otherwise.
      */
     fun stopCoreLoop(): Boolean {
+        AetherCoreManager.stop()
         val service = getService() ?: return false
 
-        AetherCoreManager.stop()
         networkMonitor?.unregister()
         networkMonitor = null
         currentVpnInterface = null
