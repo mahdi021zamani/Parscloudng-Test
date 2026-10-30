@@ -62,7 +62,37 @@ class ServerUiState(
     echConfigList: String = "",
     verifyPeerCertByName: String = "",
     pinnedCA256: String = "",
-    isFetchingCert: Boolean = false
+    isFetchingCert: Boolean = false,
+    aetherProtocol: String = "wg",
+    aetherTransport: String = "h3",
+    aetherMasqueSni: String = "",
+    aetherScanMode: String = "balanced",
+    aetherObfuscation: String = "auto",
+    aetherFingerprint: String = "chrome",
+    aetherIpVersion: String = "v4",
+    aetherWiwOuter: String = "",
+    aetherWiwInner: String = "",
+    aetherFragment: Boolean = false,
+    aetherFragmentSize: String = "",
+    aetherFragmentDelay: String = "",
+    aetherEch: Boolean = false,
+    aetherEchDns: String = "",
+    aetherEchDomain: String = "",
+    aetherDns: String = "",
+    aetherExitLoc: String = "",
+    aetherExitNode: String = "",
+    aetherPsiphon: String = "off",
+    aetherPsiphonMode: String = "auto",
+    aetherPsiphonCdnIps: String = "",
+    aetherPsiphonCdnSni: String = "",
+    aetherPsiphonCdnSets: String = "",
+    aetherPsiphonRegion: String = "",
+    aetherPsiphonBundledList: Boolean = true,
+    aetherTor: String = "off",
+    aetherTorBridges: String = "auto",
+    aetherTorBridgeLines: String = "",
+    aetherTorRelays: String = "",
+    aetherCommand: String = ""
 ) {
     var configType by mutableStateOf(configType)
     var remarks by mutableStateOf(remarks)
@@ -113,6 +143,37 @@ class ServerUiState(
     var pinnedCA256 by mutableStateOf(pinnedCA256)
     var isFetchingCert by mutableStateOf(isFetchingCert)
 
+    var aetherProtocol by mutableStateOf(aetherProtocol)
+    var aetherTransport by mutableStateOf(aetherTransport)
+    var aetherMasqueSni by mutableStateOf(aetherMasqueSni)
+    var aetherScanMode by mutableStateOf(aetherScanMode)
+    var aetherObfuscation by mutableStateOf(aetherObfuscation)
+    var aetherFingerprint by mutableStateOf(aetherFingerprint)
+    var aetherIpVersion by mutableStateOf(aetherIpVersion)
+    var aetherWiwOuter by mutableStateOf(aetherWiwOuter)
+    var aetherWiwInner by mutableStateOf(aetherWiwInner)
+    var aetherFragment by mutableStateOf(aetherFragment)
+    var aetherFragmentSize by mutableStateOf(aetherFragmentSize)
+    var aetherFragmentDelay by mutableStateOf(aetherFragmentDelay)
+    var aetherEch by mutableStateOf(aetherEch)
+    var aetherEchDns by mutableStateOf(aetherEchDns)
+    var aetherEchDomain by mutableStateOf(aetherEchDomain)
+    var aetherDns by mutableStateOf(aetherDns)
+    var aetherExitLoc by mutableStateOf(aetherExitLoc)
+    var aetherExitNode by mutableStateOf(aetherExitNode)
+    var aetherPsiphon by mutableStateOf(aetherPsiphon)
+    var aetherPsiphonMode by mutableStateOf(aetherPsiphonMode)
+    var aetherPsiphonCdnIps by mutableStateOf(aetherPsiphonCdnIps)
+    var aetherPsiphonCdnSni by mutableStateOf(aetherPsiphonCdnSni)
+    var aetherPsiphonCdnSets by mutableStateOf(aetherPsiphonCdnSets)
+    var aetherPsiphonRegion by mutableStateOf(aetherPsiphonRegion)
+    var aetherPsiphonBundledList by mutableStateOf(aetherPsiphonBundledList)
+    var aetherTor by mutableStateOf(aetherTor)
+    var aetherTorBridges by mutableStateOf(aetherTorBridges)
+    var aetherTorBridgeLines by mutableStateOf(aetherTorBridgeLines)
+    var aetherTorRelays by mutableStateOf(aetherTorRelays)
+    var aetherCommand by mutableStateOf(aetherCommand)
+
     fun toProfileItem(initialConfig: ProfileItem): ProfileItem {
         val isVmess = configType == EConfigType.VMESS
         val isVless = configType == EConfigType.VLESS
@@ -120,6 +181,7 @@ class ServerUiState(
         val isSocksOrHttp = configType == EConfigType.SOCKS || configType == EConfigType.HTTP
         val isWireguard = configType == EConfigType.WIREGUARD
         val isHysteria2 = configType == EConfigType.HYSTERIA2
+        val isAether = configType == EConfigType.AETHER
 
         return initialConfig.copy(
             configType = configType,
@@ -178,7 +240,37 @@ class ServerUiState(
             mldsa65Verify = mldsa65Verify,
             echConfigList = echConfigList,
             verifyPeerCertByName = verifyPeerCertByName,
-            pinnedCA256 = pinnedCA256
+            pinnedCA256 = pinnedCA256,
+            aetherProtocol = if (isAether) aetherProtocol else null,
+            aetherTransport = if (isAether) aetherTransport else null,
+            aetherMasqueSni = if (isAether) aetherMasqueSni else null,
+            aetherScanMode = if (isAether) aetherScanMode else null,
+            aetherObfuscation = if (isAether) aetherObfuscation else null,
+            aetherFingerprint = if (isAether) aetherFingerprint else null,
+            aetherIpVersion = if (isAether) aetherIpVersion else null,
+            aetherWiwOuter = if (isAether) aetherWiwOuter else null,
+            aetherWiwInner = if (isAether) aetherWiwInner else null,
+            aetherFragment = if (isAether) aetherFragment else null,
+            aetherFragmentSize = if (isAether) aetherFragmentSize else null,
+            aetherFragmentDelay = if (isAether) aetherFragmentDelay else null,
+            aetherEch = if (isAether) aetherEch else null,
+            aetherEchDns = if (isAether) aetherEchDns else null,
+            aetherEchDomain = if (isAether) aetherEchDomain else null,
+            aetherDns = if (isAether) aetherDns else null,
+            aetherExitLoc = if (isAether) aetherExitLoc else null,
+            aetherExitNode = if (isAether) aetherExitNode else null,
+            aetherPsiphon = if (isAether) aetherPsiphon else null,
+            aetherPsiphonMode = if (isAether) aetherPsiphonMode else null,
+            aetherPsiphonCdnIps = if (isAether) aetherPsiphonCdnIps else null,
+            aetherPsiphonCdnSni = if (isAether) aetherPsiphonCdnSni else null,
+            aetherPsiphonCdnSets = if (isAether) aetherPsiphonCdnSets else null,
+            aetherPsiphonRegion = if (isAether) aetherPsiphonRegion else null,
+            aetherPsiphonBundledList = if (isAether) aetherPsiphonBundledList else null,
+            aetherTor = if (isAether) aetherTor else null,
+            aetherTorBridges = if (isAether) aetherTorBridges else null,
+            aetherTorBridgeLines = if (isAether) aetherTorBridgeLines else null,
+            aetherTorRelays = if (isAether) aetherTorRelays else null,
+            aetherCommand = if (isAether) aetherCommand else null
         )
     }
 
@@ -233,7 +325,37 @@ class ServerUiState(
                 mldsa65Verify = initialConfig.mldsa65Verify ?: "",
                 echConfigList = initialConfig.echConfigList ?: "",
                 verifyPeerCertByName = initialConfig.verifyPeerCertByName ?: "",
-                pinnedCA256 = initialConfig.pinnedCA256 ?: ""
+                pinnedCA256 = initialConfig.pinnedCA256 ?: "",
+                aetherProtocol = initialConfig.aetherProtocol ?: "wg",
+                aetherTransport = initialConfig.aetherTransport ?: "h3",
+                aetherMasqueSni = initialConfig.aetherMasqueSni ?: "",
+                aetherScanMode = initialConfig.aetherScanMode ?: "balanced",
+                aetherObfuscation = initialConfig.aetherObfuscation ?: "auto",
+                aetherFingerprint = initialConfig.aetherFingerprint ?: "chrome",
+                aetherIpVersion = initialConfig.aetherIpVersion ?: "v4",
+                aetherWiwOuter = initialConfig.aetherWiwOuter ?: "",
+                aetherWiwInner = initialConfig.aetherWiwInner ?: "",
+                aetherFragment = initialConfig.aetherFragment == true,
+                aetherFragmentSize = initialConfig.aetherFragmentSize ?: "",
+                aetherFragmentDelay = initialConfig.aetherFragmentDelay ?: "",
+                aetherEch = initialConfig.aetherEch == true,
+                aetherEchDns = initialConfig.aetherEchDns ?: "",
+                aetherEchDomain = initialConfig.aetherEchDomain ?: "",
+                aetherDns = initialConfig.aetherDns ?: "",
+                aetherExitLoc = initialConfig.aetherExitLoc ?: "",
+                aetherExitNode = initialConfig.aetherExitNode ?: "",
+                aetherPsiphon = initialConfig.aetherPsiphon ?: "off",
+                aetherPsiphonMode = initialConfig.aetherPsiphonMode ?: "auto",
+                aetherPsiphonCdnIps = initialConfig.aetherPsiphonCdnIps ?: "",
+                aetherPsiphonCdnSni = initialConfig.aetherPsiphonCdnSni ?: "",
+                aetherPsiphonCdnSets = initialConfig.aetherPsiphonCdnSets ?: "",
+                aetherPsiphonRegion = initialConfig.aetherPsiphonRegion ?: "",
+                aetherPsiphonBundledList = initialConfig.aetherPsiphonBundledList != false,
+                aetherTor = initialConfig.aetherTor ?: "off",
+                aetherTorBridges = initialConfig.aetherTorBridges ?: "auto",
+                aetherTorBridgeLines = initialConfig.aetherTorBridgeLines ?: "",
+                aetherTorRelays = initialConfig.aetherTorRelays ?: "",
+                aetherCommand = initialConfig.aetherCommand ?: ""
             )
 
         fun from(
