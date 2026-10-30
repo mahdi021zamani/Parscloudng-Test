@@ -1,46 +1,33 @@
 package com.v2ray.ang
 
 /**
- * Central configuration for the simplified "Free VPN" client screen.
+ * Remote endpoints used by the simplified PARSCLOUD client.
  *
- * This is the ONLY file you need to edit to change where the app downloads its
- * server list from, or how long a downloaded list stays valid before the app
- * requires a fresh copy.
- *
- * After editing [SERVER_LIST_URL] (or the other values below), just rebuild the
- * APK — see the "Changing the server source" section in README.md for the exact
- * GitHub Actions steps.
+ * Public source URLs may live here. Secret-bearing subscription URLs must NOT be
+ * embedded in the APK; the emergency source is intentionally supplied by a
+ * private server-side proxy when that endpoint is configured.
  */
 object RemoteConfig {
 
+    /** Primary V2Ray-compatible share-link feed. */
+    const val SERVER_LIST_URL = "https://raw.githubusercontent.com/patterniha/Free-Configs/main/configs.txt"
+
+    /** Independent Aether feed. Keep this URL token-free and publicly readable. */
+    const val AETHER_SERVER_LIST_URL = "https://raw.githubusercontent.com/mahdi021zamani/parscloud-sub/main/Aether"
+
     /**
-     * Raw-text URL of the server list.
-     *
-     * Must point to a plain-text file (for example a "raw" GitHub URL) where each
-     * line is one share-link config, e.g.:
-     *
-     *   vless://...
-     *   vless://...
-     *
-     * Empty lines and invalid lines are ignored automatically.
+     * Optional private proxy endpoint that returns the emergency paid-panel feed.
+     * Keep blank until the secret source URL is configured server-side. Never put
+     * the original tokenized subscription URL in the APK or a public repository.
      */
-    const val SERVER_LIST_URL = "https://raw.githubusercontent.com/ralwaymahdi71/Repository-config-parsng/refs/heads/main/.txt"
+    const val EMERGENCY_FALLBACK_URL = ""
 
     /** HTTPS endpoint used to verify each customer subscription key. */
     const val SUBSCRIPTION_VALIDATE_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/validate"
 
-    /**
-     * How many minutes a successfully downloaded server list stays valid.
-     *
-     * While the cached list is within this window, the app is allowed to connect
-     * using it even without a fresh download. Once it expires, the app requires a
-     * successful refresh before allowing a new connection (see
-     * SimpleVpnRepository.canConnect()).
-     */
+    /** How long a successfully downloaded source remains connectable. */
     const val REMOTE_DATA_EXPIRY_MINUTES = 30
 
-    /**
-     * Network timeout, in seconds, used when downloading the server list.
-     */
+    /** Network timeout, in seconds, used when downloading source lists. */
     const val REQUEST_TIMEOUT_SECONDS = 15
 }
