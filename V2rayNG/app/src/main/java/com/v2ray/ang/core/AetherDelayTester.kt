@@ -57,8 +57,20 @@ object AetherDelayTester {
         NOT_READY,
     }
 
-    suspend fun measure(context: Context, guid: String, profile: ProfileItem, url: String): Long =
-        measureVia(context, guid, AetherCore.of(profile)) { port, deadline -> cancellableRequestDelay(port, url, deadline) }
+    suspend fun measure(
+        context: Context,
+        guid: String,
+        profile: ProfileItem,
+        url: String,
+        fallbackUrl: String? = null,
+    ): Long = measureVia(context, guid, AetherCore.of(profile)) { port, deadline ->
+        val primary = cancellableRequestDelay(port, url, deadline)
+        if (primary >= 0 || fallbackUrl.isNullOrBlank() || fallbackUrl == url) {
+            primary
+        } else {
+            cancellableRequestDelay(port, fallbackUrl, deadline)
+        }
+    }
 
     /**
      * Runs [probe] against [core]: the live session when it runs this core, a test tunnel on the
