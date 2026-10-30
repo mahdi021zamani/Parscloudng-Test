@@ -289,6 +289,7 @@ object CoreServiceManager {
             isReloading = true
             LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core reload start...")
 
+            AetherCoreManager.stop()
             coreController.stopLoop()
             launchCore(service, tunFd, isReload = true)
 
