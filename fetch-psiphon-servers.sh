@@ -13,7 +13,6 @@ __dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # psiphon_servers.stamp beside it records when the list was published, from the download's
 # Last-Modified header, so the app can tell a newer bundled list from an older one.
 
-APP_CONFIG="$__dir/V2rayNG/app/src/main/java/com/v2ray/ang/AppConfig.kt"
 KEY_SOURCE="$__dir/aether/aether/src/psiphon.rs"
 TARGET="$__dir/V2rayNG/app/src/main/assets/psiphon_servers.dat"
 STAMP="$__dir/V2rayNG/app/src/main/assets/psiphon_servers.stamp"
@@ -36,9 +35,14 @@ if [[ ! -f "$KEY_SOURCE" ]]; then
   exit 1
 fi
 
-URL="$(grep -o 'PSIPHON_SERVERS_URL = "[^"]*"' "$APP_CONFIG" | cut -d'"' -f2)"
+# Prefer an explicit build override; otherwise use the URL shipped by the pinned Aether source.
+# Aether names this constant SERVER_LIST_URL (not PSIPHON_SERVERS_URL in AppConfig.kt).
+URL="${PSIPHON_SERVERS_URL:-}"
 if [[ -z "$URL" ]]; then
-  echo "PSIPHON_SERVERS_URL not found in $APP_CONFIG"
+  URL="$(grep -Poz 'SERVER_LIST_URL:\\s*&str\\s*=\\s*"\\K[^"]+' "$KEY_SOURCE" | tr -d '\\0' || true)"
+fi
+if [[ -z "$URL" ]]; then
+  echo "SERVER_LIST_URL not found in $KEY_SOURCE"
   exit 1
 fi
 
