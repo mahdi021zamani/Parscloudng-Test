@@ -112,6 +112,16 @@ object CoreConfigManager {
             if (configContext.isCustom) {
                 return buildV2rayCustomConfig(configContext)
             }
+            val containsAether = configContext.resolvedOutbounds.any { resolved ->
+                resolved.resolvedProfiles.any { it.configType == EConfigType.AETHER }
+            }
+            if (containsAether) {
+                return ConfigResult(
+                    status = false,
+                    guid = guid,
+                    errorMessage = "Aether profiles must be measured through the standalone Aether test path"
+                )
+            }
             val v2rayConfig = buildUnifiedConfig(configContext)
             postProcessForSpeedtest(v2rayConfig)
 
@@ -140,6 +150,13 @@ object CoreConfigManager {
         val result = ConfigResult(true, configContext.guid, raw)
 
         val json = JsonUtil.parseString(raw)?.takeIf { it.isJsonObject }?.asJsonObject ?: return result
+        if (AetherDependency.ofCustom(json) != AetherDependency.None) {
+            return ConfigResult(
+                status = false,
+                guid = configContext.guid,
+                errorMessage = "Custom configurations with an Aether core are not supported; use a standalone Aether profile"
+            )
+        }
 
         // Inject or remove traffic statistics configuration based on user preference
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED) == true) {
