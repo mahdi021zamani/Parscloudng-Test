@@ -793,13 +793,10 @@ object AetherCoreManager {
     }
 
     /**
-     * Runs a core of its own, one that serves no session: a scan, a key renewal, a latency test. It
-     * dials out through the exit of this process's Xray, whose traffic leaves by the exit-node [exit],
-     * as the session's core dials out through the session's, see [CoreNativeManager.openExit]. For a
-     * core that dials out through a hop of a proxy chain, [configuration] is the configuration under
-     * test, whose exit-node that hop is; see [exitConfiguration]. The exit takes one core at a time, so
-     * the cores of a process take turns; it opens before the core starts and closes once the core has
-     * ended.
+     * Runs a standalone core for scanning, key renewal or latency work. This branch runs these tasks
+     * directly; exit-node and proxy-chain routing are refused until the bundled Xray library exposes
+     * the auxiliary exit bridge. The tasks are serialized so two standalone cores cannot contend for
+     * the same Aether identity files or listener ports.
      */
     internal suspend fun <T> withProcess(
         context: Context,
@@ -823,7 +820,7 @@ object AetherCoreManager {
         return exitTurns.withLock { coroutineScope { runCore(context, arguments, source, onOutput, keysDir, block) } }
     }
 
-    /** One core of its own at a time in this process, as the exit of its Xray takes; see [withProcess]. */
+    /** One standalone Aether task at a time; scans and key renewal share identity files and listener ports. */
     private val exitTurns = Mutex()
 
     /**
