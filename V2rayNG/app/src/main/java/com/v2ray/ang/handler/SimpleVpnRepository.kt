@@ -8,17 +8,38 @@ import com.v2ray.ang.dto.entities.SubscriptionItem
 import com.v2ray.ang.util.CountryFlagUtil
 
 /**
- * Orchestrates the simplified "Free VPN" screen (ui/simple/SimpleVpnActivity) on top of
- * the app's existing subscription, config-parsing, ping-test, and VPN-connect systems.
+ * Coordinates independent remote feeds for the simplified PARSCLOUD client.
  *
- * This class does NOT talk to the network or to the VPN core directly — it only
- * coordinates existing pieces (AngConfigManager, MmkvManager, LauncherManager) and
- * enforces the cache/expiry rules the simplified client needs on top of them.
+ * Each source has its own subscription ID and cache. Primary feeds are merged
+ * for display; the emergency feed is consulted only when no fresh primary
+ * configuration is available. The source selector/editor remains hidden from
+ * regular users.
  */
 object SimpleVpnRepository {
 
-    /** Fixed subscription id so we always find the same hidden subscription. */
+    /** Kept stable so existing installations migrate their old cache in place. */
     const val SIMPLE_SUB_ID = "simple_free_vpn"
+    const val AETHER_SUB_ID = "simple_aether"
+    const val EMERGENCY_SUB_ID = "simple_emergency"
+
+    private data class Source(
+        val id: String,
+        val remarks: String,
+        val url: String,
+        val fallback: Boolean = false,
+    )
+
+    private val primarySources: List<Source>
+        get() = listOf(
+            Source(SIMPLE_SUB_ID, "PARSCLOUD • V2Ray", RemoteConfig.SERVER_LIST_URL),
+            Source(AETHER_SUB_ID, "PARSCLOUD • Aether", RemoteConfig.AETHER_SERVER_LIST_URL),
+        )
+
+    /** Empty until a private server-side proxy is configured for the secret panel URL. */
+    private val emergencySource: Source?
+        get() = RemoteConfig.EMERGENCY_FALLBACK_URL
+            .takeIf { it.isNotBlank() }
+            ?.let { Source(EMERGENCY_SUB_ID, "PARSCLOUD • Backup", it, fallback = true) }
 
     data class SimpleServerUiModel(
         val guid: String,
@@ -36,23 +57,65 @@ object SimpleVpnRepository {
         data object CacheUnavailableAfterNetworkError : RefreshOutcome()
     }
 
-    /** Gets (creating if needed) the hidden subscription pointing at RemoteConfig.SERVER_LIST_URL. */
-    fun ensureSubscription(): SubscriptionCache {
-        val existing = MmkvManager.decodeSubscription(SIMPLE_SUB_ID)
+    private fun ensureSubscription(source: Source): SubscriptionCache {
+        val existing = MmkvManager.decodeSubscription(source.id)
         val subItem = existing ?: SubscriptionItem(
-            remarks = "Free VPN",
-            url = RemoteConfig.SERVER_LIST_URL,
+            remarks = source.remarks,
+            url = source.url,
             enabled = true,
             autoUpdate = false,
         )
-        if (existing == null || existing.url != RemoteConfig.SERVER_LIST_URL) {
-            subItem.url = RemoteConfig.SERVER_LIST_URL
-            MmkvManager.encodeSubscription(SIMPLE_SUB_ID, subItem)
+        if (existing == null || existing.url != source.url || existing.remarks != source.remarks) {
+            subItem.url = source.url
+            subItem.remarks = source.remarks
+            subItem.enabled = true
+            subItem.autoUpdate = false
+            MmkvManager.encodeSubscription(source.id, subItem)
         }
-        return SubscriptionCache(SIMPLE_SUB_ID, subItem)
+        return SubscriptionCache(source.id, subItem)
     }
 
-    fun getServerGuids(): List<String> = MmkvManager.decodeServerList(SIMPLE_SUB_ID)
+    /** Backwards-compatible initializer used by the existing screen. */
+    fun ensureSubscription(): SubscriptionCache = ensureSubscription(primarySources.first())
+
+    private fun allConfiguredSources(): List<Source> =
+        primarySources + listOfNotNull(emergencySource)
+
+    private fun isCacheExpired(sub: SubscriptionItem?): Boolean {
+        if (sub == null || sub.lastUpdated <= 0L) return true
+        val expiryMillis = RemoteConfig.REMOTE_DATA_EXPIRY_MINUTES * 60_000L
+        return System.currentTimeMillis() - sub.lastUpdated > expiryMillis
+    }
+
+    private fun sourceHasFreshConfigs(source: Source): Boolean {
+        val sub = MmkvManager.decodeSubscription(source.id) ?: return false
+        return MmkvManager.decodeServerList(source.id).isNotEmpty() && !isCacheExpired(sub)
+    }
+
+    private fun sourceGuids(source: Source): List<String> =
+        MmkvManager.decodeServerList(source.id).toList()
+
+    /**
+     * Primary feeds are always shown together when fresh. The emergency feed is
+     * hidden unless all primary feeds lack fresh usable data.
+     */
+    private fun visibleSourceIds(): List<String> {
+        val freshPrimary = primarySources.filter(::sourceHasFreshConfigs)
+        if (freshPrimary.isNotEmpty()) return freshPrimary.map { it.id }
+
+        emergencySource?.takeIf(::sourceHasFreshConfigs)?.let { return listOf(it.id) }
+
+        // Preserve stale cached entries for visibility/diagnostics, but canConnect()
+        // remains false until a source has a fresh cache.
+        val cachedPrimary = primarySources.filter { sourceGuids(it).isNotEmpty() }
+        if (cachedPrimary.isNotEmpty()) return cachedPrimary.map { it.id }
+        return listOfNotNull(emergencySource?.takeIf { sourceGuids(it).isNotEmpty() }?.id)
+    }
+
+    fun getServerGuids(): List<String> {
+        val ids = visibleSourceIds()
+        return ids.flatMap { MmkvManager.decodeServerList(it) }.distinct()
+    }
 
     fun getServerUiModel(guid: String): SimpleServerUiModel? {
         val profile = MmkvManager.decodeServerConfig(guid) ?: return null
@@ -71,76 +134,94 @@ object SimpleVpnRepository {
     fun getServers(): List<SimpleServerUiModel> = getServerGuids().mapNotNull(::getServerUiModel)
 
     fun sortByPing() {
-        AngConfigManager.sortByTestResultsForSub(SIMPLE_SUB_ID)
+        visibleSourceIds().forEach(AngConfigManager::sortByTestResultsForSub)
     }
 
-    private fun isCacheExpired(sub: SubscriptionItem): Boolean {
-        if (sub.lastUpdated <= 0L) return true
-        val expiryMillis = RemoteConfig.REMOTE_DATA_EXPIRY_MINUTES * 60_000L
-        return System.currentTimeMillis() - sub.lastUpdated > expiryMillis
+    fun canConnect(): Boolean = visibleSourceIds().any { id ->
+        val source = allConfiguredSources().firstOrNull { it.id == id } ?: return@any false
+        sourceHasFreshConfigs(source)
     }
 
-    /**
-     * Whether the app is currently allowed to start a NEW connection:
-     * the server list must be non-empty and the cache must not have expired.
-     * (Section 5 of the spec.)
-     */
-    fun canConnect(): Boolean {
-        val sub = MmkvManager.decodeSubscription(SIMPLE_SUB_ID) ?: return false
-        if (getServerGuids().isEmpty()) return false
-        return !isCacheExpired(sub)
-    }
-
-    /**
-     * Wipes every locally-cached server for the simple subscription and disconnects
-     * an active VPN connection, if any. Used when the server operator intentionally
-     * sends back an empty/invalid list (Section 4, case A) and when a network-error
-     * cache finally expires (Section 4, case B).
-     */
-    fun wipeAllAndDisconnect(context: Context) {
-        val guids = getServerGuids()
-        if (guids.isNotEmpty()) {
-            MmkvManager.removeServers(guids, SIMPLE_SUB_ID)
+    private fun clearSourceCache(source: Source) {
+        MmkvManager.removeServers(sourceGuids(source), source.id)
+        MmkvManager.decodeSubscription(source.id)?.let { sub ->
+            sub.lastUpdated = -1L
+            MmkvManager.encodeSubscription(source.id, sub)
         }
-        MmkvManager.decodeSubscription(SIMPLE_SUB_ID)?.let { sub ->
-            sub.lastUpdated = -1
-            MmkvManager.encodeSubscription(SIMPLE_SUB_ID, sub)
-        }
-        // No-op if nothing is running; safe to call unconditionally.
-        LauncherManager.stopService(context)
+    }
+
+    private fun refreshSource(source: Source): AngConfigManager.SimpleRefreshResult {
+        val subscription = ensureSubscription(source)
+        return AngConfigManager.refreshSimpleServerList(subscription)
     }
 
     /**
-     * Runs one refresh cycle against RemoteConfig.SERVER_LIST_URL and applies the
-     * cache/expiry rules from Section 4 of the spec. Ping-testing and sorting the
-     * newly-downloaded servers is the caller's responsibility (see SimpleVpnViewModel)
-     * since that needs to report live per-server progress to the UI.
+     * Refresh each primary independently. A bad/empty Aether response cannot
+     * erase healthy V2Ray profiles (and vice versa). Only when neither primary
+     * has fresh usable data is the optional emergency proxy attempted.
      */
     fun refresh(context: Context): RefreshOutcome {
-        val sub = ensureSubscription()
-        return when (val result = AngConfigManager.refreshSimpleServerList(sub)) {
-            is AngConfigManager.SimpleRefreshResult.Success ->
-                RefreshOutcome.Updated(result.configCount)
+        var sawNetworkError = false
+        var sawSuccessfulEmpty = false
 
-            AngConfigManager.SimpleRefreshResult.EmptyOrInvalid -> {
-                wipeAllAndDisconnect(context)
-                RefreshOutcome.EmptiedByServer
-            }
-
-            AngConfigManager.SimpleRefreshResult.NetworkError -> {
-                val current = MmkvManager.decodeSubscription(SIMPLE_SUB_ID)
-                val stillUsable = current != null &&
-                    !isCacheExpired(current) &&
-                    getServerGuids().isNotEmpty()
-                if (stillUsable) {
-                    RefreshOutcome.KeepingCacheAfterNetworkError
-                } else {
-                    // Cache is gone or expired and we couldn't refresh it: make sure the
-                    // user can't connect (or stay connected) on stale/nonexistent data.
-                    LauncherManager.stopService(context)
-                    RefreshOutcome.CacheUnavailableAfterNetworkError
+        primarySources.forEach { source ->
+            when (refreshSource(source)) {
+                is AngConfigManager.SimpleRefreshResult.Success -> Unit
+                AngConfigManager.SimpleRefreshResult.EmptyOrInvalid -> {
+                    clearSourceCache(source)
+                    sawSuccessfulEmpty = true
                 }
+                AngConfigManager.SimpleRefreshResult.NetworkError -> sawNetworkError = true
             }
         }
+
+        val freshPrimaryGuids = primarySources
+            .filter(::sourceHasFreshConfigs)
+            .flatMap(::sourceGuids)
+            .distinct()
+
+        if (freshPrimaryGuids.isNotEmpty()) {
+            return RefreshOutcome.Updated(freshPrimaryGuids.size)
+        }
+
+        val fallback = emergencySource
+        if (fallback != null) {
+            when (refreshSource(fallback)) {
+                is AngConfigManager.SimpleRefreshResult.Success -> Unit
+                AngConfigManager.SimpleRefreshResult.EmptyOrInvalid -> {
+                    clearSourceCache(fallback)
+                    sawSuccessfulEmpty = true
+                }
+                AngConfigManager.SimpleRefreshResult.NetworkError -> sawNetworkError = true
+            }
+            val fallbackGuids = sourceGuids(fallback)
+            if (fallbackGuids.isNotEmpty() && sourceHasFreshConfigs(fallback)) {
+                return RefreshOutcome.Updated(fallbackGuids.size)
+            }
+        }
+
+        val anyFreshCache = allConfiguredSources().any(::sourceHasFreshConfigs)
+        if (anyFreshCache) {
+            return RefreshOutcome.Updated(getServerGuids().size)
+        }
+
+        val anyCached = allConfiguredSources().any { sourceGuids(it).isNotEmpty() }
+        if (sawNetworkError && anyCached) {
+            return RefreshOutcome.KeepingCacheAfterNetworkError
+        }
+
+        if (sawNetworkError) {
+            LauncherManager.stopService(context)
+            return RefreshOutcome.CacheUnavailableAfterNetworkError
+        }
+
+        // Empty/invalid feeds are cleared per-source. Do not disconnect if another
+        // source still has a usable cache.
+        if (sawSuccessfulEmpty || allConfiguredSources().none { sourceGuids(it).isNotEmpty() }) {
+            LauncherManager.stopService(context)
+            return RefreshOutcome.EmptiedByServer
+        }
+
+        return RefreshOutcome.CacheUnavailableAfterNetworkError
     }
 }
