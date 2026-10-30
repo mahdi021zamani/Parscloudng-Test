@@ -170,8 +170,11 @@ object CoreConfigContextBuilder {
                         }
                     }
                 }
-                .filter { it.server.isNotNullEmpty() }
-                .filter { Utils.isPureIpAddress(it.server!!) || Utils.isValidUrl(it.server!!) }
+                .filter { profile ->
+                    profile.configType == EConfigType.AETHER ||
+                        (profile.server.isNotNullEmpty() &&
+                            (Utils.isPureIpAddress(profile.server!!) || Utils.isValidUrl(profile.server!!)))
+                }
                 .filter { !it.configType.isComplexType() }
                 .toList()
         } catch (e: Exception) {
@@ -189,8 +192,11 @@ object CoreConfigContextBuilder {
             return config.proxyChainProfiles.orEmpty().split(",")
                 .asSequence()
                 .mapNotNull { remark -> SettingsManager.getServerViaRemarks(remark) }
-                .filter { it.server.isNotNullEmpty() }
-                .filter { Utils.isPureIpAddress(it.server!!) || Utils.isValidUrl(it.server!!) }
+                .filter { profile ->
+                    profile.configType == EConfigType.AETHER ||
+                        (profile.server.isNotNullEmpty() &&
+                            (Utils.isPureIpAddress(profile.server!!) || Utils.isValidUrl(profile.server!!)))
+                }
                 .filter { !it.configType.isComplexType() }
                 .toList()
                 .reversed()
