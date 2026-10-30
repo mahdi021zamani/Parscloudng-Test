@@ -12,6 +12,7 @@ on:
     branches:
       - main
       - feature/parscloud-subscription-license
+      - feature/parscloud-aether-integration
 
 permissions:
   contents: read
