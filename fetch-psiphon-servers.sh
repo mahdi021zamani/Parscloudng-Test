@@ -39,7 +39,7 @@ fi
 # Aether names this constant SERVER_LIST_URL (not PSIPHON_SERVERS_URL in AppConfig.kt).
 URL="${PSIPHON_SERVERS_URL:-}"
 if [[ -z "$URL" ]]; then
-  URL="$(tr '\\n' ' ' < "$KEY_SOURCE" | grep -oP 'SERVER_LIST_URL:\\s*&str\\s*=\\s*"\\K[^"]+' | head -n 1 || true)"
+  URL="$(tr '\n' ' ' < "$KEY_SOURCE" | grep -oP 'SERVER_LIST_URL:\s*&str\s*=\s*"\K[^"]+' | head -n 1 || true)"
 fi
 if [[ -z "$URL" ]]; then
   echo "SERVER_LIST_URL not found in $KEY_SOURCE"
