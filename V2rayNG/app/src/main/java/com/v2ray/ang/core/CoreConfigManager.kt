@@ -43,6 +43,18 @@ object CoreConfigManager {
             if (configContext.isCustom) {
                 return buildV2rayCustomConfig(configContext)
             }
+            // Until multi-outbound Aether dependency routing is integrated, refuse Aether in chains,
+            // policy groups and routing targets rather than letting an unstarted local SOCKS core be used.
+            val containsAether = configContext.resolvedOutbounds.any { resolved ->
+                resolved.resolvedProfiles.any { it.configType == EConfigType.AETHER }
+            }
+            if (containsAether && MmkvManager.decodeServerConfig(guid)?.configType != EConfigType.AETHER) {
+                return ConfigResult(
+                    status = false,
+                    guid = guid,
+                    errorMessage = "Aether currently supports a directly selected profile only"
+                )
+            }
             val v2rayConfig = buildUnifiedConfig(configContext)
             val selectedProfile = MmkvManager.decodeServerConfig(guid)
             val aetherCore = selectedProfile?.takeIf { it.configType == EConfigType.AETHER }?.let { AetherCore.of(it) }
