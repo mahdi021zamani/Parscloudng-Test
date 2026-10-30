@@ -74,11 +74,67 @@ data class ProfileItem(
     var proxyChainProfiles: String? = null,
 
     var browserDialerMode: String? = null,
+
+    var dialMode: String? = null,
+    var targetStrategy: String? = null,
+    var aetherProtocol: String? = null,
+    var aetherTransport: String? = null,
+    var aetherMasqueSni: String? = null,
+    var aetherScanMode: String? = null,
+    var aetherObfuscation: String? = null,
+    var aetherFingerprint: String? = null,
+    var aetherIpVersion: String? = null,
+    var aetherWiwOuter: String? = null,
+    var aetherWiwInner: String? = null,
+    var aetherFragment: Boolean? = null,
+    var aetherFragmentSize: String? = null,
+    var aetherFragmentDelay: String? = null,
+    var aetherEch: Boolean? = null,
+    var aetherEchDns: String? = null,
+    var aetherEchDomain: String? = null,
+    var aetherDns: String? = null,
+    var aetherExitLoc: String? = null,
+    var aetherExitNode: String? = null,
+    var aetherListenPort: String? = null,
+    var aetherPsiphon: String? = null,
+    var aetherPsiphonMode: String? = null,
+    var aetherPsiphonCdnIps: String? = null,
+    var aetherPsiphonCdnSni: String? = null,
+    var aetherPsiphonCdnSets: String? = null,
+    var aetherPsiphonRegion: String? = null,
+    var aetherPsiphonBundledList: Boolean? = null,
+    var aetherTor: String? = null,
+    var aetherTorBridges: String? = null,
+    var aetherTorBridgeLines: String? = null,
+    var aetherTorRelays: String? = null,
+    var aetherCommand: String? = null,
 ) {
 
     companion object {
         fun create(configType: EConfigType): ProfileItem =
             ProfileItem(configType = configType)
+
+        fun proxyChainMembersOf(text: String?): List<String> {
+            if (text.isNullOrEmpty()) return emptyList()
+            val result = mutableListOf<String>()
+            val part = StringBuilder()
+            var i = 0
+            while (i < text.length) {
+                val ch = text[i]
+                val next = text.getOrNull(i + 1)
+                when {
+                    ch == '\\' && (next == ',' || next == '\\') -> { part.append(next); i++ }
+                    ch == ',' -> { result += part.toString(); part.clear() }
+                    else -> part.append(ch)
+                }
+                i++
+            }
+            result += part.toString()
+            return result
+        }
+
+        fun proxyChainProfilesOf(members: List<String>): String =
+            members.joinToString(",") { it.replace("\\", "\\\\").replace(",", "\\,") }
     }
 
     fun getServerAddressAndPort(): String {
