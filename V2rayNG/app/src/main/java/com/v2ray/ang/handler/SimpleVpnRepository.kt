@@ -26,7 +26,6 @@ object SimpleVpnRepository {
         val id: String,
         val remarks: String,
         val url: String,
-        val fallback: Boolean = false,
     )
 
     private val primarySources: List<Source>
@@ -39,7 +38,7 @@ object SimpleVpnRepository {
     private val emergencySource: Source?
         get() = RemoteConfig.EMERGENCY_FALLBACK_URL
             .takeIf { it.isNotBlank() }
-            ?.let { Source(EMERGENCY_SUB_ID, "PARSCLOUD • Backup", it, fallback = true) }
+            ?.let { Source(EMERGENCY_SUB_ID, "PARSCLOUD • Backup", it) }
 
     data class SimpleServerUiModel(
         val guid: String,
