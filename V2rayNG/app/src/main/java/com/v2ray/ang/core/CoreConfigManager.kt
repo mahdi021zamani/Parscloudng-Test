@@ -49,6 +49,20 @@ object CoreConfigManager {
                 resolved.resolvedProfiles.any { it.configType == EConfigType.AETHER }
             }
             val selectedAetherProfile = MmkvManager.decodeServerConfig(guid)
+            val primaryResolved = configContext.resolvedOutbounds.firstOrNull { it.tag == AppConfig.TAG_PROXY }
+            val aetherCompositionUnsupported = selectedAetherProfile?.configType == EConfigType.AETHER && (
+                primaryResolved?.resolvedProfiles?.size != 1 ||
+                    configContext.resolvedOutbounds.drop(1).any { resolved ->
+                        resolved.resolvedProfiles.any { it.configType == EConfigType.AETHER }
+                    }
+                )
+            if (aetherCompositionUnsupported) {
+                return ConfigResult(
+                    status = false,
+                    guid = guid,
+                    errorMessage = "Aether must be the only profile in the selected outbound; proxy-chain and routing Aether nodes are not supported"
+                )
+            }
             if (containsAether && selectedAetherProfile?.configType != EConfigType.AETHER) {
                 return ConfigResult(
                     status = false,
