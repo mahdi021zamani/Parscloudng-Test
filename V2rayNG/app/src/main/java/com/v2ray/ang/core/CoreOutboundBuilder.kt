@@ -42,6 +42,9 @@ object CoreOutboundBuilder {
         return outbound
     }
 
+    /** IP literal check used by Aether's SNI validation. */
+    internal fun isNetipAddress(value: String): Boolean = Utils.isPureIpAddress(value)
+
     /** Aether is hosted by its own local core; Xray reaches it through loopback SOCKS. */
     private fun toOutboundAether(profileItem: ProfileItem): OutboundBean? {
         val outbound = createInitOutbound(EConfigType.SOCKS) ?: return null
