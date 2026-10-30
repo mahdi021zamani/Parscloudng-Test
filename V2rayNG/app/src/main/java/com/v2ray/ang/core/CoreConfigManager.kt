@@ -56,13 +56,6 @@ object CoreConfigManager {
                     errorMessage = "Aether currently supports a directly selected profile only"
                 )
             }
-            if (selectedAetherProfile?.configType == EConfigType.AETHER && !selectedAetherProfile.aetherExitNode.isNullOrBlank()) {
-                return ConfigResult(
-                    status = false,
-                    guid = guid,
-                    errorMessage = "Named Aether exit-node profiles are not enabled in this integration yet"
-                )
-            }
             val v2rayConfig = buildUnifiedConfig(configContext)
             val selectedProfile = MmkvManager.decodeServerConfig(guid)
             val aetherCore = selectedProfile?.takeIf { it.configType == EConfigType.AETHER }?.let { AetherCore.of(it) }

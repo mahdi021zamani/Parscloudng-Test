@@ -3,6 +3,7 @@ package com.v2ray.ang.core
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.v2ray.ang.AppConfig
+import com.v2ray.ang.dto.ByName
 import com.v2ray.ang.dto.V2rayConfig.OutboundBean
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.enums.EConfigType
@@ -37,6 +38,7 @@ object CoreOutboundBuilder {
         }
 
         outbound ?: return null
+        if (profileItem.configType != EConfigType.AETHER) applyDialMode(outbound, profileItem)
         val ret = updateOutboundWithGlobalSettings(outbound)
         if (!ret) return null
         return outbound
@@ -54,30 +56,57 @@ object CoreOutboundBuilder {
     }
 
 
-    /** Builds the Xray-side exit used by an Aether core. Named profile exits are refused until
-     * the full profile-chain exit resolver is integrated; silently falling back would leak traffic. */
+    /** Copies a profile's dial mode into the outbound socket options without discarding other sockopt fields. */
+    internal fun applyDialMode(outbound: OutboundBean, mode: String?) {
+        val dialMode = mode.nullIfBlank() ?: return
+        if (outbound.streamSettings == null) {
+            outbound.streamSettings = OutboundBean.StreamSettingsBean(network = null)
+        }
+        outbound.ensureSockopt().dialMode = dialMode
+    }
+
+    /** Applies the selected exit-node profile, or a plain freedom outbound with its final mask and dial mode. */
     fun toOutboundAetherExit(exit: AetherExit, nodeOutbound: (String) -> ExitNodeOutbound = ::toOutboundOfNode): OutboundBean? {
-        exit.node?.let { name -> return (nodeOutbound(name) as? ExitNodeOutbound.Built)?.outbound }
+        exit.node?.let { name ->
+            return (nodeOutbound(name) as? ExitNodeOutbound.Built)?.outbound?.apply {
+                tag = AppConfig.TAG_EXIT_NODE
+                targetStrategy = null
+            }
+        }
         val outbound = OutboundBean(tag = AppConfig.TAG_EXIT_NODE, protocol = "freedom", mux = null)
         if (!exit.finalMask.isNullOrBlank()) {
             outbound.streamSettings = OutboundBean.StreamSettingsBean(network = null)
-            JsonUtil.parseString(exit.finalMask)?.let { outbound.streamSettings?.finalmask = it }
+            updateOutboundFinalMask(outbound.streamSettings!!, exit.finalMask)
         }
-        exit.dialMode?.takeIf { it.isNotBlank() }?.let { mode ->
-            if (outbound.streamSettings == null) outbound.streamSettings = OutboundBean.StreamSettingsBean(network = null)
-            val current = outbound.streamSettings?.sockopt ?: OutboundBean.StreamSettingsBean.SockoptBean()
-            current.dialMode = mode
-            outbound.streamSettings?.sockopt = current
-        }
+        applyDialMode(outbound, exit.dialMode)
         return outbound
     }
 
-    fun toOutboundOfNode(name: String): ExitNodeOutbound = ExitNodeOutbound.NotFound
+    /** Resolve a named profile exactly once; missing or duplicate names never silently fall back to freedom. */
+    fun toOutboundOfNode(name: String): ExitNodeOutbound = when (val found = AetherExit.nodeProfile(name)) {
+        is ByName.One -> try {
+            nodeOf(found.value, ::convert)
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to build the outbound of the Aether exit-node profile", e)
+            ExitNodeOutbound.NoOutbound
+        }
+        ByName.None -> ExitNodeOutbound.NotFound
+        ByName.Several -> ExitNodeOutbound.SameName
+    }
 
-    internal fun nodeOutboundOf(outbound: OutboundBean?): ExitNodeOutbound =
-        if (outbound == null) ExitNodeOutbound.NoOutbound
-        else if (!EchOutbound.takes(outbound, setOf(AppConfig.TAG_EXIT_NODE))) ExitNodeOutbound.EchUnusable
-        else ExitNodeOutbound.Built(outbound)
+    internal fun nodeOf(profile: ProfileItem, build: (ProfileItem) -> OutboundBean?): ExitNodeOutbound {
+        val content = AetherExit.contentOf(profile)
+        return when (val built = nodeOutboundOf(build(profile))) {
+            is ExitNodeOutbound.Built -> built.copy(content = content)
+            else -> built
+        }
+    }
+
+    internal fun nodeOutboundOf(outbound: OutboundBean?): ExitNodeOutbound = when {
+        outbound == null -> ExitNodeOutbound.NoOutbound
+        !EchOutbound.takes(outbound, setOf(AppConfig.TAG_EXIT_NODE)) -> ExitNodeOutbound.EchUnusable
+        else -> ExitNodeOutbound.Built(outbound)
+    }
 
     /** Applies global outbound options (mux, protocol-specific tweaks, etc.). */
     private fun updateOutboundWithGlobalSettings(outbound: OutboundBean): Boolean {
@@ -720,6 +749,16 @@ object CoreOutboundBuilder {
             } else {
                 LogUtil.w("V2rayConfigManager", "Invalid finalMask JSON, keeping previously generated finalmask")
             }
+        }
+    }
+
+    internal fun updateOutboundFinalMask(streamSettings: OutboundBean.StreamSettingsBean, finalMask: String?) {
+        if (finalMask.isNullOrBlank()) return
+        val parsedFinalMask = JsonUtil.parseString(finalMask)
+        if (parsedFinalMask != null) {
+            streamSettings.finalmask = parsedFinalMask
+        } else {
+            LogUtil.w("V2rayConfigManager", "Invalid finalMask JSON, keeping previously generated finalmask")
         }
     }
 }
