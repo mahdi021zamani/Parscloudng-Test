@@ -85,7 +85,7 @@ class ServerAetherActivity : BaseServerActivity() {
     }
 
     override fun validateProtocolConfig(config: ProfileItem): Boolean {
-        if (!config.aetherExitNode.isNullOrBlank() || !config.finalMask.isNullOrBlank() || !config.dialMode.isNullOrBlank()) {
+        if (!config.proxyChainProfiles.isNullOrBlank() || !config.aetherExitNode.isNullOrBlank() || !config.finalMask.isNullOrBlank() || !config.dialMode.isNullOrBlank()) {
             toast(R.string.aether_exit_settings_unsupported)
             return false
         }

@@ -57,14 +57,15 @@ object CoreConfigManager {
                 )
             }
             if (selectedAetherProfile?.configType == EConfigType.AETHER &&
-                (!selectedAetherProfile.aetherExitNode.isNullOrBlank() ||
+                (!selectedAetherProfile.proxyChainProfiles.isNullOrBlank() ||
+                    !selectedAetherProfile.aetherExitNode.isNullOrBlank() ||
                     !selectedAetherProfile.finalMask.isNullOrBlank() ||
                     !selectedAetherProfile.dialMode.isNullOrBlank())
             ) {
                 return ConfigResult(
                     status = false,
                     guid = guid,
-                    errorMessage = "Aether exit-node routing is not supported by this build yet"
+                    errorMessage = "Aether proxy-chain and exit-node routing are not supported by this build yet"
                 )
             }
             val v2rayConfig = buildUnifiedConfig(configContext)
