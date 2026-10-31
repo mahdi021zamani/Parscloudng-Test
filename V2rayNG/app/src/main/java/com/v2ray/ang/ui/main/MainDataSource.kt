@@ -62,5 +62,6 @@ interface MainDataSource : Closeable {
     fun testCurrentServerRealPing()
 
     fun syncSubscriptions()
+    suspend fun syncAetherFeed(): Boolean
     fun initAssets()
 }
