@@ -59,6 +59,7 @@ object CoreServiceManager {
 
     /** Server-side lease heartbeat for the currently running subscription session. */
     private var subscriptionHeartbeatJob: Job? = null
+    private var subscriptionReleaseJob: Job? = null
 
     /** Tun descriptor the core was started with, null in the proxy only and root run modes. */
     private var currentVpnInterface: ParcelFileDescriptor? = null
@@ -122,6 +123,15 @@ object CoreServiceManager {
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Service is null")
             return false
         }
+
+        // A previous stop may still be shutting down the core and releasing its lease.
+        // Wait for that cleanup before reusing this installation's stable session ID.
+        subscriptionReleaseJob?.let { pendingRelease ->
+            runBlocking(Dispatchers.IO) {
+                pendingRelease.join()
+            }
+        }
+        subscriptionReleaseJob = null
 
         // Claim a server-side connection slot before starting any local proxy/VPN core.
         // Network I/O runs on Dispatchers.IO; this service entry point remains synchronous
@@ -293,25 +303,30 @@ object CoreServiceManager {
     fun stopCoreLoop(): Boolean {
         subscriptionHeartbeatJob?.cancel()
         subscriptionHeartbeatJob = null
-        // Release synchronously before a possible immediate reconnect reuses this session ID.
-        runBlocking(Dispatchers.IO) {
-            SubscriptionConnectionRepository.release()
-        }
         AetherCoreManager.stop()
-        val service = getService() ?: return false
+        val service = getService()
+        if (service == null) {
+            subscriptionReleaseJob = CoroutineScope(Dispatchers.IO).launch {
+                SubscriptionConnectionRepository.release()
+            }
+            return false
+        }
 
         networkMonitor?.unregister()
         networkMonitor = null
         currentVpnInterface = null
 
-        if (isRunning()) {
-            CoroutineScope(Dispatchers.IO).launch {
+        val shouldStopCore = isRunning()
+        subscriptionReleaseJob = CoroutineScope(Dispatchers.IO).launch {
+            if (shouldStopCore) {
                 try {
                     coreController.stopLoop()
                 } catch (e: Exception) {
                     LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
                 }
             }
+            // Keep the lease until the local core has actually stopped.
+            SubscriptionConnectionRepository.release()
         }
 
         // Close existing browser dialer
