@@ -49,6 +49,26 @@ data class SimpleVpnUiState(
     val licenseValid: Boolean = false,
 )
 
+internal fun selectSimpleVpnSourceTab(
+    current: SimpleVpnUiState,
+    sourceId: String,
+    servers: List<SimpleServerUiModel>,
+    selectedGuid: String?,
+    canConnect: Boolean,
+): SimpleVpnUiState? {
+    if (sourceId != SimpleVpnRepository.SIMPLE_SUB_ID &&
+        sourceId != SimpleVpnRepository.AETHER_SUB_ID
+    ) return null
+
+    val validSelection = selectedGuid?.takeIf { guid -> servers.any { it.guid == guid } }
+    return current.copy(
+        selectedSourceId = sourceId,
+        servers = servers,
+        selectedGuid = validSelection,
+        canConnect = canConnect && validSelection != null,
+    )
+}
+
 class SimpleVpnViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(SimpleVpnUiState())
@@ -187,14 +207,15 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             ?.takeIf { guid -> servers.any { it.guid == guid } }
             ?: servers.firstOrNull()?.guid
         selected?.let(MmkvManager::setSelectServer)
-        _uiState.update {
-            it.copy(
-                selectedSourceId = sourceId,
-                servers = servers,
-                selectedGuid = selected,
-                canConnect = SimpleVpnRepository.canConnect(sourceId) && it.licenseValid,
-            )
-        }
+        val current = _uiState.value
+        val next = selectSimpleVpnSourceTab(
+            current = current,
+            sourceId = sourceId,
+            servers = servers,
+            selectedGuid = selected,
+            canConnect = SimpleVpnRepository.canConnect(sourceId) && current.licenseValid,
+        ) ?: return
+        _uiState.value = next
     }
 
     fun onSelectServer(guid: String) {
