@@ -16,6 +16,17 @@ android {
         versionCode = 746
         versionName = (project.findProperty("pattngVersion") as? String)?.takeIf { it.isNotBlank() } ?: "2.3.6"
 
+        // Production remains the default. Preview can be selected explicitly at build time
+        // with -PparscloudSubscriptionApiBaseUrl=https://<preview-worker-domain>.
+        val subscriptionApiBaseUrl = (project.findProperty("parscloudSubscriptionApiBaseUrl") as? String)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: "https://parscloud-subscription-server.mahdi021zamani.workers.dev"
+        val escapedSubscriptionApiBaseUrl = subscriptionApiBaseUrl
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        buildConfigField("String", "SUBSCRIPTION_API_BASE_URL", "\"$escapedSubscriptionApiBaseUrl\"")
+
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
         splits {
             abi {
