@@ -561,4 +561,6 @@
     <string name="simple_license_active">Đã kích hoạt gói đăng ký thành công.</string>
     <string name="simple_license_checking">Đang xác minh gói đăng ký…</string>
     <string name="simple_license_key_required">Vui lòng nhập khóa đăng ký.</string>
+    <string name="simple_tab_v2ray">V2Ray</string>
+    <string name="simple_tab_aether">Aether</string>
 </resources>
