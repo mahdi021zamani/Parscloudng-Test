@@ -24,6 +24,7 @@ import com.v2ray.ang.extension.isNotNullEmpty
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.SubscriptionConnectionRepository
 import com.v2ray.ang.handler.SpeedtestManager
 import com.v2ray.ang.helper.MessageHelper
 import com.v2ray.ang.service.DialerNativeService
@@ -33,7 +34,11 @@ import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.ProcessFinder
@@ -51,6 +56,9 @@ object CoreServiceManager {
 
     @Volatile
     private var isReloading = false
+
+    /** Server-side lease heartbeat for the currently running subscription session. */
+    private var subscriptionHeartbeatJob: Job? = null
 
     /** Tun descriptor the core was started with, null in the proxy only and root run modes. */
     private var currentVpnInterface: ParcelFileDescriptor? = null
@@ -115,15 +123,79 @@ object CoreServiceManager {
             return false
         }
 
+        // Claim a server-side connection slot before starting any local proxy/VPN core.
+        // Network I/O runs on Dispatchers.IO; this service entry point remains synchronous
+        // so no traffic can start before the server has granted the lease.
+        val leaseResult = runBlocking(Dispatchers.IO) {
+            SubscriptionConnectionRepository.acquire()
+        }
+        if (leaseResult != SubscriptionConnectionRepository.SessionResult.ACTIVE) {
+            val message = when (leaseResult) {
+                SubscriptionConnectionRepository.SessionResult.LIMIT_REACHED ->
+                    service.getString(R.string.simple_connection_limit_reached)
+                SubscriptionConnectionRepository.SessionResult.REJECTED ->
+                    service.getString(R.string.simple_license_invalid)
+                SubscriptionConnectionRepository.SessionResult.NETWORK_ERROR ->
+                    service.getString(R.string.simple_license_network_error)
+                SubscriptionConnectionRepository.SessionResult.ACTIVE -> ""
+            }
+            LogUtil.w(AppConfig.TAG, "Subscription session: start denied ($leaseResult)")
+            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
+            NotificationManager.cancelNotification()
+            return false
+        }
+
         try {
             doStartCoreLoop(service, vpnInterface)
+            startSubscriptionHeartbeat()
             return true
         } catch (e: Exception) {
+            runBlocking(Dispatchers.IO) {
+                SubscriptionConnectionRepository.release()
+            }
             val message = e.message?.takeUnless { it.isBlank() } ?: e.javaClass.simpleName
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: $message", e)
             MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
             NotificationManager.cancelNotification()
             return false
+        }
+    }
+
+    /**
+     * Renews the lease every 30 seconds. A definitive rejection stops the core
+     * immediately. Temporary network errors are retried every 10 seconds, but the
+     * core is stopped before the 90-second server lease can expire and be reused.
+     */
+    private fun startSubscriptionHeartbeat() {
+        subscriptionHeartbeatJob?.cancel()
+        subscriptionHeartbeatJob = CoroutineScope(Dispatchers.IO).launch {
+            var nextDelayMillis = 30_000L
+            while (isActive) {
+                delay(nextDelayMillis)
+                when (SubscriptionConnectionRepository.heartbeat()) {
+                    SubscriptionConnectionRepository.SessionResult.ACTIVE -> {
+                        nextDelayMillis = 30_000L
+                    }
+
+                    SubscriptionConnectionRepository.SessionResult.LIMIT_REACHED,
+                    SubscriptionConnectionRepository.SessionResult.REJECTED -> {
+                        LogUtil.w(AppConfig.TAG, "Subscription session: heartbeat rejected; stopping active service")
+                        stopActiveServiceForRevokedLicense()
+                        return@launch
+                    }
+
+                    SubscriptionConnectionRepository.SessionResult.NETWORK_ERROR -> {
+                        val elapsed = System.currentTimeMillis() -
+                            SubscriptionConnectionRepository.lastSuccessfulLeaseAtMillis()
+                        if (elapsed >= 75_000L) {
+                            LogUtil.w(AppConfig.TAG, "Subscription session: lease could not be renewed; stopping before lease expiry")
+                            stopActiveServiceForRevokedLicense()
+                            return@launch
+                        }
+                        nextDelayMillis = 10_000L
+                    }
+                }
+            }
         }
     }
 
@@ -219,6 +291,12 @@ object CoreServiceManager {
      * @return True if the core was stopped successfully, false otherwise.
      */
     fun stopCoreLoop(): Boolean {
+        subscriptionHeartbeatJob?.cancel()
+        subscriptionHeartbeatJob = null
+        // Release synchronously before a possible immediate reconnect reuses this session ID.
+        runBlocking(Dispatchers.IO) {
+            SubscriptionConnectionRepository.release()
+        }
         AetherCoreManager.stop()
         val service = getService() ?: return false
 
