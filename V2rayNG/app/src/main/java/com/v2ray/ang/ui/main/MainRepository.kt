@@ -243,12 +243,20 @@ class MainRepository(
         val subscription = ensureAetherSubscription()
         return when (val result = AetherFeedRepository.fetch()) {
             is AetherFeedRepository.Result.Success -> {
-                if (result.content.isBlank()) {
+                // Normalize harmless formatting differences from GitHub/editor uploads before parsing.
+                // This is scoped to the private Aether feed and does not change other subscription imports.
+                val normalizedContent = result.content
+                    .removePrefix("\uFEFF")
+                    .lineSequence()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .joinToString("\n")
+                if (normalizedContent.isEmpty()) {
                     MmkvManager.removeServerViaSubid(AETHER_SUBSCRIPTION_ID)
                     LogUtil.w(AppConfig.TAG, "Aether feed is intentionally empty; cleared existing Aether profiles")
                 } else {
                     val (importedCount, _) = AngConfigManager.importBatchConfig(
-                        result.content, AETHER_SUBSCRIPTION_ID, false
+                        normalizedContent, AETHER_SUBSCRIPTION_ID, false
                     )
                     LogUtil.w(AppConfig.TAG, "Aether feed import finished: $importedCount profiles imported")
                     if (importedCount <= 0) {
