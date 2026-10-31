@@ -28,8 +28,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 enum class SimpleConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED }
@@ -103,34 +101,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             onRefresh()
         }
 
-        // WorkManager's periodic interval is at least 15 minutes and may be deferred
-        // by Android. While this screen/process is alive and VPN is connected, check
-        // the entitlement promptly so a revoked subscription does not stay connected.
-        viewModelScope.launch {
-            while (isActive) {
-                delay(30_000)
-                val state = _uiState.value
-                if (state.status == SimpleConnectionStatus.CONNECTED && !state.isValidatingLicense) {
-                    val stored = withContext(Dispatchers.IO) {
-                        SubscriptionLicenseRepository.getStoredLicense()
-                    }
-                    if (stored == null) {
-                        LauncherManager.stopService(getApplication())
-                        _uiState.update {
-                            it.copy(
-                                status = SimpleConnectionStatus.DISCONNECTED,
-                                licenseValid = false,
-                                canConnect = false,
-                                licenseDialogVisible = true,
-                            )
-                        }
-                    } else {
-                        LogUtil.w(AppConfig.TAG, "Subscription monitor: foreground 30-second validation started")
-                        validateStoredLicense(stored.key, showDialogOnFailure = true)
-                    }
-                }
-            }
-        }
+        // Active connections are monitored by the daemon's 30-second session heartbeat.
+        // This avoids a second validation request every interval and continues to work
+        // even when the launcher Activity is not in the foreground.
     }
 
     /**
