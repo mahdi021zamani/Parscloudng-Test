@@ -1,5 +1,7 @@
 package com.v2ray.ang.handler
 
+import android.content.Context
+import android.provider.Settings
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.v2ray.ang.AppConfig
@@ -29,7 +31,7 @@ import kotlinx.coroutines.sync.withLock
  * subscription key is kept only in memory here and in the existing app-private license store. Never log either value.
  */
 object SubscriptionConnectionRepository {
-    private const val SESSION_ID_STORAGE_KEY = "PARSCLOUD_CONNECTION_SESSION_ID"
+    private const val SESSION_ID_STORAGE_KEY = "PARSCLOUD_CONNECTION_SESSION_ID_V2"
     private val sessionIdPattern = Regex("^[a-f0-9-]{36}$")
     private val client = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
@@ -55,10 +57,12 @@ object SubscriptionConnectionRepository {
     fun lastSuccessfulLeaseAtMillis(): Long = lastSuccessfulLeaseAtMillis
 
     /** Claims this installation's slot before the local proxy/VPN core starts. */
-    suspend fun acquire(): SessionResult = sessionMutex.withLock {
+    suspend fun acquire(context: Context): SessionResult = sessionMutex.withLock {
         val license = SubscriptionLicenseRepository.getStoredLicense()
             ?: return@withLock SessionResult.REJECTED
-        val result = requestSessionAction("acquire", license.key)
+        val sessionId = getOrCreateSessionId(context)
+            ?: return@withLock SessionResult.NETWORK_ERROR
+        val result = requestSessionAction("acquire", license.key, sessionId)
         if (result == SessionResult.ACTIVE) {
             activeSubscriptionKey = license.key
             lastSuccessfulLeaseAtMillis = System.currentTimeMillis()
@@ -121,9 +125,8 @@ object SubscriptionConnectionRepository {
         }
     }
 
-    private suspend fun requestSessionAction(action: String, key: String): SessionResult {
+    private suspend fun requestSessionAction(action: String, key: String, sessionId: String): SessionResult {
         return try {
-            val sessionId = getOrCreateSessionId() ?: return SessionResult.NETWORK_ERROR
             val body = JsonObject().apply {
                 addProperty("sessionId", sessionId)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
@@ -178,11 +181,23 @@ object SubscriptionConnectionRepository {
         }
     }
 
-    private fun getOrCreateSessionId(): String? {
+    private fun getOrCreateSessionId(context: Context? = null): String? {
         val existing = MmkvManager.decodeSettingsString(SESSION_ID_STORAGE_KEY).orEmpty()
         if (sessionIdPattern.matches(existing)) return existing
 
-        val created = UUID.randomUUID().toString()
+        // Android backup can copy MMKV data to another device. Bind the session ID
+        // to ANDROID_ID so restored app data cannot make two devices share one slot.
+        val androidId = context?.let {
+            runCatching {
+                Settings.Secure.getString(it.contentResolver, Settings.Secure.ANDROID_ID)
+            }.getOrNull()
+        }.orEmpty()
+        val created = if (androidId.isNotBlank()) {
+            UUID.nameUUIDFromBytes("${context?.packageName}:$androidId".toByteArray(Charsets.UTF_8)).toString()
+        } else {
+            UUID.randomUUID().toString()
+        }
+
         if (!MmkvManager.encodeSettings(SESSION_ID_STORAGE_KEY, created)) {
             LogUtil.w(AppConfig.TAG, "Subscription session: unable to persist installation session ID")
             return null
