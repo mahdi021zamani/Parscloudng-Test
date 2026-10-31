@@ -561,4 +561,6 @@
     <string name="simple_license_active">Подписка успешно активирована.</string>
     <string name="simple_license_checking">Проверка подписки…</string>
     <string name="simple_license_key_required">Введите ключ подписки.</string>
+    <string name="simple_tab_v2ray">V2Ray</string>
+    <string name="simple_tab_aether">Aether</string>
 </resources>
