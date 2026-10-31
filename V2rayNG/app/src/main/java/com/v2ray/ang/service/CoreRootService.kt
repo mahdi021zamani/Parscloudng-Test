@@ -43,8 +43,8 @@ class CoreRootService : Service(), ServiceControl {
         NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Root: command received")
 
-        if (CoreServiceManager.isRunning()) {
-            LogUtil.i(AppConfig.TAG, "StartCore-Root: Core is already running")
+        if (CoreServiceManager.isRunning() || setupJob?.isActive == true) {
+            LogUtil.i(AppConfig.TAG, "StartCore-Root: Core is already running or starting")
             return START_STICKY
         }
 
