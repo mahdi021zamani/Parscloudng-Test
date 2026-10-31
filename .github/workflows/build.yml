@@ -8,6 +8,11 @@ on:
         required: false
         default: V26.10.11-test
         type: string
+      subscription_api_base_url:
+        description: Subscription API environment (Preview by default; Production must be selected explicitly)
+        required: true
+        default: https://feature-concurrent-connection-lim-parscloud-subscription-server.mahdi021zamani.workers.dev
+        type: string
   push:
     branches:
       - main
@@ -148,6 +153,7 @@ jobs:
           ./gradlew licenseFdroidReleaseReport
           ./gradlew assembleRelease \
             -PpattngVersion="${{ inputs.release_tag || 'V26.10.11-test' }}" \
+            -PparscloudSubscriptionApiBaseUrl="${{ inputs.subscription_api_base_url }}" \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/android_keystore.jks" \
             -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="parscloud-test" \
