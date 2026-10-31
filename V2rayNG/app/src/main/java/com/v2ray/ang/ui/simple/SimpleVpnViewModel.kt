@@ -67,7 +67,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     _uiState.update {
                         it.copy(
                             status = SimpleConnectionStatus.DISCONNECTED,
-                            message = (safeIntent.getSerializableExtra("content") as? String)
+                            message = safeIntent.getStringExtra("content")
                                 ?.takeIf { it.isNotBlank() }
                                 ?: getApplication<Application>().getString(R.string.simple_connect_failed),
                         )
