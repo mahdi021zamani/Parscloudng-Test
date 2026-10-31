@@ -8,11 +8,6 @@ on:
         required: false
         default: V26.10.11-test
         type: string
-  push:
-    branches:
-      - main
-      - feature/parscloud-subscription-license
-      - feature/parscloud-aether-integration
 
 permissions:
   contents: read
