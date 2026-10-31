@@ -576,4 +576,5 @@
     <string name="simple_license_active">اشتراک با موفقیت فعال شد.</string>
     <string name="simple_license_checking">در حال بررسی اشتراک…</string>
     <string name="simple_license_key_required">کلید اشتراک را وارد کنید.</string>
+    <string name="simple_connection_limit_reached">ظرفیت اتصال هم‌زمان این اشتراک تکمیل شده است.</string>
 </resources>
