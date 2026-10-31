@@ -22,8 +22,11 @@ object RemoteConfig {
      */
     const val EMERGENCY_FALLBACK_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/fallback-config"
 
+    /** API base URL; override with -PparscloudSubscriptionApiBaseUrl=... for Preview builds. */
+    val SUBSCRIPTION_API_BASE_URL = BuildConfig.SUBSCRIPTION_API_BASE_URL.trimEnd('/')
+
     /** HTTPS endpoint used to verify each customer subscription key. */
-    const val SUBSCRIPTION_VALIDATE_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/validate"
+    val SUBSCRIPTION_VALIDATE_URL = "$SUBSCRIPTION_API_BASE_URL/v1/validate"
 
     /** How long a successfully downloaded source remains connectable. */
     const val REMOTE_DATA_EXPIRY_MINUTES = 30
