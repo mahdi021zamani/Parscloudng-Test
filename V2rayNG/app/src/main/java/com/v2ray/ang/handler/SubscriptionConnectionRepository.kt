@@ -76,9 +76,7 @@ object SubscriptionConnectionRepository {
      * 90-second lease expiry is the fallback cleanup mechanism.
      */
     fun release(): Boolean {
-        val key = activeSubscriptionKey
-            ?: SubscriptionLicenseRepository.getStoredLicense()?.key
-            ?: return true
+        val key = activeSubscriptionKey ?: return true
 
         return try {
             val body = JsonObject().apply {
