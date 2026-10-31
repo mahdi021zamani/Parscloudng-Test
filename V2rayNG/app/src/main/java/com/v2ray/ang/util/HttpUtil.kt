@@ -133,6 +133,24 @@ object HttpUtil {
         return null
     }
 
+    /** Credentials supplied for one endpoint must not follow a redirect to another origin. */
+    private fun sameOrigin(firstUrl: String?, secondUrl: String): Boolean {
+        if (firstUrl.isNullOrBlank()) return false
+        return runCatching {
+            val first = URL(firstUrl)
+            val second = URL(secondUrl)
+            first.protocol.equals(second.protocol, ignoreCase = true) &&
+                first.host.equals(second.host, ignoreCase = true) &&
+                effectivePort(first) == effectivePort(second)
+        }.getOrDefault(false)
+    }
+
+    private fun effectivePort(url: URL): Int = when {
+        url.port >= 0 -> url.port
+        url.protocol.equals("https", ignoreCase = true) -> 443
+        url.protocol.equals("http", ignoreCase = true) -> 80
+        else -> -1
+    }
     /**
      * Retrieves the content of a URL as a string with a custom User-Agent header.
      *
@@ -166,7 +184,11 @@ object HttpUtil {
 
 
             val headersMap = JsonUtil.parseHeadersToMap(request.requestHeaders)
+            val sameEndpoint = sameOrigin(request.url, currentUrl)
             for ((key, value) in headersMap) {
+                if (!sameEndpoint && (key.equals("Authorization", ignoreCase = true) ||
+                    key.equals("Proxy-Authorization", ignoreCase = true)
+                )) continue
                 val safeValue = if (key.equals("Authorization", ignoreCase = true) ||
                     key.equals("Proxy-Authorization", ignoreCase = true)
                 ) "[REDACTED]" else value
