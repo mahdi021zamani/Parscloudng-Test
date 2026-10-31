@@ -561,4 +561,6 @@
     <string name="simple_license_active">اشتراک بموفقیت فعال بۊیه.</string>
     <string name="simple_license_checking">اشتراک هونی بررسی ابۊ…</string>
     <string name="simple_license_key_required">کلید اشتراک وارد کنین.</string>
+    <string name="simple_tab_v2ray">V2Ray</string>
+    <string name="simple_tab_aether">Aether</string>
 </resources>
