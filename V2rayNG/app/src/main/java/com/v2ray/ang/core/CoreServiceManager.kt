@@ -113,6 +113,15 @@ object CoreServiceManager {
      * Starts the V2Ray core service.
      */
     fun startCoreLoop(vpnInterface: ParcelFileDescriptor?): Boolean {
+        // A previous stop may still be shutting down the core and releasing its lease.
+        // Wait for that cleanup before reusing this installation's stable session ID.
+        subscriptionReleaseJob?.let { pendingRelease ->
+            runBlocking(Dispatchers.IO) {
+                pendingRelease.join()
+            }
+        }
+        subscriptionReleaseJob = null
+
         if (isRunning()) {
             LogUtil.w(AppConfig.TAG, "StartCore-Manager: Core already running")
             return false
@@ -123,15 +132,6 @@ object CoreServiceManager {
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Service is null")
             return false
         }
-
-        // A previous stop may still be shutting down the core and releasing its lease.
-        // Wait for that cleanup before reusing this installation's stable session ID.
-        subscriptionReleaseJob?.let { pendingRelease ->
-            runBlocking(Dispatchers.IO) {
-                pendingRelease.join()
-            }
-        }
-        subscriptionReleaseJob = null
 
         // Claim a server-side connection slot before starting any local proxy/VPN core.
         // Network I/O runs on Dispatchers.IO; this service entry point remains synchronous
