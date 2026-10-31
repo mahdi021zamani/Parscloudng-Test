@@ -155,11 +155,13 @@ object CoreServiceManager {
             return false
         }
 
+        startSubscriptionHeartbeat()
         try {
             doStartCoreLoop(service, vpnInterface)
-            startSubscriptionHeartbeat()
             return true
         } catch (e: Exception) {
+            subscriptionHeartbeatJob?.cancel()
+            subscriptionHeartbeatJob = null
             runBlocking(Dispatchers.IO) {
                 SubscriptionConnectionRepository.release()
             }
