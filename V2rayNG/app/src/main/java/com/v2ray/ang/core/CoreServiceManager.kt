@@ -166,9 +166,8 @@ object CoreServiceManager {
                 subscriptionHeartbeatJob?.cancel()
                 subscriptionHeartbeatJob = null
                 cleanupFailedCoreStart(service)
-                withContext(NonCancellable) {
-                    SubscriptionConnectionRepository.release()
-                }
+                // The owning service's stop path performs the release after this
+                // startup lock is released; avoid holding cancellation for network I/O.
                 throw e
             } catch (e: Exception) {
                 subscriptionHeartbeatJob?.cancel()
