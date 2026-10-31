@@ -183,25 +183,22 @@ object SubscriptionConnectionRepository {
 
     private fun getOrCreateSessionId(context: Context? = null): String? {
         val existing = MmkvManager.decodeSettingsString(SESSION_ID_STORAGE_KEY).orEmpty()
-        if (sessionIdPattern.matches(existing)) return existing
+        if (context == null) return existing.takeIf(sessionIdPattern::matches)
 
-        // Android backup can copy MMKV data to another device. Bind the session ID
-        // to ANDROID_ID so restored app data cannot make two devices share one slot.
-        val androidId = context?.let {
-            runCatching {
-                Settings.Secure.getString(it.contentResolver, Settings.Secure.ANDROID_ID)
-            }.getOrNull()
-        }.orEmpty()
-        val created = if (androidId.isNotBlank()) {
-            UUID.nameUUIDFromBytes("${context?.packageName}:$androidId".toByteArray(Charsets.UTF_8)).toString()
-        } else {
-            UUID.randomUUID().toString()
-        }
+        // Android backup can copy MMKV data to another device. Recompute the
+        // expected ID on every acquire so a restored backup is rebound to this device.
+        val androidId = runCatching {
+            Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: return null
+        val deviceBoundId = UUID.nameUUIDFromBytes(
+            "${context.packageName}:$androidId".toByteArray(Charsets.UTF_8)
+        ).toString()
+        if (existing == deviceBoundId) return existing
 
-        if (!MmkvManager.encodeSettings(SESSION_ID_STORAGE_KEY, created)) {
+        if (!MmkvManager.encodeSettings(SESSION_ID_STORAGE_KEY, deviceBoundId)) {
             LogUtil.w(AppConfig.TAG, "Subscription session: unable to persist installation session ID")
             return null
         }
-        return created
+        return deviceBoundId
     }
 }
