@@ -306,7 +306,13 @@ object CoreServiceManager {
         AetherCoreManager.stop()
         val service = getService()
         if (service == null) {
+            val previousRelease = subscriptionReleaseJob
             subscriptionReleaseJob = CoroutineScope(Dispatchers.IO).launch {
+                previousRelease?.join()
+                if (isRunning()) {
+                    runCatching { coreController.stopLoop() }
+                        .onFailure { LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", it) }
+                }
                 SubscriptionConnectionRepository.release()
             }
             return false
@@ -316,9 +322,10 @@ object CoreServiceManager {
         networkMonitor = null
         currentVpnInterface = null
 
-        val shouldStopCore = isRunning()
+        val previousRelease = subscriptionReleaseJob
         subscriptionReleaseJob = CoroutineScope(Dispatchers.IO).launch {
-            if (shouldStopCore) {
+            previousRelease?.join()
+            if (isRunning()) {
                 try {
                     coreController.stopLoop()
                 } catch (e: Exception) {
