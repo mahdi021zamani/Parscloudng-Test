@@ -244,8 +244,8 @@ class MainRepository(
         return when (val result = AetherFeedRepository.fetch()) {
             is AetherFeedRepository.Result.Success -> {
                 if (result.content.isBlank()) {
-                    val removed = MmkvManager.removeServerViaSubid(AETHER_SUBSCRIPTION_ID)
-                    LogUtil.w(AppConfig.TAG, "Aether feed is intentionally empty; removed $removed existing profiles")
+                    MmkvManager.removeServerViaSubid(AETHER_SUBSCRIPTION_ID)
+                    LogUtil.w(AppConfig.TAG, "Aether feed is intentionally empty; cleared existing Aether profiles")
                 } else {
                     val (importedCount, _) = AngConfigManager.importBatchConfig(
                         result.content, AETHER_SUBSCRIPTION_ID, false
