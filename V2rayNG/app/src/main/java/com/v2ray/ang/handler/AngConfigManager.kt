@@ -570,7 +570,10 @@ object AngConfigManager {
      *
      * @param it The subscription item pointing at RemoteConfig.SERVER_LIST_URL.
      */
-    fun refreshSimpleServerList(it: SubscriptionCache): SimpleRefreshResult {
+    fun refreshSimpleServerList(
+        it: SubscriptionCache,
+        requestHeaders: String? = it.subscription.requestHeaders,
+    ): SimpleRefreshResult {
         try {
             val url = HttpUtil.toIdnUrl(it.subscription.url)
             if (!Utils.isValidUrl(url)) {
@@ -583,7 +586,8 @@ object AngConfigManager {
                 HttpUtil.getUrlContentWithUserAgent(
                     UrlContentRequest(
                         url = url,
-                        timeout = RemoteConfig.REQUEST_TIMEOUT_SECONDS * 1000
+                        timeout = RemoteConfig.REQUEST_TIMEOUT_SECONDS * 1000,
+                        requestHeaders = requestHeaders
                     )
                 )
             } catch (e: Exception) {

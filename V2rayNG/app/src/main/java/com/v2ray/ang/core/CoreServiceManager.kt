@@ -24,6 +24,7 @@ import com.v2ray.ang.extension.isNotNullEmpty
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.SubscriptionConnectionRepository
 import com.v2ray.ang.handler.SpeedtestManager
 import com.v2ray.ang.helper.MessageHelper
 import com.v2ray.ang.service.DialerNativeService
@@ -31,9 +32,19 @@ import com.v2ray.ang.service.DialerWebviewService
 import com.v2ray.ang.service.NetworkMonitor
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.ProcessFinder
@@ -51,6 +62,11 @@ object CoreServiceManager {
 
     @Volatile
     private var isReloading = false
+
+    /** Server-side lease heartbeat for the currently running subscription session. */
+    private var subscriptionHeartbeatJob: Job? = null
+    private var subscriptionReleaseJob: Job? = null
+    private val coreLifecycleMutex = Mutex()
 
     /** Tun descriptor the core was started with, null in the proxy only and root run modes. */
     private var currentVpnInterface: ParcelFileDescriptor? = null
@@ -103,27 +119,124 @@ object CoreServiceManager {
      * `registerReceiver(Context, BroadcastReceiver, IntentFilter, int)`.
      * Starts the V2Ray core service.
      */
-    fun startCoreLoop(vpnInterface: ParcelFileDescriptor?): Boolean {
+    suspend fun startCoreLoop(vpnInterface: ParcelFileDescriptor?): Boolean {
+        // A previous stop must finish releasing the stable installation session first.
+        subscriptionReleaseJob?.join()
+
+        return coreLifecycleMutex.withLock {
+            if (isRunning()) {
+                LogUtil.w(AppConfig.TAG, "StartCore-Manager: Core already running")
+                return@withLock false
+            }
+
+            val service = getService()
+            if (service == null) {
+                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Service is null")
+                return@withLock false
+            }
+
+            // This is a cancellable network operation. Service callers run on Dispatchers.IO,
+            // never on Android's main thread.
+            val leaseResult = SubscriptionConnectionRepository.acquire(service)
+            if (leaseResult != SubscriptionConnectionRepository.SessionResult.ACTIVE) {
+                val message = when (leaseResult) {
+                    SubscriptionConnectionRepository.SessionResult.LIMIT_REACHED ->
+                        service.getString(R.string.simple_connection_limit_reached)
+                    SubscriptionConnectionRepository.SessionResult.REJECTED ->
+                        service.getString(R.string.simple_license_invalid)
+                    SubscriptionConnectionRepository.SessionResult.NETWORK_ERROR ->
+                        service.getString(R.string.simple_license_network_error)
+                    SubscriptionConnectionRepository.SessionResult.ACTIVE -> ""
+                }
+                LogUtil.w(AppConfig.TAG, "Subscription session: start denied ($leaseResult)")
+                MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
+                NotificationManager.cancelNotification()
+                return@withLock false
+            }
+
+            startSubscriptionHeartbeat()
+            try {
+                currentCoroutineContext().ensureActive()
+                doStartCoreLoop(service, vpnInterface)
+                // If the service was stopped while native startup was in progress, do not
+                // leave a core running after its owning service has gone away.
+                currentCoroutineContext().ensureActive()
+                true
+            } catch (e: CancellationException) {
+                subscriptionHeartbeatJob?.cancel()
+                subscriptionHeartbeatJob = null
+                cleanupFailedCoreStart(service)
+                // The owning service's stop path performs the release after this
+                // startup lock is released; avoid holding cancellation for network I/O.
+                throw e
+            } catch (e: Exception) {
+                subscriptionHeartbeatJob?.cancel()
+                subscriptionHeartbeatJob = null
+                cleanupFailedCoreStart(service)
+                withContext(NonCancellable) {
+                    SubscriptionConnectionRepository.release()
+                }
+                val message = e.message?.takeUnless { it.isBlank() } ?: e.javaClass.simpleName
+                LogUtil.e(AppConfig.TAG, "StartCore-Manager: $message", e)
+                MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
+                NotificationManager.cancelNotification()
+                false
+            }
+        }
+    }
+
+    private fun cleanupFailedCoreStart(service: Service) {
+        AetherCoreManager.stop()
         if (isRunning()) {
-            LogUtil.w(AppConfig.TAG, "StartCore-Manager: Core already running")
-            return false
+            runCatching { coreController.stopLoop() }
+                .onFailure { LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to clean up partial core start", it) }
         }
-
-        val service = getService()
-        if (service == null) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Service is null")
-            return false
+        networkMonitor?.unregister()
+        networkMonitor = null
+        currentVpnInterface = null
+        runCatching { service.unregisterReceiver(mMsgReceive) }
+        CoreNativeManager.reconcileBrowserDialer("")
+        if (browserDialer != null) {
+            runCatching { browserDialer?.stop() }
+            browserDialer = null
         }
+    }
 
-        try {
-            doStartCoreLoop(service, vpnInterface)
-            return true
-        } catch (e: Exception) {
-            val message = e.message?.takeUnless { it.isBlank() } ?: e.javaClass.simpleName
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: $message", e)
-            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
-            NotificationManager.cancelNotification()
-            return false
+    /**
+     * Renews the lease every 30 seconds. A definitive rejection stops the core
+     * immediately. Temporary network errors are retried every 10 seconds, but the
+     * core is stopped before the 90-second server lease can expire and be reused.
+     */
+    private fun startSubscriptionHeartbeat() {
+        subscriptionHeartbeatJob?.cancel()
+        subscriptionHeartbeatJob = CoroutineScope(Dispatchers.IO).launch {
+            var nextDelayMillis = 30_000L
+            while (isActive) {
+                delay(nextDelayMillis)
+                when (SubscriptionConnectionRepository.heartbeat()) {
+                    SubscriptionConnectionRepository.SessionResult.ACTIVE -> {
+                        nextDelayMillis = 30_000L
+                    }
+
+                    SubscriptionConnectionRepository.SessionResult.LIMIT_REACHED,
+                    SubscriptionConnectionRepository.SessionResult.REJECTED -> {
+                        LogUtil.w(AppConfig.TAG, "Subscription session: heartbeat rejected; stopping active service")
+                        stopActiveServiceForRevokedLicense()
+                        return@launch
+                    }
+
+                    SubscriptionConnectionRepository.SessionResult.NETWORK_ERROR -> {
+                        val elapsed = System.currentTimeMillis() -
+                            SubscriptionConnectionRepository.lastSuccessfulLeaseAtMillis()
+                        if (elapsed >= 65_000L) {
+                            LogUtil.w(AppConfig.TAG, "Subscription session: lease could not be renewed; stopping before lease expiry")
+                            stopActiveServiceForRevokedLicense()
+                            return@launch
+                        }
+                        nextDelayMillis = 10_000L
+                    }
+                }
+            }
         }
     }
 
@@ -219,40 +332,54 @@ object CoreServiceManager {
      * @return True if the core was stopped successfully, false otherwise.
      */
     fun stopCoreLoop(): Boolean {
+        subscriptionHeartbeatJob?.cancel()
+        val previousRelease = subscriptionReleaseJob
+        subscriptionReleaseJob = CoroutineScope(Dispatchers.IO).launch {
+            previousRelease?.join()
+            stopCoreLoopAndWait()
+        }
+        return true
+    }
+
+    /** Waits for the native core to stop and then releases its server-side lease. */
+    suspend fun stopCoreLoopAndWait(): Boolean = coreLifecycleMutex.withLock {
+        subscriptionHeartbeatJob?.cancel()
+        subscriptionHeartbeatJob = null
         AetherCoreManager.stop()
-        val service = getService() ?: return false
 
         networkMonitor?.unregister()
         networkMonitor = null
         currentVpnInterface = null
 
         if (isRunning()) {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    coreController.stopLoop()
-                } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
-                }
+            try {
+                coreController.stopLoop()
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
             }
         }
 
-        // Close existing browser dialer
         CoreNativeManager.reconcileBrowserDialer("")
         if (browserDialer != null) {
-            browserDialer!!.stop()
+            runCatching { browserDialer?.stop() }
             browserDialer = null
         }
 
-        MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+        val service = getService()
+        if (service != null) {
+            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+            try {
+                service.unregisterReceiver(mMsgReceive)
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister receiver", e)
+            }
+        }
         NotificationManager.cancelNotification()
 
-        try {
-            service.unregisterReceiver(mMsgReceive)
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister receiver", e)
+        withContext(NonCancellable) {
+            SubscriptionConnectionRepository.release()
         }
-
-        return true
+        true
     }
 
     /**

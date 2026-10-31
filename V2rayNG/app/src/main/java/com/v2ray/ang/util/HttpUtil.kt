@@ -166,8 +166,14 @@ object HttpUtil {
 
 
             val headersMap = JsonUtil.parseHeadersToMap(request.requestHeaders)
+            val mayForwardSensitiveHeaders = isSameOrigin(request.url, currentUrl)
             for ((key, value) in headersMap) {
-                LogUtil.d(AppConfig.TAG, "Adding custom header: $key = $value")
+                val isSensitiveHeader = key.equals("Authorization", ignoreCase = true) ||
+                    key.equals("Proxy-Authorization", ignoreCase = true)
+                if (isSensitiveHeader && !mayForwardSensitiveHeaders) continue
+
+                val safeValue = if (isSensitiveHeader) "[REDACTED]" else value
+                LogUtil.d(AppConfig.TAG, "Adding custom header: $key = $safeValue")
                 try {
                     requestBuilder.header(key, value)
                 } catch (_: IllegalArgumentException) {
@@ -203,6 +209,20 @@ object HttpUtil {
             }
         }
         throw IOException("Too many redirects")
+    }
+
+    /** Do not forward subscription credentials across a cross-origin redirect. */
+    private fun isSameOrigin(originalUrl: String?, currentUrl: String): Boolean {
+        if (originalUrl.isNullOrBlank()) return false
+        return runCatching {
+            val original = URL(originalUrl)
+            val current = URL(currentUrl)
+            val originalPort = if (original.port >= 0) original.port else original.defaultPort
+            val currentPort = if (current.port >= 0) current.port else current.defaultPort
+            original.protocol.equals(current.protocol, ignoreCase = true) &&
+                original.host.equals(current.host, ignoreCase = true) &&
+                originalPort == currentPort
+        }.getOrDefault(false)
     }
 
     private fun applyEmbeddedBasicAuthHeader(rawUrl: String, requestBuilder: Request.Builder) {

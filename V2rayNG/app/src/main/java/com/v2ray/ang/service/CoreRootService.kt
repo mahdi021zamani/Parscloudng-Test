@@ -14,9 +14,8 @@ import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.lang.ref.SoftReference
 
 /**
@@ -42,23 +41,21 @@ class CoreRootService : Service(), ServiceControl {
         NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Root: command received")
 
-        if (CoreServiceManager.isRunning()) {
-            LogUtil.i(AppConfig.TAG, "StartCore-Root: Core is already running")
+        if (CoreServiceManager.isRunning() || setupJob?.isActive == true) {
+            LogUtil.i(AppConfig.TAG, "StartCore-Root: Core is already running or starting")
             return START_STICKY
         }
 
-        // Start the in-process core first (this also posts the foreground notification),
-        // then install the root routing off the main thread.
-        if (!CoreServiceManager.startCoreLoop(null)) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Root: core failed to start")
-            stopService()
-            return START_NOT_STICKY
-        }
-
+        // Acquire the subscription lease and start the core off the Android main thread.
         setupJob = CoroutineScope(Dispatchers.IO).launch {
+            if (!CoreServiceManager.startCoreLoop(null)) {
+                LogUtil.e(AppConfig.TAG, "StartCore-Root: core failed to start")
+                withContext(Dispatchers.Main) { stopService() }
+                return@launch
+            }
             if (!RootProxyManager.start(this@CoreRootService)) {
                 LogUtil.e(AppConfig.TAG, "StartCore-Root: failed to start root mode, stopping")
-                stopService()
+                withContext(Dispatchers.Main) { stopService() }
             }
         }
 
@@ -67,16 +64,20 @@ class CoreRootService : Service(), ServiceControl {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Wait for any in-flight async setup to finish before tearing down. The rules are
-        // installed off the main thread and can take seconds (the setup script waits for the
-        // tun to appear); if a stop arrives during that window, teardown would run first and
-        // the setup would then re-install the rules + tun pointing at a now-dead core,
-        // blackholing all traffic until the next start/stop cycle clears it.
-        runBlocking { setupJob?.cancelAndJoin() }
-        // Remove routing rules BEFORE stopping the core so traffic is never redirected
-        // to a dead listener. Synchronous on purpose — leaving rules behind breaks the net.
-        RootProxyManager.stop(this)
-        CoreServiceManager.stopCoreLoop()
+        // Cancel setup immediately, then perform ordered teardown off the main thread.
+        // This avoids blocking Android's main thread and avoids joining this same setup
+        // job when it calls stopService() after a failed start.
+        val pendingSetup = setupJob
+        setupJob = null
+        pendingSetup?.cancel()
+
+        CoroutineScope(Dispatchers.IO).launch {
+            pendingSetup?.join()
+            // Remove routing rules BEFORE stopping the core so traffic is never redirected
+            // to a dead listener.
+            RootProxyManager.stop(this@CoreRootService)
+            CoreServiceManager.stopCoreLoopAndWait()
+        }
     }
 
     override fun getService(): Service = this
