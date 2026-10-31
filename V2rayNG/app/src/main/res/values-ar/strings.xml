@@ -561,4 +561,6 @@
     <string name="simple_license_active">تم تفعيل الاشتراك بنجاح.</string>
     <string name="simple_license_checking">جارٍ التحقق من الاشتراك…</string>
     <string name="simple_license_key_required">أدخل مفتاح الاشتراك.</string>
+    <string name="simple_tab_v2ray">V2Ray</string>
+    <string name="simple_tab_aether">Aether</string>
 </resources>
