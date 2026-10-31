@@ -14,9 +14,7 @@ import java.lang.ref.SoftReference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 class CoreProxyOnlyService : Service(), ServiceControl {
@@ -62,8 +60,10 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      */
     override fun onDestroy() {
         super.onDestroy()
-        runBlocking {
-            startJob?.cancelAndJoin()
+        val pendingStart = startJob
+        pendingStart?.cancel()
+        CoroutineScope(Dispatchers.IO).launch {
+            pendingStart?.join()
             CoreServiceManager.stopCoreLoopAndWait()
         }
     }
