@@ -13,7 +13,7 @@ object RemoteConfig {
     const val SERVER_LIST_URL = "https://raw.githubusercontent.com/patterniha/Free-Configs/main/configs.txt"
 
     /** Independent Aether feed. Keep this URL token-free and publicly readable. */
-    const val AETHER_SERVER_LIST_URL = "https://raw.githubusercontent.com/mahdi021zamani/parscloud-sub/main/Aether"
+    const val AETHER_SERVER_LIST_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/primary-feed/aether"
 
     /**
      * Optional private proxy endpoint that returns the emergency paid-panel feed.
