@@ -40,8 +40,8 @@ class CoreProxyOnlyService : Service(), ServiceControl {
         NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Service command received")
 
-        if (CoreServiceManager.isRunning()) {
-            LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Core is already running")
+        if (CoreServiceManager.isRunning() || startJob?.isActive == true) {
+            LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Core is already running or starting")
             return START_STICKY
         }
 
