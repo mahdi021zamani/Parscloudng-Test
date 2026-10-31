@@ -244,22 +244,42 @@ class MainRepository(
         return when (val result = AetherFeedRepository.fetch()) {
             is AetherFeedRepository.Result.Success -> {
                 if (result.content.isBlank()) {
-                    MmkvManager.removeServerViaSubid(AETHER_SUBSCRIPTION_ID)
+                    val removed = MmkvManager.removeServerViaSubid(AETHER_SUBSCRIPTION_ID)
+                    LogUtil.w(AppConfig.TAG, "Aether feed is intentionally empty; removed $removed existing profiles")
                 } else {
                     val (importedCount, _) = AngConfigManager.importBatchConfig(
                         result.content, AETHER_SUBSCRIPTION_ID, false
                     )
-                    if (importedCount <= 0) return false
+                    LogUtil.w(AppConfig.TAG, "Aether feed import finished: $importedCount profiles imported")
+                    if (importedCount <= 0) {
+                        LogUtil.w(AppConfig.TAG, "Aether feed contained no importable profiles; existing profiles were preserved")
+                        return false
+                    }
                 }
                 subscription.lastUpdated = System.currentTimeMillis()
                 MmkvManager.encodeSubscription(AETHER_SUBSCRIPTION_ID, subscription)
                 true
             }
-            AetherFeedRepository.Result.LicenseMissing,
-            AetherFeedRepository.Result.LicenseExpired,
-            AetherFeedRepository.Result.Unauthorized,
-            is AetherFeedRepository.Result.HttpError,
-            AetherFeedRepository.Result.NetworkError -> false
+            AetherFeedRepository.Result.LicenseMissing -> {
+                LogUtil.w(AppConfig.TAG, "Aether sync failed: subscription license is missing")
+                false
+            }
+            AetherFeedRepository.Result.LicenseExpired -> {
+                LogUtil.w(AppConfig.TAG, "Aether sync failed: subscription license is expired")
+                false
+            }
+            AetherFeedRepository.Result.Unauthorized -> {
+                LogUtil.w(AppConfig.TAG, "Aether sync failed: server rejected subscription license")
+                false
+            }
+            is AetherFeedRepository.Result.HttpError -> {
+                LogUtil.w(AppConfig.TAG, "Aether sync failed: HTTP ${result.code}")
+                false
+            }
+            AetherFeedRepository.Result.NetworkError -> {
+                LogUtil.w(AppConfig.TAG, "Aether sync failed: network request did not complete")
+                false
+            }
         }
     }
 
