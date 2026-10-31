@@ -12,7 +12,7 @@ object RemoteConfig {
     /** Primary V2Ray-compatible share-link feed. */
     const val SERVER_LIST_URL = "https://raw.githubusercontent.com/patterniha/Free-Configs/main/configs.txt"
 
-    /** Independent Aether feed. Keep this URL token-free and publicly readable. */
+    /** Authenticated Worker proxy for the private Aether feed; upstream secrets stay server-side. */
     const val AETHER_SERVER_LIST_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/primary-feed/aether"
 
     /**
