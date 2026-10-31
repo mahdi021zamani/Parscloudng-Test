@@ -10,10 +10,9 @@ import com.v2ray.ang.util.CountryFlagUtil
 /**
  * Coordinates independent remote feeds for the simplified PARSCLOUD client.
  *
- * Each source has its own subscription ID and cache. Primary feeds are merged
- * for display; the emergency feed is consulted only when no fresh primary
- * configuration is available. The source selector/editor remains hidden from
- * regular users.
+ * Each source has its own subscription ID and cache. V2Ray and Aether are
+ * presented in separate tabs; the emergency feed is shown in the V2Ray tab
+ * only when neither primary feed has fresh usable data.
  */
 object SimpleVpnRepository {
 
@@ -95,8 +94,8 @@ object SimpleVpnRepository {
         MmkvManager.decodeServerList(source.id).toList()
 
     /**
-     * Primary feeds are always shown together when fresh. The emergency feed is
-     * hidden unless all primary feeds lack fresh usable data.
+     * Fresh primary feeds are exposed independently to their respective tabs.
+     * The emergency feed is hidden unless all primary feeds lack fresh usable data.
      */
     private fun visibleSourceIds(): List<String> {
         val freshPrimary = primarySources.filter(::sourceHasFreshConfigs)
