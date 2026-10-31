@@ -11,8 +11,17 @@ import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.util.LogUtil
 import java.lang.ref.SoftReference
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 
 class CoreProxyOnlyService : Service(), ServiceControl {
+
+    private var startJob: Job? = null
     /**
      * Initializes the service.
      */
@@ -38,10 +47,11 @@ class CoreProxyOnlyService : Service(), ServiceControl {
             return START_STICKY
         }
 
-        if (!CoreServiceManager.startCoreLoop(null)) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Proxy: Failed to start core loop")
-            stopSelf()
-            return START_NOT_STICKY
+        startJob = CoroutineScope(Dispatchers.IO).launch {
+            if (!CoreServiceManager.startCoreLoop(null)) {
+                LogUtil.e(AppConfig.TAG, "StartCore-Proxy: Failed to start core loop")
+                withContext(Dispatchers.Main) { stopSelf() }
+            }
         }
 
         return START_STICKY
@@ -52,7 +62,10 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      */
     override fun onDestroy() {
         super.onDestroy()
-        CoreServiceManager.stopCoreLoop()
+        runBlocking {
+            startJob?.cancelAndJoin()
+            CoreServiceManager.stopCoreLoopAndWait()
+        }
     }
 
     /**
