@@ -146,14 +146,20 @@ jobs:
           echo "KEY_PASSWORD=$KEYSTORE_PASS" >> "$GITHUB_ENV"
 
       - name: Build APK
+        env:
+          PARSCLOUD_SUBSCRIPTION_API_BASE_URL: ${{ inputs.subscription_api_base_url }}
         run: |
+          case "$PARSCLOUD_SUBSCRIPTION_API_BASE_URL" in
+            https://parscloud-subscription-server.mahdi021zamani.workers.dev|https://feature-concurrent-connection-lim-parscloud-subscription-server.mahdi021zamani.workers.dev) ;;
+            *) echo "::error::Only the configured Production or Preview subscription API URLs are allowed."; exit 1 ;;
+          esac
           cd V2rayNG
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod 755 gradlew
           ./gradlew licenseFdroidReleaseReport
           ./gradlew assembleRelease \
             -PpattngVersion="${{ inputs.release_tag || 'V26.10.11-test' }}" \
-            -PparscloudSubscriptionApiBaseUrl="${{ inputs.subscription_api_base_url }}" \
+            -PparscloudSubscriptionApiBaseUrl="$PARSCLOUD_SUBSCRIPTION_API_BASE_URL" \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/android_keystore.jks" \
             -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="parscloud-test" \
