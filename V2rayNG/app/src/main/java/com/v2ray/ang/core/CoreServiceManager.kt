@@ -197,7 +197,7 @@ object CoreServiceManager {
                     SubscriptionConnectionRepository.SessionResult.NETWORK_ERROR -> {
                         val elapsed = System.currentTimeMillis() -
                             SubscriptionConnectionRepository.lastSuccessfulLeaseAtMillis()
-                        if (elapsed >= 75_000L) {
+                        if (elapsed >= 65_000L) {
                             LogUtil.w(AppConfig.TAG, "Subscription session: lease could not be renewed; stopping before lease expiry")
                             stopActiveServiceForRevokedLicense()
                             return@launch
