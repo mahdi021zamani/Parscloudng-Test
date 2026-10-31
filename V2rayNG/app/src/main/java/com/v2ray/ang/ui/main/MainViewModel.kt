@@ -86,7 +86,19 @@ class MainViewModel(
     // ---------- Service events ----------
     init {
         collectServiceEvents()
-        setupGroupTab()
+        val initialGroupSetup = setupGroupTab()
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                initialGroupSetup.join()
+                if (dataSource.syncAetherFeed()) {
+                    setupGroupTab(forceRefresh = true).join()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                LogUtil.e(AppConfig.TAG, "Aether feed synchronization failed", error)
+            }
+        }
     }
 
     private fun collectServiceEvents() {
