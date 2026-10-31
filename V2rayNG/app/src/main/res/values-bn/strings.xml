@@ -561,4 +561,6 @@
     <string name="simple_license_active">সাবস্ক্রিপশন সফলভাবে সক্রিয় হয়েছে।</string>
     <string name="simple_license_checking">সাবস্ক্রিপশন যাচাই করা হচ্ছে…</string>
     <string name="simple_license_key_required">আপনার সাবস্ক্রিপশন কী লিখুন।</string>
+    <string name="simple_tab_v2ray">V2Ray</string>
+    <string name="simple_tab_aether">Aether</string>
 </resources>
