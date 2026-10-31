@@ -151,7 +151,15 @@ object SimpleVpnRepository {
 
     private fun refreshSource(source: Source): AngConfigManager.SimpleRefreshResult {
         val subscription = ensureSubscription(source)
-        return AngConfigManager.refreshSimpleServerList(subscription)
+        val requestHeaders = if (source.id == EMERGENCY_SUB_ID) {
+            val license = SubscriptionLicenseRepository.getStoredLicense()
+                ?.takeUnless(SubscriptionLicenseRepository::isExpired)
+                ?: return AngConfigManager.SimpleRefreshResult.NetworkError
+            """{"Authorization":"Bearer ${license.key}"}"""
+        } else {
+            null
+        }
+        return AngConfigManager.refreshSimpleServerList(subscription, requestHeaders)
     }
 
     /**
