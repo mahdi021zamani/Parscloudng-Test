@@ -17,6 +17,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import java.lang.ref.SoftReference
 
 /**
@@ -47,18 +48,16 @@ class CoreRootService : Service(), ServiceControl {
             return START_STICKY
         }
 
-        // Start the in-process core first (this also posts the foreground notification),
-        // then install the root routing off the main thread.
-        if (!CoreServiceManager.startCoreLoop(null)) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Root: core failed to start")
-            stopService()
-            return START_NOT_STICKY
-        }
-
+        // Acquire the subscription lease and start the core off the Android main thread.
         setupJob = CoroutineScope(Dispatchers.IO).launch {
+            if (!CoreServiceManager.startCoreLoop(null)) {
+                LogUtil.e(AppConfig.TAG, "StartCore-Root: core failed to start")
+                withContext(Dispatchers.Main) { stopService() }
+                return@launch
+            }
             if (!RootProxyManager.start(this@CoreRootService)) {
                 LogUtil.e(AppConfig.TAG, "StartCore-Root: failed to start root mode, stopping")
-                stopService()
+                withContext(Dispatchers.Main) { stopService() }
             }
         }
 
@@ -76,7 +75,7 @@ class CoreRootService : Service(), ServiceControl {
         // Remove routing rules BEFORE stopping the core so traffic is never redirected
         // to a dead listener. Synchronous on purpose — leaving rules behind breaks the net.
         RootProxyManager.stop(this)
-        CoreServiceManager.stopCoreLoop()
+        runBlocking { CoreServiceManager.stopCoreLoopAndWait() }
     }
 
     override fun getService(): Service = this
