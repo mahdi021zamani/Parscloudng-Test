@@ -45,6 +45,7 @@ object SubscriptionConnectionRepository {
     fun lastSuccessfulLeaseAtMillis(): Long = lastSuccessfulLeaseAtMillis
 
     /** Claims this installation's slot before the local proxy/VPN core starts. */
+    @Synchronized
     fun acquire(): SessionResult {
         val license = SubscriptionLicenseRepository.getStoredLicense()
             ?: return SessionResult.REJECTED
@@ -58,6 +59,7 @@ object SubscriptionConnectionRepository {
     }
 
     /** Renews the same slot; the server treats a repeated session ID as a renewal. */
+    @Synchronized
     fun heartbeat(): SessionResult {
         val key = activeSubscriptionKey
             ?: SubscriptionLicenseRepository.getStoredLicense()?.key
@@ -75,6 +77,7 @@ object SubscriptionConnectionRepository {
      * Releases the lease on a normal stop. If the process is killed, the server's
      * 90-second lease expiry is the fallback cleanup mechanism.
      */
+    @Synchronized
     fun release(): Boolean {
         val key = activeSubscriptionKey ?: return true
 
