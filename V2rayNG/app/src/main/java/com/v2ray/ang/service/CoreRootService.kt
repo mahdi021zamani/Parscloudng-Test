@@ -75,7 +75,9 @@ class CoreRootService : Service(), ServiceControl {
         // Remove routing rules BEFORE stopping the core so traffic is never redirected
         // to a dead listener. Synchronous on purpose — leaving rules behind breaks the net.
         RootProxyManager.stop(this)
-        runBlocking { CoreServiceManager.stopCoreLoopAndWait() }
+        CoroutineScope(Dispatchers.IO).launch {
+            CoreServiceManager.stopCoreLoopAndWait()
+        }
     }
 
     override fun getService(): Service = this
