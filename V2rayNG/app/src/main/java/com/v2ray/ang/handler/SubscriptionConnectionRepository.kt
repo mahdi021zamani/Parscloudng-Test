@@ -5,13 +5,22 @@ import com.google.gson.JsonParser
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.RemoteConfig
 import com.v2ray.ang.util.LogUtil
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CancellationException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Owns the server-side lease for this app installation.
@@ -27,6 +36,8 @@ object SubscriptionConnectionRepository {
         .readTimeout(5, TimeUnit.SECONDS)
         .callTimeout(8, TimeUnit.SECONDS)
         .build()
+
+    private val sessionMutex = Mutex()
 
     @Volatile
     private var activeSubscriptionKey: String? = null
@@ -44,44 +55,37 @@ object SubscriptionConnectionRepository {
     fun lastSuccessfulLeaseAtMillis(): Long = lastSuccessfulLeaseAtMillis
 
     /** Claims this installation's slot before the local proxy/VPN core starts. */
-    @Synchronized
-    fun acquire(): SessionResult {
+    suspend fun acquire(): SessionResult = sessionMutex.withLock {
         val license = SubscriptionLicenseRepository.getStoredLicense()
-            ?: return SessionResult.REJECTED
-
+            ?: return@withLock SessionResult.REJECTED
         val result = requestSessionAction("acquire", license.key)
         if (result == SessionResult.ACTIVE) {
             activeSubscriptionKey = license.key
             lastSuccessfulLeaseAtMillis = System.currentTimeMillis()
         }
-        return result
+        result
     }
 
-    /** Renews the same slot; the server treats a repeated session ID as a renewal. */
-    @Synchronized
-    fun heartbeat(): SessionResult {
+    suspend fun heartbeat(): SessionResult = sessionMutex.withLock {
         val key = activeSubscriptionKey
             ?: SubscriptionLicenseRepository.getStoredLicense()?.key
-            ?: return SessionResult.REJECTED
-
+            ?: return@withLock SessionResult.REJECTED
         val result = requestSessionAction("heartbeat", key)
         if (result == SessionResult.ACTIVE) {
             activeSubscriptionKey = key
             lastSuccessfulLeaseAtMillis = System.currentTimeMillis()
         }
-        return result
+        result
     }
 
     /**
      * Releases the lease on a normal stop. If the process is killed, the server's
      * 90-second lease expiry is the fallback cleanup mechanism.
      */
-    @Synchronized
-    fun release(): Boolean {
-        val key = activeSubscriptionKey ?: return true
-
-        return try {
-            val sessionId = getOrCreateSessionId() ?: return false
+    suspend fun release(): Boolean = sessionMutex.withLock {
+        val key = activeSubscriptionKey ?: return@withLock true
+        try {
+            val sessionId = getOrCreateSessionId() ?: return@withLock false
             val body = JsonObject().apply {
                 addProperty("sessionId", sessionId)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
@@ -90,22 +94,21 @@ object SubscriptionConnectionRepository {
                 .header("Authorization", "Bearer $key")
                 .post(body)
                 .build()
-
-            client.newCall(request).execute().use { response ->
+            execute(request).use { response ->
                 val responseBody = response.body?.string().orEmpty()
                 val released = if (response.isSuccessful) {
                     runCatching {
                         JsonParser.parseString(responseBody).asJsonObject
                             .get("released")?.asBoolean == true
                     }.getOrDefault(false)
-                } else {
-                    false
-                }
+                } else false
                 if (!released) {
                     LogUtil.w(AppConfig.TAG, "Subscription session: server did not confirm release; lease expiry will clean up")
                 }
                 released
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: IOException) {
             LogUtil.w(AppConfig.TAG, "Subscription session: release request failed; lease expiry will clean up", e)
             false
@@ -118,7 +121,7 @@ object SubscriptionConnectionRepository {
         }
     }
 
-    private fun requestSessionAction(action: String, key: String): SessionResult {
+    private suspend fun requestSessionAction(action: String, key: String): SessionResult {
         return try {
             val sessionId = getOrCreateSessionId() ?: return SessionResult.NETWORK_ERROR
             val body = JsonObject().apply {
@@ -129,10 +132,11 @@ object SubscriptionConnectionRepository {
                 .header("Authorization", "Bearer $key")
                 .post(body)
                 .build()
-
-            client.newCall(request).execute().use { response ->
+            execute(request).use { response ->
                 parseSessionResponse(response.code, response.body?.string().orEmpty())
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: IOException) {
             LogUtil.w(AppConfig.TAG, "Subscription session: $action request failed", e)
             SessionResult.NETWORK_ERROR
@@ -140,6 +144,21 @@ object SubscriptionConnectionRepository {
             LogUtil.e(AppConfig.TAG, "Subscription session: $action response failed", e)
             SessionResult.NETWORK_ERROR
         }
+    }
+
+    /** Cancellable OkHttp bridge so a stopped service can cancel pending requests. */
+    private suspend fun execute(request: Request): Response = suspendCancellableCoroutine { continuation ->
+        val call = client.newCall(request)
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (continuation.isActive) continuation.resumeWithException(e)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (continuation.isActive) continuation.resume(response) else response.close()
+            }
+        })
     }
 
     internal fun parseSessionResponse(httpCode: Int, responseBody: String): SessionResult {
