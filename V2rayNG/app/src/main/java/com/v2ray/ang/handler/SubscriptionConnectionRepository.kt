@@ -17,8 +17,7 @@ import java.util.concurrent.TimeUnit
  * Owns the server-side lease for this app installation.
  *
  * The installation ID is stable across process/service restarts, while the
- * subscription key is kept only in memory here and in the existing encrypted/
- * private license store. Never log either value.
+ * subscription key is kept only in memory here and in the existing app-private license store. Never log either value.
  */
 object SubscriptionConnectionRepository {
     private const val SESSION_ID_STORAGE_KEY = "PARSCLOUD_CONNECTION_SESSION_ID"
