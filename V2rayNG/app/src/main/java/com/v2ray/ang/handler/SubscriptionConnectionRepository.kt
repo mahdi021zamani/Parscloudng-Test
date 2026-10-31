@@ -82,8 +82,9 @@ object SubscriptionConnectionRepository {
         val key = activeSubscriptionKey ?: return true
 
         return try {
+            val sessionId = getOrCreateSessionId() ?: return false
             val body = JsonObject().apply {
-                addProperty("sessionId", getOrCreateSessionId())
+                addProperty("sessionId", sessionId)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val request = Request.Builder()
                 .url("${RemoteConfig.SUBSCRIPTION_API_BASE_URL}/v1/session/release")
@@ -120,8 +121,9 @@ object SubscriptionConnectionRepository {
 
     private fun requestSessionAction(action: String, key: String): SessionResult {
         return try {
+            val sessionId = getOrCreateSessionId() ?: return SessionResult.NETWORK_ERROR
             val body = JsonObject().apply {
-                addProperty("sessionId", getOrCreateSessionId())
+                addProperty("sessionId", sessionId)
             }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             val request = Request.Builder()
                 .url("${RemoteConfig.SUBSCRIPTION_API_BASE_URL}/v1/session/$action")
@@ -158,13 +160,14 @@ object SubscriptionConnectionRepository {
         }
     }
 
-    private fun getOrCreateSessionId(): String {
+    private fun getOrCreateSessionId(): String? {
         val existing = MmkvManager.decodeSettingsString(SESSION_ID_STORAGE_KEY).orEmpty()
         if (sessionIdPattern.matches(existing)) return existing
 
         val created = UUID.randomUUID().toString()
         if (!MmkvManager.encodeSettings(SESSION_ID_STORAGE_KEY, created)) {
             LogUtil.w(AppConfig.TAG, "Subscription session: unable to persist installation session ID")
+            return null
         }
         return created
     }
