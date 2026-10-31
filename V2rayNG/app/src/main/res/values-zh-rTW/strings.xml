@@ -561,4 +561,6 @@
     <string name="simple_license_active">訂閱已成功啟用。</string>
     <string name="simple_license_checking">正在驗證訂閱…</string>
     <string name="simple_license_key_required">請輸入訂閱金鑰。</string>
+    <string name="simple_tab_v2ray">V2Ray</string>
+    <string name="simple_tab_aether">Aether</string>
 </resources>
