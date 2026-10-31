@@ -3,6 +3,7 @@ package com.v2ray.ang.handler
 import android.content.Context
 import com.v2ray.ang.RemoteConfig
 import com.v2ray.ang.core.LauncherManager
+import com.google.gson.JsonObject
 import com.v2ray.ang.dto.entities.SubscriptionCache
 import com.v2ray.ang.dto.entities.SubscriptionItem
 import com.v2ray.ang.util.CountryFlagUtil
@@ -151,7 +152,20 @@ object SimpleVpnRepository {
 
     private fun refreshSource(source: Source): AngConfigManager.SimpleRefreshResult {
         val subscription = ensureSubscription(source)
-        return AngConfigManager.refreshSimpleServerList(subscription)
+
+        // The emergency proxy is subscription-authenticated. Keep its key in a
+        // transient request header only; never persist it in SubscriptionItem/MMKV.
+        val requestHeaders = if (source.id == EMERGENCY_SUB_ID) {
+            val key = SubscriptionLicenseRepository.getStoredLicense()?.key
+                ?: return AngConfigManager.SimpleRefreshResult.NetworkError
+            JsonObject().apply {
+                addProperty("Authorization", "Bearer $key")
+            }.toString()
+        } else {
+            null
+        }
+
+        return AngConfigManager.refreshSimpleServerList(subscription, requestHeaders)
     }
 
     /**
