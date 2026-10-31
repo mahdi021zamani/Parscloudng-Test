@@ -77,8 +77,9 @@ object SubscriptionConnectionRepository {
     }
 
     suspend fun heartbeat(): SessionResult = sessionMutex.withLock {
+        // Heartbeats may only renew a lease that this process successfully
+        // acquired; never create a new lease from a stored license key here.
         val key = activeSubscriptionKey
-            ?: SubscriptionLicenseRepository.getStoredLicense()?.key
             ?: return@withLock SessionResult.REJECTED
         val result = requestSessionAction("heartbeat", key)
         if (result == SessionResult.ACTIVE) {
