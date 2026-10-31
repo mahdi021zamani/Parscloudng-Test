@@ -62,10 +62,16 @@ object SubscriptionConnectionRepository {
             ?: return@withLock SessionResult.REJECTED
         val sessionId = getOrCreateSessionId(context)
             ?: return@withLock SessionResult.NETWORK_ERROR
+
+        // Retain the key during the request so a cancelled/lost response can still
+        // be followed by a best-effort release using the same stable session ID.
+        activeSubscriptionKey = license.key
+        lastSuccessfulLeaseAtMillis = 0L
         val result = requestSessionAction("acquire", license.key, sessionId)
-        if (result == SessionResult.ACTIVE) {
-            activeSubscriptionKey = license.key
-            lastSuccessfulLeaseAtMillis = System.currentTimeMillis()
+        when (result) {
+            SessionResult.ACTIVE -> lastSuccessfulLeaseAtMillis = System.currentTimeMillis()
+            SessionResult.LIMIT_REACHED, SessionResult.REJECTED -> activeSubscriptionKey = null
+            SessionResult.NETWORK_ERROR -> Unit
         }
         result
     }
