@@ -153,7 +153,7 @@ object SimpleVpnRepository {
         val subscription = ensureSubscription(source)
         val requestHeaders = if (source.id == EMERGENCY_SUB_ID) {
             val license = SubscriptionLicenseRepository.getStoredLicense()
-                ?.takeUnless(SubscriptionLicenseRepository::isExpired)
+                ?.takeUnless { SubscriptionLicenseRepository.isExpired(it) }
                 ?: return AngConfigManager.SimpleRefreshResult.NetworkError
             """{"Authorization":"Bearer ${license.key}"}"""
         } else {
