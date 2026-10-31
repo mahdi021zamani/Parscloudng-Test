@@ -20,10 +20,11 @@ object RemoteConfig {
      * Keep blank until the secret source URL is configured server-side. Never put
      * the original tokenized subscription URL in the APK or a public repository.
      */
-    val EMERGENCY_FALLBACK_URL = "$SUBSCRIPTION_API_BASE_URL/v1/fallback-config"
-
     /** API base URL; override with -PparscloudSubscriptionApiBaseUrl=... for Preview builds. */
     val SUBSCRIPTION_API_BASE_URL = BuildConfig.SUBSCRIPTION_API_BASE_URL.trimEnd('/')
+
+    /** Private server-side proxy for the emergency paid-panel feed. */
+    val EMERGENCY_FALLBACK_URL = "$SUBSCRIPTION_API_BASE_URL/v1/fallback-config"
 
     /** HTTPS endpoint used to verify each customer subscription key. */
     val SUBSCRIPTION_VALIDATE_URL = "$SUBSCRIPTION_API_BASE_URL/v1/validate"
