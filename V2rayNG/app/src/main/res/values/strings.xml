@@ -576,6 +576,7 @@
     <string name="simple_license_active">Subscription activated successfully.</string>
     <string name="simple_license_checking">Verifying subscription…</string>
     <string name="simple_license_key_required">Enter your subscription key.</string>
+    <string name="simple_connection_limit_reached">This subscription is already in use on the maximum number of devices.</string>
     <string name="toast_profile_name_not_found">No profile named "%1$s" was found</string>
     <string name="toast_profile_name_duplicate">Two profiles named "%1$s" were found; please rename one</string>
     <string name="aether_exit_node_unusable">The exit-node profile "%1$s" gives no outbound; choose another one, or freedom</string>
