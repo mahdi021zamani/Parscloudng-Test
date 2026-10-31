@@ -11,7 +11,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -81,6 +86,8 @@ fun SettingsScreen(
     var observatorySettingsExpanded by rememberSaveable { mutableStateOf(false) }
     var advancedSettingsExpanded by rememberSaveable { mutableStateOf(true) }
     var modeSettingsExpanded by rememberSaveable { mutableStateOf(true) }
+    var licenseDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var licenseKeyInput by rememberSaveable { mutableStateOf("") }
 
     var localDns by rememberMmkvBool(AppConfig.PREF_LOCAL_DNS_ENABLED, true)
     var fakeDns by rememberMmkvBool(AppConfig.PREF_FAKE_DNS_ENABLED, true)
@@ -203,6 +210,11 @@ fun SettingsScreen(
                 .verticalScrollbar(scrollState)
                 .verticalScroll(scrollState)
         ) {
+            SettingsMenuItem(
+                title = stringResource(R.string.simple_license_manage),
+                subtitle = stringResource(R.string.simple_license_prompt),
+                onClick = { licenseDialogVisible = true }
+            )
             CollapsiblePreferenceGroupHeader(
                 title = stringResource(R.string.title_ui_settings),
                 expanded = uiSettingsExpanded,
@@ -679,6 +691,40 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
             NavigationBarsSpacer()
+            if (licenseDialogVisible) {
+                AlertDialog(
+                    onDismissRequest = { licenseDialogVisible = false },
+                    title = { Text(stringResource(R.string.simple_license_title)) },
+                    text = {
+                        Column {
+                            Text(stringResource(R.string.simple_license_prompt))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = licenseKeyInput,
+                                onValueChange = { licenseKeyInput = it },
+                                label = { Text(stringResource(R.string.simple_license_key_hint)) },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            enabled = !isLoading,
+                            onClick = {
+                                viewModel.activateSubscription(licenseKeyInput)
+                                licenseDialogVisible = false
+                                licenseKeyInput = ""
+                            }
+                        ) { Text(stringResource(R.string.simple_license_activate)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { licenseDialogVisible = false }) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                    }
+                )
+            }
         }
     }
 }
