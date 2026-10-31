@@ -1,6 +1,8 @@
 package com.v2ray.ang.handler
 
 import com.v2ray.ang.RemoteConfig
+import com.v2ray.ang.AppConfig
+import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -30,8 +32,11 @@ object AetherFeedRepository {
 
     suspend fun fetch(): Result = withContext(Dispatchers.IO) {
         val license = SubscriptionLicenseRepository.getStoredLicense()
-            ?: return@withContext Result.LicenseMissing
+            ?: return@withContext Result.LicenseMissing.also {
+                LogUtil.w(AppConfig.TAG, "Aether sync skipped: no stored subscription license")
+            }
         if (SubscriptionLicenseRepository.isExpired(license)) {
+            LogUtil.w(AppConfig.TAG, "Aether sync skipped: stored subscription license is expired")
             return@withContext Result.LicenseExpired
         }
 
@@ -45,14 +50,26 @@ object AetherFeedRepository {
         try {
             client.newCall(request).execute().use { response ->
                 when {
-                    response.code == 401 || response.code == 403 -> Result.Unauthorized
-                    !response.isSuccessful -> Result.HttpError(response.code)
-                    else -> Result.Success(response.body?.string().orEmpty())
+                    response.code == 401 || response.code == 403 -> {
+                        LogUtil.w(AppConfig.TAG, "Aether feed request rejected by server: HTTP ${response.code}")
+                        Result.Unauthorized
+                    }
+                    !response.isSuccessful -> {
+                        LogUtil.w(AppConfig.TAG, "Aether feed request failed: HTTP ${response.code}")
+                        Result.HttpError(response.code)
+                    }
+                    else -> {
+                        val content = response.body?.string().orEmpty()
+                        LogUtil.w(AppConfig.TAG, "Aether feed downloaded: HTTP ${response.code}, ${content.length} characters, ${content.lineSequence().count { it.isNotBlank() }} non-empty lines")
+                        Result.Success(content)
+                    }
                 }
             }
-        } catch (_: IOException) {
+        } catch (error: IOException) {
+            LogUtil.w(AppConfig.TAG, "Aether feed network error: ${error.javaClass.simpleName}")
             Result.NetworkError
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            LogUtil.w(AppConfig.TAG, "Aether feed request error: ${error.javaClass.simpleName}")
             Result.NetworkError
         }
     }
