@@ -16,9 +16,8 @@ object RemoteConfig {
     const val AETHER_SERVER_LIST_URL = "https://raw.githubusercontent.com/mahdi021zamani/parscloud-sub/main/Aether"
 
     /**
-     * Optional private proxy endpoint that returns the emergency paid-panel feed.
-     * Keep blank until the secret source URL is configured server-side. Never put
-     * the original tokenized subscription URL in the APK or a public repository.
+     * Private proxy endpoint for the emergency paid-panel feed. The server-side
+     * source URL remains secret; the app authenticates with the customer's license.
      */
     /** API base URL; override with -PparscloudSubscriptionApiBaseUrl=... for Preview builds. */
     val SUBSCRIPTION_API_BASE_URL = BuildConfig.SUBSCRIPTION_API_BASE_URL.trimEnd('/')
