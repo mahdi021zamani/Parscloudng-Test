@@ -17,6 +17,7 @@ import com.v2ray.ang.dto.entities.SubscriptionCache
 import com.v2ray.ang.dto.entities.SubscriptionItem
 import com.v2ray.ang.extension.serializable
 import com.v2ray.ang.handler.AngConfigManager
+import com.v2ray.ang.handler.AetherFeedRepository
 import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
@@ -33,6 +34,21 @@ import java.util.concurrent.atomic.AtomicBoolean
 class MainRepository(
     private val app: AngApplication
 ) : MainDataSource {
+    companion object {
+        private const val AETHER_SUBSCRIPTION_ID = "PARSCLOUD_AETHER_FEED"
+    }
+
+    private fun ensureAetherSubscription(): SubscriptionItem {
+        val existing = MmkvManager.decodeSubscription(AETHER_SUBSCRIPTION_ID)
+        if (existing != null) return existing
+        val created = SubscriptionItem().apply {
+            remarks = "Aether"
+            enabled = true
+            autoUpdate = false
+        }
+        MmkvManager.encodeSubscription(AETHER_SUBSCRIPTION_ID, created)
+        return created
+    }
 
     private val localizedContext: Context
         get() = AppLocaleManager.localizedContext(app)
@@ -126,6 +142,7 @@ class MainRepository(
         localizedContext.getString(resId, *formatArgs)
 
     override fun getSubscriptions(): List<SubscriptionCache> {
+        ensureAetherSubscription()
         val result = mutableListOf<SubscriptionCache>()
         if (isGroupAllDisplayEnabled()) {
             result += SubscriptionCache(
@@ -220,6 +237,30 @@ class MainRepository(
 
     override fun syncSubscriptions() {
         SubscriptionUpdater.sync(app)
+    }
+
+    override suspend fun syncAetherFeed(): Boolean {
+        val subscription = ensureAetherSubscription()
+        return when (val result = AetherFeedRepository.fetch()) {
+            is AetherFeedRepository.Result.Success -> {
+                if (result.content.isBlank()) {
+                    MmkvManager.removeServerViaSubid(AETHER_SUBSCRIPTION_ID)
+                } else {
+                    val (importedCount, _) = AngConfigManager.importBatchConfig(
+                        result.content, AETHER_SUBSCRIPTION_ID, false
+                    )
+                    if (importedCount <= 0) return false
+                }
+                subscription.lastUpdated = System.currentTimeMillis()
+                MmkvManager.encodeSubscription(AETHER_SUBSCRIPTION_ID, subscription)
+                true
+            }
+            AetherFeedRepository.Result.LicenseMissing,
+            AetherFeedRepository.Result.LicenseExpired,
+            AetherFeedRepository.Result.Unauthorized,
+            is AetherFeedRepository.Result.HttpError,
+            AetherFeedRepository.Result.NetworkError -> false
+        }
     }
 
     override fun initAssets() {
