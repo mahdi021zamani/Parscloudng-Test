@@ -167,7 +167,10 @@ object HttpUtil {
 
             val headersMap = JsonUtil.parseHeadersToMap(request.requestHeaders)
             for ((key, value) in headersMap) {
-                LogUtil.d(AppConfig.TAG, "Adding custom header: $key = $value")
+                val safeValue = if (key.equals("Authorization", ignoreCase = true) ||
+                    key.equals("Proxy-Authorization", ignoreCase = true)
+                ) "[REDACTED]" else value
+                LogUtil.d(AppConfig.TAG, "Adding custom header: $key = $safeValue")
                 try {
                     requestBuilder.header(key, value)
                 } catch (_: IllegalArgumentException) {
