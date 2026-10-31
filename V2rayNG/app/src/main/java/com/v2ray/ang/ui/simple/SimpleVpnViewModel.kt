@@ -38,6 +38,7 @@ data class SimpleVpnUiState(
     val servers: List<SimpleServerUiModel> = emptyList(),
     val testingGuids: Set<String> = emptySet(),
     val selectedGuid: String? = null,
+    val selectedSourceId: String = SimpleVpnRepository.SIMPLE_SUB_ID,
     val status: SimpleConnectionStatus = SimpleConnectionStatus.DISCONNECTED,
     val isRefreshing: Boolean = false,
     val canConnect: Boolean = false,
@@ -162,7 +163,8 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun loadLocalState() {
         SimpleVpnRepository.ensureSubscription()
-        val servers = SimpleVpnRepository.getServers()
+        val sourceId = _uiState.value.selectedSourceId
+        val servers = SimpleVpnRepository.getServersForSource(sourceId)
         val selected = MmkvManager.getSelectServer()
             ?.takeIf { guid -> servers.any { it.guid == guid } }
             ?: servers.firstOrNull()?.guid
@@ -171,12 +173,32 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             it.copy(
                 servers = servers,
                 selectedGuid = selected,
-                canConnect = SimpleVpnRepository.canConnect() && _uiState.value.licenseValid,
+                canConnect = SimpleVpnRepository.canConnect(sourceId) && _uiState.value.licenseValid,
+            )
+        }
+    }
+
+    fun onSelectSource(sourceId: String) {
+        if (sourceId != SimpleVpnRepository.SIMPLE_SUB_ID &&
+            sourceId != SimpleVpnRepository.AETHER_SUB_ID
+        ) return
+        val servers = SimpleVpnRepository.getServersForSource(sourceId)
+        val selected = MmkvManager.getSelectServer()
+            ?.takeIf { guid -> servers.any { it.guid == guid } }
+            ?: servers.firstOrNull()?.guid
+        selected?.let(MmkvManager::setSelectServer)
+        _uiState.update {
+            it.copy(
+                selectedSourceId = sourceId,
+                servers = servers,
+                selectedGuid = selected,
+                canConnect = SimpleVpnRepository.canConnect(sourceId) && it.licenseValid,
             )
         }
     }
 
     fun onSelectServer(guid: String) {
+        if (_uiState.value.servers.none { it.guid == guid }) return
         MmkvManager.setSelectServer(guid)
         _uiState.update { it.copy(selectedGuid = guid) }
     }
@@ -193,21 +215,24 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             val app = getApplication<Application>()
             when (val outcome = SimpleVpnRepository.refresh(app)) {
                 is SimpleVpnRepository.RefreshOutcome.Updated -> {
-                    val guids = SimpleVpnRepository.getServerGuids()
+                    val allGuids = SimpleVpnRepository.getServerGuids()
+                    val sourceId = _uiState.value.selectedSourceId
+                    val servers = SimpleVpnRepository.getServersForSource(sourceId)
                     val selected = MmkvManager.getSelectServer()
-                        ?.takeIf { it in guids }
-                        ?: guids.firstOrNull()
+                        ?.takeIf { guid -> servers.any { it.guid == guid } }
+                        ?: servers.firstOrNull()?.guid
                     selected?.let(MmkvManager::setSelectServer)
                     withContext(Dispatchers.Main) {
                         _uiState.update {
                             it.copy(
-                                servers = guids.mapNotNull(SimpleVpnRepository::getServerUiModel),
+                                servers = servers,
                                 selectedGuid = selected,
-                                testingGuids = guids.toSet(),
+                                testingGuids = allGuids.toSet(),
+                                canConnect = SimpleVpnRepository.canConnect(sourceId) && it.licenseValid,
                             )
                         }
                     }
-                    runPingTest(guids)
+                    runPingTest(allGuids)
                 }
 
                 SimpleVpnRepository.RefreshOutcome.EmptiedByServer -> withContext(Dispatchers.Main) {
@@ -228,7 +253,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     _uiState.update {
                         it.copy(
                             isRefreshing = false,
-                            canConnect = SimpleVpnRepository.canConnect() && _uiState.value.licenseValid,
+                            canConnect = SimpleVpnRepository.canConnect(_uiState.value.selectedSourceId) && _uiState.value.licenseValid,
                             message = app.getString(R.string.simple_network_error_using_cache),
                         )
                     }
@@ -250,7 +275,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun runPingTest(guids: List<String>) {
         if (guids.isEmpty()) {
-            _uiState.update { it.copy(isRefreshing = false, canConnect = SimpleVpnRepository.canConnect() && it.licenseValid) }
+            _uiState.update { it.copy(isRefreshing = false, canConnect = SimpleVpnRepository.canConnect(it.selectedSourceId) && it.licenseValid) }
             return
         }
 
@@ -283,10 +308,10 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 SimpleVpnRepository.sortByPing()
                 _uiState.update {
                     it.copy(
-                        servers = SimpleVpnRepository.getServers(),
+                        servers = SimpleVpnRepository.getServersForSource(it.selectedSourceId),
                         testingGuids = emptySet(),
                         isRefreshing = false,
-                        canConnect = SimpleVpnRepository.canConnect() && _uiState.value.licenseValid,
+                        canConnect = SimpleVpnRepository.canConnect(it.selectedSourceId) && it.licenseValid,
                     )
                 }
             }
@@ -366,7 +391,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         LauncherManager.stopService(app)
                     }
                     SubscriptionLicenseWorker.schedule(app)
-                    val canConnect = SimpleVpnRepository.canConnect()
+                    val canConnect = SimpleVpnRepository.canConnect(_uiState.value.selectedSourceId)
                     _uiState.update {
                         it.copy(
                             licenseDialogVisible = false,
@@ -377,6 +402,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             message = app.getString(R.string.simple_license_active),
                         )
                     }
+                    onRefresh()
                 }
 
                 is SubscriptionLicenseRepository.ValidationResult.Rejected -> {
@@ -412,7 +438,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 val saved = withContext(Dispatchers.IO) {
                     SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis)
                 }
-                val canConnect = saved && SimpleVpnRepository.canConnect()
+                val canConnect = saved && SimpleVpnRepository.canConnect(_uiState.value.selectedSourceId)
                 _uiState.update {
                     it.copy(
                         isValidatingLicense = false,
@@ -502,7 +528,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     val saved = withContext(Dispatchers.IO) {
                         SubscriptionLicenseRepository.saveActiveLicense(stored.key, result.expiresAtMillis)
                     }
-                    val canConnect = saved && SimpleVpnRepository.canConnect()
+                    val canConnect = saved && SimpleVpnRepository.canConnect(_uiState.value.selectedSourceId)
                     if (!canConnect) {
                         _uiState.update {
                             it.copy(
