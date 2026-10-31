@@ -30,6 +30,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +44,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.v2ray.ang.R
+import com.v2ray.ang.handler.SimpleVpnRepository
 import com.v2ray.ang.handler.SimpleVpnRepository.SimpleServerUiModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,6 +133,20 @@ fun SimpleVpnScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) { Snackbar(it) } }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            TabRow(
+                selectedTabIndex = if (uiState.selectedSourceId == SimpleVpnRepository.AETHER_SUB_ID) 1 else 0,
+            ) {
+                Tab(
+                    selected = uiState.selectedSourceId == SimpleVpnRepository.SIMPLE_SUB_ID,
+                    onClick = { viewModel.onSelectSource(SimpleVpnRepository.SIMPLE_SUB_ID) },
+                    text = { Text(stringResource(R.string.simple_tab_v2ray)) },
+                )
+                Tab(
+                    selected = uiState.selectedSourceId == SimpleVpnRepository.AETHER_SUB_ID,
+                    onClick = { viewModel.onSelectSource(SimpleVpnRepository.AETHER_SUB_ID) },
+                    text = { Text(stringResource(R.string.simple_tab_aether)) },
+                )
+            }
             Box(modifier = Modifier.weight(1f)) {
                 if (uiState.isRefreshing && uiState.servers.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
