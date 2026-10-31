@@ -137,7 +137,7 @@ object CoreServiceManager {
 
             // This is a cancellable network operation. Service callers run on Dispatchers.IO,
             // never on Android's main thread.
-            val leaseResult = SubscriptionConnectionRepository.acquire()
+            val leaseResult = SubscriptionConnectionRepository.acquire(service)
             if (leaseResult != SubscriptionConnectionRepository.SessionResult.ACTIVE) {
                 val message = when (leaseResult) {
                     SubscriptionConnectionRepository.SessionResult.LIMIT_REACHED ->
