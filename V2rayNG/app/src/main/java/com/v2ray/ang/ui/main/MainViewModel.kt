@@ -462,28 +462,53 @@ class MainViewModel(
 
     private fun importConfigViaSub() {
         val subId = uiState.value.selectedGroupId
+        val isAetherSelected = subId == AETHER_SUBSCRIPTION_ID
         launchLoading {
             withContext(ioDispatcher) {
                 try {
-                    val result = if (subId.isEmpty()) {
-                        dataSource.updateConfigViaSubAll()
-                    } else {
-                        val item = dataSource.getSubscriptionItem(subId) ?: return@withContext
-                        dataSource.updateConfigViaSub(SubscriptionCache(subId, item))
+                    // Aether is a server-backed feed, not a conventional URL subscription.
+                    // Refresh it explicitly when its tab is selected; refresh it alongside
+                    // regular subscriptions when the user chooses the "All" group.
+                    val result = when {
+                        isAetherSelected -> null
+                        subId.isEmpty() -> dataSource.updateConfigViaSubAll()
+                        else -> {
+                            val item = dataSource.getSubscriptionItem(subId)
+                                ?: return@withContext
+                            dataSource.updateConfigViaSub(SubscriptionCache(subId, item))
+                        }
                     }
-                    when {
-                        result.successCount + result.failureCount + result.skipCount == 0 ->
-                            toast(R.string.title_update_subscription_no_subscription)
 
-                        result.successCount > 0 && result.failureCount + result.skipCount == 0 ->
-                            toast(dataSource.getString(R.string.title_update_config_count, result.configCount))
+                    if (result != null) {
+                        when {
+                            result.successCount + result.failureCount + result.skipCount == 0 ->
+                                toast(R.string.title_update_subscription_no_subscription)
 
-                        else ->
-                            toast(dataSource.getString(R.string.title_update_subscription_result, result.configCount, result.successCount, result.failureCount, result.skipCount))
+                            result.successCount > 0 && result.failureCount + result.skipCount == 0 ->
+                                toast(dataSource.getString(R.string.title_update_config_count, result.configCount))
+
+                            else ->
+                                toast(dataSource.getString(R.string.title_update_subscription_result, result.configCount, result.successCount, result.failureCount, result.skipCount))
+                        }
                     }
-                    if (result.configCount > 0) {
-                        setupGroupTab(forceRefresh = true)
+
+                    val aetherSynced = isAetherSelected || subId.isEmpty()
+                    val aetherSuccess = if (aetherSynced) dataSource.syncAetherFeed() else false
+
+                    if ((result?.configCount ?: 0) > 0 || aetherSuccess) {
+                        setupGroupTab(forceRefresh = true).join()
                         refreshSelectedGuid()
+                    }
+
+                    if (isAetherSelected) {
+                        if (aetherSuccess) {
+                            val count = dataSource.getServerGuidList(AETHER_SUBSCRIPTION_ID).size
+                            toast(dataSource.getString(R.string.title_update_config_count, count))
+                        } else {
+                            toastError(R.string.toast_failure)
+                        }
+                    } else if (subId.isEmpty() && !aetherSuccess) {
+                        LogUtil.w(AppConfig.TAG, "Manual update completed, but Aether feed synchronization did not succeed")
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
