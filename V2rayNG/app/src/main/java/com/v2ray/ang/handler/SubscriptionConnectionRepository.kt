@@ -127,21 +127,7 @@ object SubscriptionConnectionRepository {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                val responseBody = response.body?.string().orEmpty()
-                if (response.code == 429) return SessionResult.LIMIT_REACHED
-                if (response.code == 401 || response.code == 403) return SessionResult.REJECTED
-                if (!response.isSuccessful) return SessionResult.NETWORK_ERROR
-
-                val acquired = runCatching {
-                    JsonParser.parseString(responseBody).asJsonObject
-                        .get("acquired")?.asBoolean
-                }.getOrNull()
-
-                when (acquired) {
-                    true -> SessionResult.ACTIVE
-                    false -> SessionResult.LIMIT_REACHED
-                    null -> SessionResult.NETWORK_ERROR
-                }
+                parseSessionResponse(response.code, response.body?.string().orEmpty())
             }
         } catch (e: IOException) {
             LogUtil.w(AppConfig.TAG, "Subscription session: $action request failed", e)
@@ -149,6 +135,23 @@ object SubscriptionConnectionRepository {
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Subscription session: $action response failed", e)
             SessionResult.NETWORK_ERROR
+        }
+    }
+
+    internal fun parseSessionResponse(httpCode: Int, responseBody: String): SessionResult {
+        if (httpCode == 429) return SessionResult.LIMIT_REACHED
+        if (httpCode == 401 || httpCode == 403) return SessionResult.REJECTED
+        if (httpCode !in 200..299) return SessionResult.NETWORK_ERROR
+
+        val acquired = runCatching {
+            JsonParser.parseString(responseBody).asJsonObject
+                .get("acquired")?.asBoolean
+        }.getOrNull()
+
+        return when (acquired) {
+            true -> SessionResult.ACTIVE
+            false -> SessionResult.LIMIT_REACHED
+            null -> SessionResult.NETWORK_ERROR
         }
     }
 
