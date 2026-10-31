@@ -424,6 +424,7 @@ object MmkvManager {
             }
             profileFullStorage.remove(guid)
             serverAffStorage.remove(guid)
+            serverRawStorage.remove(guid)
         }
 
         serverList.clear()
