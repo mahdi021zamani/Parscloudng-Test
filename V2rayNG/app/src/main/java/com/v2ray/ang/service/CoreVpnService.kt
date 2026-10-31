@@ -147,6 +147,10 @@ class CoreVpnService : VpnService(), ServiceControl {
         if (isSystemVpnStart) {
             unlockStart()
         }
+        if (coreStartJob?.isActive == true) {
+            LogUtil.w(AppConfig.TAG, "StartCore-VPN: Core startup is already in progress")
+            return START_NOT_STICKY
+        }
         if (!tryLockStart()) {
             LogUtil.w(AppConfig.TAG, "StartCore-VPN: Start already in progress")
             return START_NOT_STICKY
