@@ -4,11 +4,38 @@ import android.app.Application
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.root.RootManager
+import com.v2ray.ang.handler.SubscriptionLicenseRepository
 import com.v2ray.ang.ui.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class SettingsViewModel(application: Application) : BaseViewModel(application) {
+
+    /** Validates and securely stores a customer subscription key. */
+    fun activateSubscription(rawKey: String) {
+        val key = rawKey.trim()
+        if (key.isEmpty()) {
+            toastError(R.string.simple_license_key_required)
+            return
+        }
+        launchLoading {
+            when (val result = withContext(Dispatchers.IO) {
+                SubscriptionLicenseRepository.validate(key)
+            }) {
+                is SubscriptionLicenseRepository.ValidationResult.Active -> {
+                    val saved = withContext(Dispatchers.IO) {
+                        SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis)
+                    }
+                    if (saved) toastSuccess(R.string.simple_license_active)
+                    else toastError(R.string.simple_license_network_error)
+                }
+                is SubscriptionLicenseRepository.ValidationResult.Rejected ->
+                    toastError(R.string.simple_license_invalid)
+                SubscriptionLicenseRepository.ValidationResult.NetworkError ->
+                    toastError(R.string.simple_license_network_error)
+            }
+        }
+    }
 
     /**
      * Checks for root access and requests it if necessary.
