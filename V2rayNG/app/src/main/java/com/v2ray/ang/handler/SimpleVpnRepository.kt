@@ -116,6 +116,27 @@ object SimpleVpnRepository {
         return ids.flatMap { MmkvManager.decodeServerList(it) }.distinct()
     }
 
+    /**
+     * Returns only the profiles belonging to the requested primary tab.
+     * The emergency feed is shown in the V2Ray tab only when neither primary
+     * feed has fresh usable profiles.
+     */
+    fun getServerGuidsForSource(sourceId: String): List<String> {
+        val source = primarySources.firstOrNull { it.id == sourceId } ?: return emptyList()
+        if (sourceHasFreshConfigs(source)) return sourceGuids(source).distinct()
+
+        val anyFreshPrimary = primarySources.any(::sourceHasFreshConfigs)
+        if (anyFreshPrimary) return emptyList()
+
+        val cached = sourceGuids(source)
+        if (cached.isNotEmpty()) return cached.distinct()
+
+        if (sourceId == SIMPLE_SUB_ID) {
+            return emergencySource?.let(::sourceGuids).orEmpty().distinct()
+        }
+        return emptyList()
+    }
+
     fun getServerUiModel(guid: String): SimpleServerUiModel? {
         val profile = MmkvManager.decodeServerConfig(guid) ?: return null
         val delay = MmkvManager.decodeServerAffiliationInfo(guid)?.testDelayMillis
@@ -132,6 +153,9 @@ object SimpleVpnRepository {
 
     fun getServers(): List<SimpleServerUiModel> = getServerGuids().mapNotNull(::getServerUiModel)
 
+    fun getServersForSource(sourceId: String): List<SimpleServerUiModel> =
+        getServerGuidsForSource(sourceId).mapNotNull(::getServerUiModel)
+
     fun sortByPing() {
         visibleSourceIds().forEach(AngConfigManager::sortByTestResultsForSub)
     }
@@ -139,6 +163,14 @@ object SimpleVpnRepository {
     fun canConnect(): Boolean = visibleSourceIds().any { id ->
         val source = allConfiguredSources().firstOrNull { it.id == id } ?: return@any false
         sourceHasFreshConfigs(source)
+    }
+
+    fun canConnect(sourceId: String): Boolean {
+        val source = primarySources.firstOrNull { it.id == sourceId } ?: return false
+        if (sourceHasFreshConfigs(source)) return true
+        if (primarySources.any(::sourceHasFreshConfigs)) return false
+        return sourceId == SIMPLE_SUB_ID &&
+            emergencySource?.let(::sourceHasFreshConfigs) == true
     }
 
     private fun clearSourceCache(source: Source) {
@@ -151,7 +183,7 @@ object SimpleVpnRepository {
 
     private fun refreshSource(source: Source): AngConfigManager.SimpleRefreshResult {
         val subscription = ensureSubscription(source)
-        val requestHeaders = if (source.id == EMERGENCY_SUB_ID) {
+        val requestHeaders = if (source.id == AETHER_SUB_ID || source.id == EMERGENCY_SUB_ID) {
             val license = SubscriptionLicenseRepository.getStoredLicense()
                 ?.takeUnless { SubscriptionLicenseRepository.isExpired(it) }
                 ?: return AngConfigManager.SimpleRefreshResult.NetworkError
