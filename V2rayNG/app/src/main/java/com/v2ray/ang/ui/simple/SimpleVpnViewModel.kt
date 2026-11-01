@@ -305,6 +305,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         SimpleVpnRepository.AetherFailure.LICENSE_MISSING -> R.string.simple_aether_license_required
                         SimpleVpnRepository.AetherFailure.LICENSE_EXPIRED -> R.string.simple_aether_license_expired
                         SimpleVpnRepository.AetherFailure.UNAUTHORIZED -> R.string.simple_aether_license_rejected
+                        SimpleVpnRepository.AetherFailure.HTTP_ERROR,
+                        SimpleVpnRepository.AetherFailure.NETWORK_ERROR,
+                        SimpleVpnRepository.AetherFailure.INVALID_CONTENT,
                         null -> R.string.simple_network_error_no_cache
                     }
                     _uiState.update {
