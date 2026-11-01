@@ -209,6 +209,27 @@ object AngConfigManager {
     }
 
     /**
+     * Imports configuration lines without interpreting URL lines as subscription URLs.
+     * Use this for controlled feeds such as PARSCLOUD Aether where every line belongs
+     * to the feed payload and must not mutate the user's subscription list.
+     */
+    fun importBatchConfigWithoutSubscriptions(
+        server: String?,
+        subid: String,
+        append: Boolean
+    ): Int {
+        return try {
+            var count = parseBatchConfig(Utils.decode(server), subid, append)
+            if (count <= 0) count = parseBatchConfig(server, subid, append)
+            if (count <= 0) count = parseCustomConfigServer(server, subid, append)
+            count
+        } catch (e: ProfileStorageException) {
+            LogUtil.e(AppConfig.TAG, "Failed to store imported feed profiles", e)
+            0
+        }
+    }
+
+    /**
      * Parses a batch of subscriptions.
      *
      * @param servers The servers string.
