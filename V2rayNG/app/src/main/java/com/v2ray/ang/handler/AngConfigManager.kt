@@ -555,10 +555,13 @@ object AngConfigManager {
         /** Downloaded successfully and at least one valid config was parsed. */
         data class Success(val configCount: Int) : SimpleRefreshResult()
 
-        /** Downloaded successfully (HTTP ok) but the file was empty or had no valid config. */
-        data object EmptyOrInvalid : SimpleRefreshResult()
+        /** The server explicitly returned an empty body; this is the only clear-cache signal. */
+        data object EmptyResponse : SimpleRefreshResult()
 
-        /** Could not download the file at all (timeout, no internet, temporary server error). */
+        /** A non-empty response contained no importable profiles; preserve the existing cache. */
+        data object InvalidContent : SimpleRefreshResult()
+
+        /** Could not download the file or the request was rejected. */
         data object NetworkError : SimpleRefreshResult()
     }
 
@@ -597,22 +600,28 @@ object AngConfigManager {
                 return SimpleRefreshResult.NetworkError
             }
 
-            if (configText.isBlank()) {
-                // Got a response, it was just empty: the operator intentionally cleared the list.
+            val normalizedText = configText.removePrefix("\uFEFF")
+                .lineSequence()
+                .map { line -> line.trim() }
+                .filter { line -> line.isNotEmpty() }
+                .joinToString("\n")
+
+            if (normalizedText.isEmpty()) {
+                // Only a truly empty response means the operator intentionally cleared the feed.
                 LogUtil.i(AppConfig.TAG, "refreshSimpleServerList: server returned an empty file")
-                return SimpleRefreshResult.EmptyOrInvalid
+                return SimpleRefreshResult.EmptyResponse
             }
 
-            val count = parseConfigViaSub(configText, it.guid, false)
+            val count = parseConfigViaSub(normalizedText, it.guid, false)
             return if (count > 0) {
                 it.subscription.lastUpdated = System.currentTimeMillis()
                 MmkvManager.encodeSubscription(it.guid, it.subscription)
                 LogUtil.i(AppConfig.TAG, "refreshSimpleServerList: updated ${count} configs")
                 SimpleRefreshResult.Success(count)
             } else {
-                // We got a response, it just had nothing usable in it.
-                LogUtil.i(AppConfig.TAG, "refreshSimpleServerList: response had no valid configs")
-                SimpleRefreshResult.EmptyOrInvalid
+                // A non-empty but invalid response must never destroy a previously valid cache.
+                LogUtil.i(AppConfig.TAG, "refreshSimpleServerList: non-empty response had no valid configs; cache preserved")
+                SimpleRefreshResult.InvalidContent
             }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "refreshSimpleServerList: unexpected failure", e)
