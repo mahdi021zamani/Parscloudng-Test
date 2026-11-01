@@ -49,10 +49,10 @@ object SimpleVpnRepository {
         val delayMillis: Long?,
     )
 
-    enum class AetherFailure { LICENSE_MISSING, LICENSE_EXPIRED, UNAUTHORIZED }
+    enum class AetherFailure { LICENSE_MISSING, LICENSE_EXPIRED, UNAUTHORIZED, HTTP_ERROR, NETWORK_ERROR, INVALID_CONTENT }
 
     sealed class RefreshOutcome {
-        data class Updated(val serverCount: Int) : RefreshOutcome()
+        data class Updated(val serverCount: Int, val aetherFailure: AetherFailure? = null) : RefreshOutcome()
         data object EmptiedByServer : RefreshOutcome()
         data object KeepingCacheAfterNetworkError : RefreshOutcome()
         data class CacheUnavailableAfterNetworkError(
@@ -226,7 +226,7 @@ object SimpleVpnRepository {
                             SourceRefreshResult(AngConfigManager.SimpleRefreshResult.Success(count))
                         } else {
                             LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether feed returned non-empty content with no importable profiles; cache preserved")
-                            SourceRefreshResult(AngConfigManager.SimpleRefreshResult.InvalidContent)
+                            SourceRefreshResult(AngConfigManager.SimpleRefreshResult.InvalidContent, AetherFailure.INVALID_CONTENT)
                         }
                     }
                 }
@@ -243,11 +243,11 @@ object SimpleVpnRepository {
                         LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether refresh rejected: unauthorized")
                     }
                 is AetherFeedRepository.Result.HttpError ->
-                    SourceRefreshResult(AngConfigManager.SimpleRefreshResult.NetworkError).also {
+                    SourceRefreshResult(AngConfigManager.SimpleRefreshResult.NetworkError, AetherFailure.HTTP_ERROR).also {
                         LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether refresh failed: HTTP ${result.code}")
                     }
                 AetherFeedRepository.Result.NetworkError ->
-                    SourceRefreshResult(AngConfigManager.SimpleRefreshResult.NetworkError)
+                    SourceRefreshResult(AngConfigManager.SimpleRefreshResult.NetworkError, AetherFailure.NETWORK_ERROR)
             }
         }
         return SourceRefreshResult(AngConfigManager.refreshSimpleServerList(subscription))
@@ -265,7 +265,12 @@ object SimpleVpnRepository {
 
         primarySources.forEach { source ->
             val refresh = refreshSource(source)
-            if (source.id == AETHER_SUB_ID) aetherFailure = refresh.aetherFailure
+            if (source.id == AETHER_SUB_ID) {
+                aetherFailure = refresh.aetherFailure
+                if (refresh.result == AngConfigManager.SimpleRefreshResult.NetworkError && aetherFailure == null) {
+                    aetherFailure = AetherFailure.NETWORK_ERROR
+                }
+            }
             when (refresh.result) {
                 is AngConfigManager.SimpleRefreshResult.Success -> Unit
                 AngConfigManager.SimpleRefreshResult.EmptyResponse -> {
@@ -283,7 +288,7 @@ object SimpleVpnRepository {
             .distinct()
 
         if (freshPrimaryGuids.isNotEmpty()) {
-            return RefreshOutcome.Updated(freshPrimaryGuids.size)
+            return RefreshOutcome.Updated(freshPrimaryGuids.size, aetherFailure)
         }
 
         val fallback = emergencySource
@@ -305,7 +310,7 @@ object SimpleVpnRepository {
 
         val anyFreshCache = allConfiguredSources().any(::sourceHasFreshConfigs)
         if (anyFreshCache) {
-            return RefreshOutcome.Updated(getServerGuids().size)
+            return RefreshOutcome.Updated(getServerGuids().size, aetherFailure)
         }
 
         if (sawNetworkError) {
