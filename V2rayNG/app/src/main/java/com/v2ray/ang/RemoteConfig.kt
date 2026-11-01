@@ -3,17 +3,16 @@ package com.v2ray.ang
 /**
  * Remote endpoints used by the simplified PARSCLOUD client.
  *
- * Public source URLs may live here. Secret-bearing subscription URLs must NOT be
- * embedded in the APK; the emergency source is intentionally supplied by a
- * private server-side proxy when that endpoint is configured.
+ * Aether is intentionally a public, read-only GitHub raw feed. No repository
+ * credential or customer subscription key is embedded in the APK.
  */
 object RemoteConfig {
 
     /** Primary V2Ray-compatible share-link feed. */
     const val SERVER_LIST_URL = "https://raw.githubusercontent.com/patterniha/Free-Configs/main/configs.txt"
 
-    /** Authenticated Worker proxy for the private Aether feed; upstream secrets stay server-side. */
-    const val AETHER_SERVER_LIST_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/primary-feed/aether"
+    /** Public Aether feed; direct GitHub Raw access, bypassing the Worker. */
+    const val AETHER_SERVER_LIST_URL = "https://raw.githubusercontent.com/mahdi021zamani/parscloud-sub/main/Aether"
 
     /**
      * Optional private proxy endpoint that returns the emergency paid-panel feed.
