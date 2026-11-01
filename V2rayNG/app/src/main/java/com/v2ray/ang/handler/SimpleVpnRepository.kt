@@ -167,6 +167,12 @@ object SimpleVpnRepository {
         visibleSourceIds().forEach(AngConfigManager::sortByTestResultsForSub)
     }
 
+    /** Returns true when the Aether cache is absent or older than the configured freshness window. */
+    fun isAetherRefreshDue(): Boolean {
+        val source = primarySources.first { it.id == AETHER_SUB_ID }
+        return !sourceHasFreshConfigs(source)
+    }
+
     fun canConnect(): Boolean = visibleSourceIds().any { id ->
         val source = allConfiguredSources().firstOrNull { it.id == id } ?: return@any false
         sourceHasFreshConfigs(source)
