@@ -178,6 +178,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             validateStoredLicense(stored.key, showDialogOnFailure = true)
+            if (_uiState.value.licenseValid && SimpleVpnRepository.isAetherRefreshDue()) {
+                onRefresh()
+            }
         }
     }
 
