@@ -415,20 +415,25 @@ object MmkvManager {
      */
     fun removeServerViaSubid(subscriptionId: String?) {
         val subId = getSubscriptionId(subscriptionId)
-        val serverList = decodeServerList(subId)
+        withProfileIndexLock {
+            val serverList = decodeServerList(subId)
 
-        // Remove all servers in the list
-        serverList.forEach { guid ->
-            if (getSelectServer() == guid) {
-                mainStorage.remove(KEY_SELECTED_SERVER)
+            // Keep the index mutation and payload cleanup atomic with profile imports.
+            serverList.forEach { guid ->
+                if (getSelectServer() == guid) {
+                    mainStorage.remove(KEY_SELECTED_SERVER)
+                }
+                profileFullStorage.remove(guid)
+                serverAffStorage.remove(guid)
+                serverRawStorage.remove(guid)
             }
-            profileFullStorage.remove(guid)
-            serverAffStorage.remove(guid)
-            serverRawStorage.remove(guid)
-        }
 
-        serverList.clear()
-        encodeServerList(serverList, subId)
+            serverList.clear()
+            requireStorageWrite(
+                persistServerList(serverList, subId),
+                "Failed to clear subscription profile index",
+            )
+        }
     }
 
     /**
