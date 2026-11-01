@@ -246,6 +246,21 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         ?.takeIf { guid -> servers.any { it.guid == guid } }
                         ?: servers.firstOrNull()?.guid
                     selected?.let(MmkvManager::setSelectServer)
+                    val aetherFailure = outcome.aetherFailure.takeIf {
+                        sourceId == SimpleVpnRepository.AETHER_SUB_ID && servers.isEmpty()
+                    }
+                    val aetherMessageId = when (aetherFailure) {
+                        SimpleVpnRepository.AetherFailure.LICENSE_MISSING -> R.string.simple_aether_license_required
+                        SimpleVpnRepository.AetherFailure.LICENSE_EXPIRED -> R.string.simple_aether_license_expired
+                        SimpleVpnRepository.AetherFailure.UNAUTHORIZED -> R.string.simple_aether_license_rejected
+                        SimpleVpnRepository.AetherFailure.HTTP_ERROR,
+                        SimpleVpnRepository.AetherFailure.NETWORK_ERROR,
+                        SimpleVpnRepository.AetherFailure.INVALID_CONTENT -> R.string.simple_network_error_no_cache
+                        null -> null
+                    }
+                    val needsLicenseDialog = aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_MISSING ||
+                        aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_EXPIRED ||
+                        aetherFailure == SimpleVpnRepository.AetherFailure.UNAUTHORIZED
                     withContext(Dispatchers.Main) {
                         _uiState.update {
                             it.copy(
@@ -253,6 +268,8 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                                 selectedGuid = selected,
                                 testingGuids = allGuids.toSet(),
                                 canConnect = SimpleVpnRepository.canConnect(sourceId) && it.licenseValid,
+                                message = aetherMessageId?.let(app::getString),
+                                licenseDialogVisible = needsLicenseDialog,
                             )
                         }
                     }
