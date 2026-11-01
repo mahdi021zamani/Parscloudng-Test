@@ -11,8 +11,11 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
- * Downloads the private Aether feed through the PARSCLOUD Worker.
- * The entitlement key is sent only as an Authorization header and is never logged.
+ * Downloads the public Aether feed directly from GitHub.
+ *
+ * Customer subscription licensing remains independently validated by
+ * SubscriptionLicenseRepository; no customer key or GitHub credential is sent
+ * with this public feed request.
  */
 object AetherFeedRepository {
     sealed class Result {
@@ -31,45 +34,35 @@ object AetherFeedRepository {
         .build()
 
     suspend fun fetch(): Result = withContext(Dispatchers.IO) {
-        val license = SubscriptionLicenseRepository.getStoredLicense()
-            ?: return@withContext Result.LicenseMissing.also {
-                LogUtil.w(AppConfig.TAG, "Aether sync skipped: no stored subscription license")
-            }
-        if (SubscriptionLicenseRepository.isExpired(license)) {
-            LogUtil.w(AppConfig.TAG, "Aether sync skipped: stored subscription license is expired")
-            return@withContext Result.LicenseExpired
-        }
-
         val request = Request.Builder()
             .url(RemoteConfig.AETHER_SERVER_LIST_URL)
-            .header("Authorization", "Bearer ${license.key}")
             .header("Accept", "text/plain")
+            .header("Cache-Control", "no-cache")
             .get()
             .build()
 
         try {
             client.newCall(request).execute().use { response ->
                 when {
-                    response.code == 401 || response.code == 403 -> {
-                        LogUtil.w(AppConfig.TAG, "Aether feed request rejected by server: HTTP ${response.code}")
-                        Result.Unauthorized
-                    }
                     !response.isSuccessful -> {
-                        LogUtil.w(AppConfig.TAG, "Aether feed request failed: HTTP ${response.code}")
+                        LogUtil.w(AppConfig.TAG, "Aether public feed request failed: HTTP ${response.code}")
                         Result.HttpError(response.code)
                     }
                     else -> {
                         val content = response.body?.string().orEmpty()
-                        LogUtil.w(AppConfig.TAG, "Aether feed downloaded: HTTP ${response.code}, ${content.length} characters, ${content.lineSequence().count { it.isNotBlank() }} non-empty lines")
+                        LogUtil.i(
+                            AppConfig.TAG,
+                            "Aether public feed downloaded: HTTP ${response.code}, ${content.length} characters, ${content.lineSequence().count { it.isNotBlank() }} non-empty lines"
+                        )
                         Result.Success(content)
                     }
                 }
             }
         } catch (error: IOException) {
-            LogUtil.w(AppConfig.TAG, "Aether feed network error: ${error.javaClass.simpleName}")
+            LogUtil.w(AppConfig.TAG, "Aether public feed network error: ${error.javaClass.simpleName}")
             Result.NetworkError
         } catch (error: Exception) {
-            LogUtil.w(AppConfig.TAG, "Aether feed request error: ${error.javaClass.simpleName}")
+            LogUtil.w(AppConfig.TAG, "Aether public feed request error: ${error.javaClass.simpleName}")
             Result.NetworkError
         }
     }
