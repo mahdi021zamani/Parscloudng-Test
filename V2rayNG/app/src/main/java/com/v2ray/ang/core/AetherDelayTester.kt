@@ -34,9 +34,9 @@ object AetherDelayTester {
      * HTTP client and the current-server test a 12-second context; an Aether profile gets the same
      * budget, so a tunnel that cannot come up fails within it instead of after a minute-long scan.
      */
-    internal const val TEST_BUDGET_MS = 12_000L
+    internal const val TEST_BUDGET_MS = 8_000L
     private const val POLL_INTERVAL_MS = 250L
-    private const val ATTEMPTS = 2
+    private const val ATTEMPTS = 1
 
     /** No further attempt starts with less than this left; it could not tell anything. */
     private const val MIN_REQUEST_MS = 1_000L
