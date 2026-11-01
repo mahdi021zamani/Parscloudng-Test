@@ -60,13 +60,18 @@ object SimpleVpnRepository {
         val subItem = existing ?: SubscriptionItem(
             remarks = source.remarks,
             url = source.url,
-            enabled = true,
+            enabled = source.id != AETHER_SUB_ID,
             autoUpdate = false,
         )
-        if (existing == null || existing.url != source.url || existing.remarks != source.remarks) {
+        if (existing == null || existing.url != source.url || existing.remarks != source.remarks ||
+            (source.id == AETHER_SUB_ID && subItem.enabled)
+        ) {
             subItem.url = source.url
             subItem.remarks = source.remarks
-            subItem.enabled = true
+            // Aether is fetched only through the authenticated repository below.
+            // Keep its legacy MMKV subscription disabled so generic bulk updates cannot
+            // request the protected Worker without its Authorization header.
+            subItem.enabled = source.id != AETHER_SUB_ID
             subItem.autoUpdate = false
             MmkvManager.encodeSubscription(source.id, subItem)
         }
@@ -124,11 +129,13 @@ object SimpleVpnRepository {
         val source = primarySources.firstOrNull { it.id == sourceId } ?: return emptyList()
         if (sourceHasFreshConfigs(source)) return sourceGuids(source).distinct()
 
-        val anyFreshPrimary = primarySources.any(::sourceHasFreshConfigs)
-        if (anyFreshPrimary) return emptyList()
-
+        // Visibility is independent of freshness: stale cached profiles remain visible
+        // for diagnostics and can be refreshed, but canConnect() still rejects stale data.
         val cached = sourceGuids(source)
         if (cached.isNotEmpty()) return cached.distinct()
+
+        val anyFreshPrimary = primarySources.any(::sourceHasFreshConfigs)
+        if (anyFreshPrimary) return emptyList()
 
         if (sourceId == SIMPLE_SUB_ID) {
             return emergencySource?.let(::sourceGuids).orEmpty().distinct()
@@ -180,17 +187,54 @@ object SimpleVpnRepository {
         }
     }
 
-    private fun refreshSource(source: Source): AngConfigManager.SimpleRefreshResult {
+    private suspend fun refreshSource(source: Source): AngConfigManager.SimpleRefreshResult {
         val subscription = ensureSubscription(source)
-        val requestHeaders = if (source.id == AETHER_SUB_ID || source.id == EMERGENCY_SUB_ID) {
-            val license = SubscriptionLicenseRepository.getStoredLicense()
-                ?.takeUnless { SubscriptionLicenseRepository.isExpired(it) }
-                ?: return AngConfigManager.SimpleRefreshResult.NetworkError
-            """{"Authorization":"Bearer ${license.key}"}"""
-        } else {
-            null
+        if (source.id == AETHER_SUB_ID) {
+            return when (val result = AetherFeedRepository.fetch()) {
+                is AetherFeedRepository.Result.Success -> {
+                    val normalized = result.content
+                        .removePrefix("\uFEFF")
+                        .lineSequence()
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .joinToString("\n")
+                    if (normalized.isEmpty()) {
+                        AngConfigManager.SimpleRefreshResult.EmptyResponse
+                    } else {
+                        val count = AngConfigManager.importBatchConfigWithoutSubscriptions(
+                            normalized, source.id, false
+                        )
+                        if (count > 0) {
+                            subscription.subscription.lastUpdated = System.currentTimeMillis()
+                            MmkvManager.encodeSubscription(source.id, subscription.subscription)
+                            AngConfigManager.SimpleRefreshResult.Success(count)
+                        } else {
+                            LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether feed returned non-empty content with no importable profiles; cache preserved")
+                            AngConfigManager.SimpleRefreshResult.InvalidContent
+                        }
+                    }
+                }
+                AetherFeedRepository.Result.LicenseMissing ->
+                    AngConfigManager.SimpleRefreshResult.NetworkError.also {
+                        LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether refresh skipped: license missing")
+                    }
+                AetherFeedRepository.Result.LicenseExpired ->
+                    AngConfigManager.SimpleRefreshResult.NetworkError.also {
+                        LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether refresh skipped: license expired")
+                    }
+                AetherFeedRepository.Result.Unauthorized ->
+                    AngConfigManager.SimpleRefreshResult.NetworkError.also {
+                        LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether refresh rejected: unauthorized")
+                    }
+                is AetherFeedRepository.Result.HttpError ->
+                    AngConfigManager.SimpleRefreshResult.NetworkError.also {
+                        LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether refresh failed: HTTP ${result.code}")
+                    }
+                AetherFeedRepository.Result.NetworkError ->
+                    AngConfigManager.SimpleRefreshResult.NetworkError
+            }
         }
-        return AngConfigManager.refreshSimpleServerList(subscription, requestHeaders)
+        return AngConfigManager.refreshSimpleServerList(subscription)
     }
 
     /**
@@ -198,17 +242,18 @@ object SimpleVpnRepository {
      * erase healthy V2Ray profiles (and vice versa). Only when neither primary
      * has fresh usable data is the optional emergency proxy attempted.
      */
-    fun refresh(context: Context): RefreshOutcome {
+    suspend fun refresh(context: Context): RefreshOutcome {
         var sawNetworkError = false
         var sawSuccessfulEmpty = false
 
         primarySources.forEach { source ->
             when (refreshSource(source)) {
                 is AngConfigManager.SimpleRefreshResult.Success -> Unit
-                AngConfigManager.SimpleRefreshResult.EmptyOrInvalid -> {
+                AngConfigManager.SimpleRefreshResult.EmptyResponse -> {
                     clearSourceCache(source)
                     sawSuccessfulEmpty = true
                 }
+                AngConfigManager.SimpleRefreshResult.InvalidContent,
                 AngConfigManager.SimpleRefreshResult.NetworkError -> sawNetworkError = true
             }
         }
@@ -226,10 +271,11 @@ object SimpleVpnRepository {
         if (fallback != null) {
             when (refreshSource(fallback)) {
                 is AngConfigManager.SimpleRefreshResult.Success -> Unit
-                AngConfigManager.SimpleRefreshResult.EmptyOrInvalid -> {
+                AngConfigManager.SimpleRefreshResult.EmptyResponse -> {
                     clearSourceCache(fallback)
                     sawSuccessfulEmpty = true
                 }
+                AngConfigManager.SimpleRefreshResult.InvalidContent,
                 AngConfigManager.SimpleRefreshResult.NetworkError -> sawNetworkError = true
             }
             val fallbackGuids = sourceGuids(fallback)
