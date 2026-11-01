@@ -49,12 +49,21 @@ object SimpleVpnRepository {
         val delayMillis: Long?,
     )
 
+    enum class AetherFailure { LICENSE_MISSING, LICENSE_EXPIRED, UNAUTHORIZED }
+
     sealed class RefreshOutcome {
         data class Updated(val serverCount: Int) : RefreshOutcome()
         data object EmptiedByServer : RefreshOutcome()
         data object KeepingCacheAfterNetworkError : RefreshOutcome()
-        data object CacheUnavailableAfterNetworkError : RefreshOutcome()
+        data class CacheUnavailableAfterNetworkError(
+            val aetherFailure: AetherFailure? = null
+        ) : RefreshOutcome()
     }
+
+    private data class SourceRefreshResult(
+        val result: AngConfigManager.SimpleRefreshResult,
+        val aetherFailure: AetherFailure? = null,
+    )
 
     private fun ensureSubscription(source: Source): SubscriptionCache {
         val existing = MmkvManager.decodeSubscription(source.id)
@@ -194,7 +203,7 @@ object SimpleVpnRepository {
         }
     }
 
-    private suspend fun refreshSource(source: Source): AngConfigManager.SimpleRefreshResult {
+    private suspend fun refreshSource(source: Source): SourceRefreshResult {
         val subscription = ensureSubscription(source)
         if (source.id == AETHER_SUB_ID) {
             return when (val result = AetherFeedRepository.fetch()) {
@@ -206,7 +215,7 @@ object SimpleVpnRepository {
                         .filter { it.isNotEmpty() }
                         .joinToString("\n")
                     if (normalized.isEmpty()) {
-                        AngConfigManager.SimpleRefreshResult.EmptyResponse
+                        SourceRefreshResult(AngConfigManager.SimpleRefreshResult.EmptyResponse)
                     } else {
                         val count = AngConfigManager.importBatchConfigWithoutSubscriptions(
                             normalized, source.id, false
@@ -214,34 +223,34 @@ object SimpleVpnRepository {
                         if (count > 0) {
                             subscription.subscription.lastUpdated = System.currentTimeMillis()
                             MmkvManager.encodeSubscription(source.id, subscription.subscription)
-                            AngConfigManager.SimpleRefreshResult.Success(count)
+                            SourceRefreshResult(AngConfigManager.SimpleRefreshResult.Success(count))
                         } else {
                             LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether feed returned non-empty content with no importable profiles; cache preserved")
-                            AngConfigManager.SimpleRefreshResult.InvalidContent
+                            SourceRefreshResult(AngConfigManager.SimpleRefreshResult.InvalidContent)
                         }
                     }
                 }
                 AetherFeedRepository.Result.LicenseMissing ->
-                    AngConfigManager.SimpleRefreshResult.NetworkError.also {
+                    SourceRefreshResult(AngConfigManager.SimpleRefreshResult.NetworkError, AetherFailure.LICENSE_MISSING).also {
                         LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether refresh skipped: license missing")
                     }
                 AetherFeedRepository.Result.LicenseExpired ->
-                    AngConfigManager.SimpleRefreshResult.NetworkError.also {
+                    SourceRefreshResult(AngConfigManager.SimpleRefreshResult.NetworkError, AetherFailure.LICENSE_EXPIRED).also {
                         LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether refresh skipped: license expired")
                     }
                 AetherFeedRepository.Result.Unauthorized ->
-                    AngConfigManager.SimpleRefreshResult.NetworkError.also {
+                    SourceRefreshResult(AngConfigManager.SimpleRefreshResult.NetworkError, AetherFailure.UNAUTHORIZED).also {
                         LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether refresh rejected: unauthorized")
                     }
                 is AetherFeedRepository.Result.HttpError ->
-                    AngConfigManager.SimpleRefreshResult.NetworkError.also {
+                    SourceRefreshResult(AngConfigManager.SimpleRefreshResult.NetworkError).also {
                         LogUtil.w(com.v2ray.ang.AppConfig.TAG, "Simple Aether refresh failed: HTTP ${result.code}")
                     }
                 AetherFeedRepository.Result.NetworkError ->
-                    AngConfigManager.SimpleRefreshResult.NetworkError
+                    SourceRefreshResult(AngConfigManager.SimpleRefreshResult.NetworkError)
             }
         }
-        return AngConfigManager.refreshSimpleServerList(subscription)
+        return SourceRefreshResult(AngConfigManager.refreshSimpleServerList(subscription))
     }
 
     /**
@@ -252,9 +261,12 @@ object SimpleVpnRepository {
     suspend fun refresh(context: Context): RefreshOutcome {
         var sawNetworkError = false
         var sawSuccessfulEmpty = false
+        var aetherFailure: AetherFailure? = null
 
         primarySources.forEach { source ->
-            when (refreshSource(source)) {
+            val refresh = refreshSource(source)
+            if (source.id == AETHER_SUB_ID) aetherFailure = refresh.aetherFailure
+            when (refresh.result) {
                 is AngConfigManager.SimpleRefreshResult.Success -> Unit
                 AngConfigManager.SimpleRefreshResult.EmptyResponse -> {
                     clearSourceCache(source)
@@ -276,7 +288,7 @@ object SimpleVpnRepository {
 
         val fallback = emergencySource
         if (fallback != null) {
-            when (refreshSource(fallback)) {
+            when (refreshSource(fallback).result) {
                 is AngConfigManager.SimpleRefreshResult.Success -> Unit
                 AngConfigManager.SimpleRefreshResult.EmptyResponse -> {
                     clearSourceCache(fallback)
@@ -300,7 +312,7 @@ object SimpleVpnRepository {
             // A stale cache may remain visible for diagnostics, but it must never
             // be treated as a usable offline cache after its expiry window.
             LauncherManager.stopService(context)
-            return RefreshOutcome.CacheUnavailableAfterNetworkError
+            return RefreshOutcome.CacheUnavailableAfterNetworkError(aetherFailure)
         }
 
         // Empty/invalid feeds are cleared per-source. Do not disconnect if another
