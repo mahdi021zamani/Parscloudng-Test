@@ -283,13 +283,22 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
 
-                SimpleVpnRepository.RefreshOutcome.CacheUnavailableAfterNetworkError -> withContext(Dispatchers.Main) {
+                is SimpleVpnRepository.RefreshOutcome.CacheUnavailableAfterNetworkError -> withContext(Dispatchers.Main) {
+                    val messageId = when (outcome.aetherFailure) {
+                        SimpleVpnRepository.AetherFailure.LICENSE_MISSING -> R.string.simple_aether_license_required
+                        SimpleVpnRepository.AetherFailure.LICENSE_EXPIRED -> R.string.simple_aether_license_expired
+                        SimpleVpnRepository.AetherFailure.UNAUTHORIZED -> R.string.simple_aether_license_rejected
+                        null -> R.string.simple_network_error_no_cache
+                    }
                     _uiState.update {
                         it.copy(
                             isRefreshing = false,
                             canConnect = false,
                             status = SimpleConnectionStatus.DISCONNECTED,
-                            message = app.getString(R.string.simple_network_error_no_cache),
+                            message = app.getString(messageId),
+                            licenseDialogVisible = outcome.aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_MISSING ||
+                                outcome.aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_EXPIRED ||
+                                outcome.aetherFailure == SimpleVpnRepository.AetherFailure.UNAUTHORIZED,
                         )
                     }
                 }
