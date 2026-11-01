@@ -31,7 +31,7 @@ object AetherDelayTester {
 
     /**
      * The whole test, tunnel start included. The native probe gives every other profile a 12-second
-     * HTTP client and the current-server test a 12-second context; an Aether profile gets the same
+     * HTTP client and the current-server test a 8-second context; an Aether profile gets the same
      * budget, so a tunnel that cannot come up fails within it instead of after a minute-long scan.
      */
     internal const val TEST_BUDGET_MS = 8_000L
