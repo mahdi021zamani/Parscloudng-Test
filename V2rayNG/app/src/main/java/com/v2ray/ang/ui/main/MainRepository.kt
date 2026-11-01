@@ -255,7 +255,7 @@ class MainRepository(
                     MmkvManager.removeServerViaSubid(AETHER_SUBSCRIPTION_ID)
                     LogUtil.w(AppConfig.TAG, "Aether feed is intentionally empty; cleared existing Aether profiles")
                 } else {
-                    val (importedCount, _) = AngConfigManager.importBatchConfig(
+                    val importedCount = AngConfigManager.importBatchConfigWithoutSubscriptions(
                         normalizedContent, AETHER_SUBSCRIPTION_ID, false
                     )
                     LogUtil.w(AppConfig.TAG, "Aether feed import finished: $importedCount profiles imported")
