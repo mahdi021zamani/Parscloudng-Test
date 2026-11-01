@@ -246,33 +246,35 @@ private fun ConnectionBar(
     canConnect: Boolean,
     onConnectClick: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-        val statusText = when (status) {
-            SimpleConnectionStatus.DISCONNECTED -> stringResource(R.string.simple_status_disconnected)
-            SimpleConnectionStatus.CONNECTING -> stringResource(R.string.simple_status_connecting)
-            SimpleConnectionStatus.CONNECTED -> stringResource(R.string.simple_status_connected)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(statusText)
-            if (status == SimpleConnectionStatus.CONNECTING) {
-                CircularProgressIndicator(modifier = Modifier.height(16.dp).padding(start = 8.dp))
-            }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Button(
+    val statusText = when (status) {
+        SimpleConnectionStatus.DISCONNECTED -> stringResource(R.string.simple_status_disconnected)
+        SimpleConnectionStatus.CONNECTING -> stringResource(R.string.simple_status_connecting)
+        SimpleConnectionStatus.CONNECTED -> stringResource(R.string.simple_status_connected)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(statusText)
+        androidx.compose.material3.FloatingActionButton(
             onClick = onConnectClick,
-            enabled = status != SimpleConnectionStatus.CONNECTING && (status == SimpleConnectionStatus.CONNECTED || canConnect),
-            modifier = Modifier.fillMaxWidth(),
+            enabled = status != SimpleConnectionStatus.CONNECTING &&
+                (status == SimpleConnectionStatus.CONNECTED || canConnect),
+            containerColor = MaterialTheme.colorScheme.primary,
         ) {
-            Text(
-                if (status == SimpleConnectionStatus.DISCONNECTED)
-                    stringResource(R.string.simple_connect)
-                else
-                    stringResource(R.string.simple_disconnect)
+            androidx.compose.material3.Icon(
+                painter = androidx.compose.ui.res.painterResource(
+                    if (status == SimpleConnectionStatus.CONNECTED) R.drawable.ic_stop_24dp
+                    else R.drawable.ic_play_24dp
+                ),
+                contentDescription = stringResource(
+                    if (status == SimpleConnectionStatus.CONNECTED) R.string.acc_stop else R.string.acc_start
+                ),
+                tint = androidx.compose.ui.graphics.Color.White,
+                modifier = Modifier.width(24.dp).height(24.dp),
             )
         }
     }
