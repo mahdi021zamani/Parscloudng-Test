@@ -322,6 +322,6 @@ object SimpleVpnRepository {
             return RefreshOutcome.EmptiedByServer
         }
 
-        return RefreshOutcome.CacheUnavailableAfterNetworkError
+        return RefreshOutcome.CacheUnavailableAfterNetworkError()
     }
 }
