@@ -260,10 +260,14 @@ private fun ConnectionBar(
     ) {
         Text(statusText)
         androidx.compose.material3.FloatingActionButton(
-            onClick = onConnectClick,
-            enabled = status != SimpleConnectionStatus.CONNECTING &&
-                (status == SimpleConnectionStatus.CONNECTED || canConnect),
-            containerColor = MaterialTheme.colorScheme.primary,
+            onClick = {
+                if (status != SimpleConnectionStatus.CONNECTING &&
+                    (status == SimpleConnectionStatus.CONNECTED || canConnect)
+                ) onConnectClick()
+            },
+            containerColor = if (status == SimpleConnectionStatus.CONNECTING)
+                MaterialTheme.colorScheme.surfaceVariant
+            else MaterialTheme.colorScheme.primary,
         ) {
             androidx.compose.material3.Icon(
                 painter = androidx.compose.ui.res.painterResource(
