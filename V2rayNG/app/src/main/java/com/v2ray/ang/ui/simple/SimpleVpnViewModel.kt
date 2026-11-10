@@ -239,9 +239,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             val app = getApplication<Application>()
             when (val outcome = SimpleVpnRepository.refresh(app)) {
                 is SimpleVpnRepository.RefreshOutcome.Updated -> {
-                    val allGuids = SimpleVpnRepository.getServerGuids()
                     val sourceId = _uiState.value.selectedSourceId
                     val servers = SimpleVpnRepository.getServersForSource(sourceId)
+                    val sourceGuids = servers.map { it.guid }
                     val selected = MmkvManager.getSelectServer()
                         ?.takeIf { guid -> servers.any { it.guid == guid } }
                         ?: servers.firstOrNull()?.guid
@@ -266,14 +266,16 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             it.copy(
                                 servers = servers,
                                 selectedGuid = selected,
-                                testingGuids = allGuids.toSet(),
+                                testingGuids = sourceGuids.toSet(),
                                 canConnect = SimpleVpnRepository.canConnect(sourceId) && it.licenseValid,
                                 message = aetherMessageId?.let(app::getString),
                                 licenseDialogVisible = needsLicenseDialog,
                             )
                         }
                     }
-                    runPingTest(allGuids)
+                    // Ping is informational; the source is connectable as soon as its feed is ready.
+                    // Test only the active tab so unrelated profiles cannot delay its results.
+                    runPingTest(sourceGuids)
                 }
 
                 SimpleVpnRepository.RefreshOutcome.EmptiedByServer -> withContext(Dispatchers.Main) {
@@ -381,7 +383,19 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     fun onToggleConnect(requestVpnPermission: () -> Unit) {
         val state = _uiState.value
         val app = getApplication<Application>()
-        if (state.status != SimpleConnectionStatus.DISCONNECTED) {
+        if (state.status == SimpleConnectionStatus.CONNECTING) {
+            // Aether profiles can fail before the service reports a final state.
+            // Always let the user cancel a pending start and choose another profile.
+            LauncherManager.stopService(app)
+            _uiState.update {
+                it.copy(
+                    status = SimpleConnectionStatus.DISCONNECTED,
+                    canConnect = it.licenseValid && SimpleVpnRepository.canConnect(it.selectedSourceId),
+                )
+            }
+            return
+        }
+        if (state.status == SimpleConnectionStatus.CONNECTED) {
             LauncherManager.stopService(app)
             return
         }
