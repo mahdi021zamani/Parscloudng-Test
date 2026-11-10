@@ -254,6 +254,35 @@ object SimpleVpnRepository {
     }
 
     /**
+     * Refresh only the source currently displayed. This prevents a failure or
+     * slow response from the other tab from blocking this tab's refresh/ping.
+     */
+    suspend fun refresh(context: Context, sourceId: String): RefreshOutcome {
+        val source = primarySources.firstOrNull { it.id == sourceId }
+            ?: return RefreshOutcome.CacheUnavailableAfterNetworkError()
+        val refresh = refreshSource(source)
+        when (refresh.result) {
+            is AngConfigManager.SimpleRefreshResult.Success -> {
+                return RefreshOutcome.Updated(sourceGuids(source).size, refresh.aetherFailure)
+            }
+            AngConfigManager.SimpleRefreshResult.EmptyResponse -> {
+                clearSourceCache(source)
+                if (!canConnect(SIMPLE_SUB_ID) && !canConnect(AETHER_SUB_ID)) {
+                    LauncherManager.stopService(context)
+                }
+                return RefreshOutcome.EmptiedByServer
+            }
+            AngConfigManager.SimpleRefreshResult.InvalidContent,
+            AngConfigManager.SimpleRefreshResult.NetworkError -> {
+                if (sourceHasFreshConfigs(source)) {
+                    return RefreshOutcome.KeepingCacheAfterNetworkError
+                }
+                return RefreshOutcome.CacheUnavailableAfterNetworkError(refresh.aetherFailure)
+            }
+        }
+    }
+
+    /**
      * Refresh each primary independently. A bad/empty Aether response cannot
      * erase healthy V2Ray profiles (and vice versa). Only when neither primary
      * has fresh usable data is the optional emergency proxy attempted.
