@@ -23,6 +23,7 @@ import com.v2ray.ang.service.SubscriptionLicenseWorker
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -75,6 +76,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     val uiState: StateFlow<SimpleVpnUiState> = _uiState.asStateFlow()
 
     private var pingWorker: RealPingWorkerService? = null
+    private var connectValidationJob: Job? = null
 
     private val serviceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -385,12 +387,16 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val state = _uiState.value
         val app = getApplication<Application>()
         if (state.status == SimpleConnectionStatus.CONNECTING) {
-            // Aether profiles can fail before the service reports a final state.
-            // Always let the user cancel a pending start and choose another profile.
+            // Cancel pending entitlement validation as well as the service start.
+            // Otherwise a late validation response could start the previously selected
+            // (possibly unreachable) profile after the user has cancelled.
+            connectValidationJob?.cancel()
+            connectValidationJob = null
             LauncherManager.stopService(app)
             _uiState.update {
                 it.copy(
                     status = SimpleConnectionStatus.DISCONNECTED,
+                    isValidatingLicense = false,
                     canConnect = it.licenseValid && SimpleVpnRepository.canConnect(it.selectedSourceId),
                 )
             }
@@ -573,8 +579,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
 
+        connectValidationJob?.cancel()
         _uiState.update { it.copy(isValidatingLicense = true) }
-        viewModelScope.launch {
+        connectValidationJob = viewModelScope.launch {
             val stored = withContext(Dispatchers.IO) {
                 SubscriptionLicenseRepository.getStoredLicense()
             }
@@ -653,16 +660,18 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 }
 
                 SubscriptionLicenseRepository.ValidationResult.NetworkError -> {
-                    if (SubscriptionLicenseRepository.isExpired(stored)) {
+                    val locallyActive = !SubscriptionLicenseRepository.isExpired(stored)
+                    if (!locallyActive) {
                         LauncherManager.stopService(app)
                     }
                     _uiState.update {
                         it.copy(
                             status = SimpleConnectionStatus.DISCONNECTED,
                             isValidatingLicense = false,
-                            licenseValid = false,
-                            canConnect = false,
-                            message = app.getString(R.string.simple_license_network_error),
+                            licenseValid = locallyActive,
+                            canConnect = locallyActive && SimpleVpnRepository.canConnect(it.selectedSourceId),
+                            // A transient validation outage must not disable either protocol tab.
+                            message = if (locallyActive) null else app.getString(R.string.simple_license_network_error),
                         )
                     }
                 }
