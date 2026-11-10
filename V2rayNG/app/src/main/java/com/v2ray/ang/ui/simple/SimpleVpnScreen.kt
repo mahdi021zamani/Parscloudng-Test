@@ -261,21 +261,20 @@ private fun ConnectionBar(
         Text(statusText)
         androidx.compose.material3.FloatingActionButton(
             onClick = {
-                if (status != SimpleConnectionStatus.CONNECTING &&
-                    (status == SimpleConnectionStatus.CONNECTED || canConnect)
+                // CONNECTING remains cancellable: a failed Aether start must not trap the UI.
+                if (status == SimpleConnectionStatus.CONNECTING ||
+                    status == SimpleConnectionStatus.CONNECTED || canConnect
                 ) onConnectClick()
             },
-            containerColor = if (status == SimpleConnectionStatus.CONNECTING)
-                MaterialTheme.colorScheme.surfaceVariant
-            else MaterialTheme.colorScheme.primary,
+            containerColor = MaterialTheme.colorScheme.primary,
         ) {
             androidx.compose.material3.Icon(
                 painter = androidx.compose.ui.res.painterResource(
-                    if (status == SimpleConnectionStatus.CONNECTED) R.drawable.ic_stop_24dp
+                    if (status != SimpleConnectionStatus.DISCONNECTED) R.drawable.ic_stop_24dp
                     else R.drawable.ic_play_24dp
                 ),
                 contentDescription = stringResource(
-                    if (status == SimpleConnectionStatus.CONNECTED) R.string.acc_stop else R.string.acc_start
+                    if (status != SimpleConnectionStatus.DISCONNECTED) R.string.acc_stop else R.string.acc_start
                 ),
                 tint = androidx.compose.ui.graphics.Color.White,
                 modifier = Modifier.width(24.dp).height(24.dp),
