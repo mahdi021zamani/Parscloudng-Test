@@ -233,13 +233,14 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun onRefresh() {
         if (_uiState.value.isRefreshing) return
+        val requestedSourceId = _uiState.value.selectedSourceId
         _uiState.update { it.copy(isRefreshing = true, message = null) }
 
         viewModelScope.launch(Dispatchers.IO) {
             val app = getApplication<Application>()
-            when (val outcome = SimpleVpnRepository.refresh(app)) {
+            when (val outcome = SimpleVpnRepository.refresh(app, requestedSourceId)) {
                 is SimpleVpnRepository.RefreshOutcome.Updated -> {
-                    val sourceId = _uiState.value.selectedSourceId
+                    val sourceId = requestedSourceId
                     val servers = SimpleVpnRepository.getServersForSource(sourceId)
                     val sourceGuids = servers.map { it.guid }
                     val selected = MmkvManager.getSelectServer()
@@ -530,16 +531,18 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             SubscriptionLicenseRepository.ValidationResult.NetworkError -> {
-                if (stored != null && SubscriptionLicenseRepository.isExpired(stored)) {
+                val locallyActive = stored != null && !SubscriptionLicenseRepository.isExpired(stored)
+                if (!locallyActive) {
                     LauncherManager.stopService(getApplication())
                 }
                 _uiState.update {
                     it.copy(
                         isValidatingLicense = false,
-                        licenseValid = false,
-                        canConnect = false,
-                        licenseDialogVisible = showDialogOnFailure,
-                        message = getApplication<Application>().getString(R.string.simple_license_network_error),
+                        licenseValid = locallyActive,
+                        canConnect = locallyActive && SimpleVpnRepository.canConnect(it.selectedSourceId),
+                        // A temporary validation network failure is not a rejected subscription.
+                        licenseDialogVisible = showDialogOnFailure && !locallyActive,
+                        message = if (locallyActive) null else getApplication<Application>().getString(R.string.simple_license_network_error),
                     )
                 }
             }
