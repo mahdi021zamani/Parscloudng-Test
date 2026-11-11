@@ -67,6 +67,9 @@ internal fun selectSimpleVpnSourceTab(
         servers = servers,
         selectedGuid = validSelection,
         canConnect = canConnect && validSelection != null,
+        testingGuids = emptySet(),
+        isRefreshing = false,
+        message = null,
     )
 }
 
@@ -76,6 +79,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     val uiState: StateFlow<SimpleVpnUiState> = _uiState.asStateFlow()
 
     private var pingWorker: RealPingWorkerService? = null
+    private var refreshJob: Job? = null
     private var connectValidationJob: Job? = null
 
     private val serviceReceiver = object : BroadcastReceiver() {
@@ -179,16 +183,17 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 return@launch
             }
 
-            validateStoredLicense(stored.key, showDialogOnFailure = true)
-            if (_uiState.value.licenseValid && SimpleVpnRepository.isAetherRefreshDue()) {
-                onRefresh()
-            }
+            // Feed refresh remains user-driven. License validation on resume must
+            // not unexpectedly refresh whichever protocol tab happens to be selected.
         }
     }
 
     private fun loadLocalState() {
         SimpleVpnRepository.ensureSubscription()
         val sourceId = _uiState.value.selectedSourceId
+        refreshJob?.cancel()
+        refreshJob = null
+        cancelPingWorker()
         val servers = SimpleVpnRepository.getServersForSource(sourceId)
         val selected = MmkvManager.getSelectServer()
             ?.takeIf { guid -> servers.any { it.guid == guid } }
@@ -238,7 +243,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val requestedSourceId = _uiState.value.selectedSourceId
         _uiState.update { it.copy(isRefreshing = true, message = null) }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        refreshJob = viewModelScope.launch(Dispatchers.IO) {
             val app = getApplication<Application>()
             when (val outcome = SimpleVpnRepository.refresh(app, requestedSourceId)) {
                 is SimpleVpnRepository.RefreshOutcome.Updated -> {
@@ -248,7 +253,6 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     val selected = MmkvManager.getSelectServer()
                         ?.takeIf { guid -> servers.any { it.guid == guid } }
                         ?: servers.firstOrNull()?.guid
-                    selected?.let(MmkvManager::setSelectServer)
                     val aetherFailure = outcome.aetherFailure.takeIf {
                         sourceId == SimpleVpnRepository.AETHER_SUB_ID && servers.isEmpty()
                     }
@@ -265,42 +269,57 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_EXPIRED ||
                         aetherFailure == SimpleVpnRepository.AetherFailure.UNAUTHORIZED
                     withContext(Dispatchers.Main) {
-                        _uiState.update {
-                            it.copy(
-                                servers = servers,
-                                selectedGuid = selected,
-                                testingGuids = sourceGuids.toSet(),
-                                canConnect = SimpleVpnRepository.canConnect(sourceId) && it.licenseValid,
-                                message = aetherMessageId?.let(app::getString),
-                                licenseDialogVisible = needsLicenseDialog,
-                            )
+                        _uiState.update { state ->
+                            if (state.selectedSourceId != sourceId) {
+                                state.copy(
+                                    isRefreshing = false,
+                                    canConnect = SimpleVpnRepository.canConnect(state.selectedSourceId) && state.licenseValid,
+                                )
+                            } else {
+                                selected?.let(MmkvManager::setSelectServer)
+                                state.copy(
+                                    servers = servers,
+                                    selectedGuid = selected,
+                                    testingGuids = sourceGuids.toSet(),
+                                    canConnect = SimpleVpnRepository.canConnect(sourceId) && state.licenseValid,
+                                    message = aetherMessageId?.let(app::getString),
+                                    licenseDialogVisible = needsLicenseDialog,
+                                )
+                            }
                         }
                     }
-                    // Ping is informational; the source is connectable as soon as its feed is ready.
-                    // Test only the active tab so unrelated profiles cannot delay its results.
-                    runPingTest(sourceGuids)
+                    // Ping is informational; test only the source that is still active.
+                    if (_uiState.value.selectedSourceId == sourceId) runPingTest(sourceGuids)
                 }
 
                 SimpleVpnRepository.RefreshOutcome.EmptiedByServer -> withContext(Dispatchers.Main) {
-                    _uiState.update {
-                        it.copy(
-                            servers = emptyList(),
-                            selectedGuid = null,
-                            testingGuids = emptySet(),
-                            canConnect = false,
-                            isRefreshing = false,
-                            status = SimpleConnectionStatus.DISCONNECTED,
-                            message = app.getString(R.string.simple_no_servers_available),
-                        )
+                    _uiState.update { state ->
+                        if (state.selectedSourceId != requestedSourceId) {
+                            state.copy(
+                                isRefreshing = false,
+                                canConnect = SimpleVpnRepository.canConnect(state.selectedSourceId) && state.licenseValid,
+                            )
+                        } else {
+                            state.copy(
+                                servers = emptyList(),
+                                selectedGuid = null,
+                                testingGuids = emptySet(),
+                                canConnect = false,
+                                isRefreshing = false,
+                                status = SimpleConnectionStatus.DISCONNECTED,
+                                message = app.getString(R.string.simple_no_servers_available),
+                            )
+                        }
                     }
                 }
 
                 SimpleVpnRepository.RefreshOutcome.KeepingCacheAfterNetworkError -> withContext(Dispatchers.Main) {
-                    _uiState.update {
-                        it.copy(
+                    _uiState.update { state ->
+                        state.copy(
                             isRefreshing = false,
-                            canConnect = SimpleVpnRepository.canConnect(_uiState.value.selectedSourceId) && _uiState.value.licenseValid,
-                            message = app.getString(R.string.simple_network_error_using_cache),
+                            canConnect = SimpleVpnRepository.canConnect(state.selectedSourceId) && state.licenseValid,
+                            message = if (state.selectedSourceId == requestedSourceId)
+                                app.getString(R.string.simple_network_error_using_cache) else null,
                         )
                     }
                 }
@@ -315,34 +334,52 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         SimpleVpnRepository.AetherFailure.INVALID_CONTENT,
                         null -> R.string.simple_network_error_no_cache
                     }
-                    _uiState.update {
-                        it.copy(
-                            isRefreshing = false,
-                            canConnect = false,
-                            status = SimpleConnectionStatus.DISCONNECTED,
-                            message = app.getString(messageId),
-                            licenseDialogVisible = outcome.aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_MISSING ||
-                                outcome.aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_EXPIRED ||
-                                outcome.aetherFailure == SimpleVpnRepository.AetherFailure.UNAUTHORIZED,
-                        )
+                    _uiState.update { state ->
+                        if (state.selectedSourceId != requestedSourceId) {
+                            state.copy(
+                                isRefreshing = false,
+                                canConnect = SimpleVpnRepository.canConnect(state.selectedSourceId) && state.licenseValid,
+                            )
+                        } else {
+                            state.copy(
+                                isRefreshing = false,
+                                canConnect = false,
+                                status = SimpleConnectionStatus.DISCONNECTED,
+                                message = app.getString(messageId),
+                                licenseDialogVisible = outcome.aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_MISSING ||
+                                    outcome.aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_EXPIRED ||
+                                    outcome.aetherFailure == SimpleVpnRepository.AetherFailure.UNAUTHORIZED,
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
+    private fun cancelPingWorker() {
+        val previous = pingWorker
+        pingWorker = null
+        previous?.cancel()
+    }
+
     private fun runPingTest(guids: List<String>) {
+        cancelPingWorker()
         if (guids.isEmpty()) {
             _uiState.update { it.copy(isRefreshing = false, canConnect = SimpleVpnRepository.canConnect(it.selectedSourceId) && it.licenseValid) }
             return
         }
 
-        pingWorker?.cancel()
         val app = getApplication<Application>()
-        val worker = RealPingWorkerService(
+        lateinit var worker: RealPingWorkerService
+        worker = RealPingWorkerService(
             context = app,
             guids = guids,
-            onEvent = { event -> handlePingEvent(event) }
+            onEvent = { event ->
+                // A cancelled batch may finish after a newer batch has started.
+                // Ignore all late events from workers that no longer own the UI.
+                if (pingWorker === worker) handlePingEvent(event)
+            }
         )
         pingWorker = worker
         worker.start()
@@ -363,6 +400,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             is RealPingEvent.Finish -> {
+                pingWorker = null
                 SimpleVpnRepository.sortByPing()
                 _uiState.update {
                     it.copy(
@@ -414,8 +452,20 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             _uiState.update { it.copy(message = app.getString(R.string.simple_no_servers_available)) }
             return
         }
+        // Aether probes use the same local listener as a live session. Stop the
+        // current batch before launching the daemon so its native process releases
+        // the port and identity files first.
+        refreshJob?.cancel()
+        refreshJob = null
+        cancelPingWorker()
         // Validate after the permission prompt, immediately before starting the VPN.
-        _uiState.update { it.copy(status = SimpleConnectionStatus.CONNECTING) }
+        _uiState.update {
+            it.copy(
+                status = SimpleConnectionStatus.CONNECTING,
+                isRefreshing = false,
+                testingGuids = emptySet(),
+            )
+        }
         requestVpnPermission()
     }
 
@@ -681,8 +731,10 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     override fun onCleared() {
         super.onCleared()
-        pingWorker?.cancel()
-        val app = getApplication<Application>()
+        refreshJob?.cancel()
+        refreshJob = null
+        cancelPingWorker()
+        val app = getApplication<Application>
         runCatching { MessageHelper.sendMsg2Service(app, AppConfig.MSG_UNREGISTER_CLIENT, "") }
         runCatching { app.unregisterReceiver(serviceReceiver) }
     }
