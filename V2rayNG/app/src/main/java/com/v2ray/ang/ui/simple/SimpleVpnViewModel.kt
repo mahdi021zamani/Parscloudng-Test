@@ -375,8 +375,8 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         }
 
         val app = getApplication<Application>()
-        lateinit var worker: RealPingWorkerService
-        worker = RealPingWorkerService(
+        var worker: RealPingWorkerService? = null
+        val newWorker = RealPingWorkerService(
             context = app,
             guids = guids,
             onEvent = { event ->
@@ -385,8 +385,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 if (pingWorker === worker) handlePingEvent(event)
             }
         )
-        pingWorker = worker
-        worker.start()
+        worker = newWorker
+        pingWorker = newWorker
+        newWorker.start()
     }
 
     private fun handlePingEvent(event: RealPingEvent) {
