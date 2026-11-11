@@ -1048,6 +1048,37 @@ object AetherCoreManager {
         lifecycle.execute { current.process?.let { end(it, current.context) } }
     }
 
+    /**
+     * Stops the session and waits behind any already queued start/stop work on the
+     * single lifecycle executor. This is used before the VPN service closes its TUN
+     * descriptor; a fire-and-forget stop could otherwise leave a child core alive
+     * while the next session is already being prepared.
+     */
+    @Synchronized
+    fun stopAndWait(timeoutMs: Long = EXIT_WAIT_MS * 2 + 2_000L): Boolean {
+        val current = session
+        session = null
+        val completion = FutureTask {
+            current?.process?.let { end(it, current.context) }
+            true
+        }
+        return try {
+            // Even with no current Session, this barrier waits for an earlier stop()
+            // task that may still be ending the previous process.
+            lifecycle.execute(completion)
+            completion.get(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            LogUtil.e(AppConfig.TAG, "AetherCore: timed out waiting for session shutdown")
+            false
+        } catch (e: ExecutionException) {
+            LogUtil.e(AppConfig.TAG, "AetherCore: session shutdown failed", e)
+            false
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+    }
+
     suspend fun awaitListening(timeoutMs: Long): Boolean =
         awaitReady(timeoutMs, READY_POLL_MS, { isRunning }, { session?.let { it.wordSeen && answersSocks(it.port) } == true })
 
