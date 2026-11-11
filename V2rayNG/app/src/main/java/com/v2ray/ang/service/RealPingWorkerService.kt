@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 internal object RealPingExecutionLimiter {
@@ -56,6 +57,7 @@ class RealPingWorkerService(
 
     private val runningCount = AtomicInteger(0)
     private val totalCount = AtomicInteger(0)
+    private val finishSent = AtomicBoolean(false)
 
     fun start() {
         val jobs = guids.map { guid ->
@@ -82,12 +84,10 @@ class RealPingWorkerService(
         scope.launch {
             try {
                 joinAll(*jobs.toTypedArray())
-                if (isActive) {
-                    onEvent(RealPingEvent.Finish("0"))
-                }
             } catch (_: CancellationException) {
-                // If cancelled, don't send finish event to avoid confusion
+                // Cancellation is a completed batch from the UI's point of view.
             } finally {
+                finishOnce()
                 close()
             }
         }
@@ -95,6 +95,17 @@ class RealPingWorkerService(
 
     fun cancel() {
         job.cancel()
+        // The parent coroutine may not get scheduled after immediate cancellation.
+        // Complete the UI batch and release its dispatcher here as well; finishOnce
+        // prevents the coroutine's finally block from emitting a duplicate event.
+        finishOnce()
+        close()
+    }
+
+    private fun finishOnce() {
+        if (finishSent.compareAndSet(false, true)) {
+            onEvent(RealPingEvent.Finish("0"))
+        }
     }
 
     private fun close() {
