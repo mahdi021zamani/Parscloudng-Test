@@ -172,7 +172,7 @@ object CoreServiceManager {
         if (aetherCore != null) {
             if (!AetherCoreManager.isSupported(service)) error(service.getString(R.string.aether_unsupported_abi))
             // Start the local Aether listener before Xray begins accepting traffic through its SOCKS outbound.
-            AetherCoreManager.start(service, aetherCore) {
+            AetherCoreManager.start(service, aetherCore, afterProbes = true) {
                 CoroutineScope(Dispatchers.Main).launch {
                     if (isRunning()) stopCoreLoop()
                 }
