@@ -81,6 +81,13 @@ object CoreConfigContextBuilder {
                 Pair(chainProfiles, type)
             }
 
+            EConfigType.AETHER -> {
+                // Aether profiles are standalone cores. Subscription neighbour chaining is a
+                // V2Ray profile feature and must not silently turn an Aether subscription item
+                // into a multi-hop outbound that CoreConfigManager cannot execute.
+                Pair(listOf(profile), CoreResolvedType.NORMAL)
+            }
+
             else -> {
                 val chainProfiles = resolveProxyChainProfilesFromGroup(profile)
                 val type = if (chainProfiles.size <= 1) CoreResolvedType.NORMAL else CoreResolvedType.PROXYCHAIN
