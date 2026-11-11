@@ -34,6 +34,9 @@ import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.ProcessFinder
@@ -44,6 +47,7 @@ object CoreServiceManager {
 
     private val coreController: CoreController = CoreNativeManager.newCoreController(CoreCallback())
     private val mMsgReceive = ReceiveMessageHandler()
+    private val stopMutex = Mutex()
     private var currentConfig: ProfileItem? = null
     private var processFinder: XrayProcessFinder? = null
     private var browserDialer: IDialerService? = null
@@ -218,31 +222,44 @@ object CoreServiceManager {
      * Unregisters broadcast receivers, stops notifications, and shuts down plugins.
      * @return True if the core was stopped successfully, false otherwise.
      */
-    fun stopCoreLoop(): Boolean {
-        AetherCoreManager.stop()
-        val service = getService() ?: return false
+    /**
+     * Stops Aether and Xray in order, and reports completion only after both native
+     * cores have returned. Callers that own the VPN descriptor can therefore close it
+     * after this function completes instead of relying on a fixed sleep.
+     */
+    suspend fun stopCoreLoopAndAwait(): Boolean = stopMutex.withLock {
+        val service = getService() ?: return@withLock false
+
+        val aetherStopped = withContext(Dispatchers.IO) {
+            AetherCoreManager.stopAndWait()
+        }
+        if (!aetherStopped) {
+            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Aether shutdown did not complete within its deadline")
+        }
 
         networkMonitor?.unregister()
         networkMonitor = null
         currentVpnInterface = null
 
+        var xrayStopped = true
         if (isRunning()) {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
+            try {
+                withContext(Dispatchers.IO) {
                     coreController.stopLoop()
-                } catch (e: Exception) {
-                    LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
                 }
+            } catch (e: Exception) {
+                xrayStopped = false
+                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to stop V2Ray loop", e)
             }
         }
 
-        // Close existing browser dialer
         CoreNativeManager.reconcileBrowserDialer("")
         if (browserDialer != null) {
             browserDialer!!.stop()
             browserDialer = null
         }
 
+        // Do not publish STOP_SUCCESS until native shutdown has actually returned.
         MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
         NotificationManager.cancelNotification()
 
@@ -252,6 +269,15 @@ object CoreServiceManager {
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister receiver", e)
         }
 
+        aetherStopped && xrayStopped
+    }
+
+    /** Backwards-compatible asynchronous entry point for proxy-only and root services. */
+    fun stopCoreLoop(): Boolean {
+        if (getService() == null) return false
+        CoroutineScope(Dispatchers.IO).launch {
+            stopCoreLoopAndAwait()
+        }
         return true
     }
 
