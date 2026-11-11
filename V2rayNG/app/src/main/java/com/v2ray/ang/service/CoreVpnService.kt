@@ -362,16 +362,16 @@ class CoreVpnService : VpnService(), ServiceControl {
         // HEV's JNI stop joins its native worker thread. Run it off the service
         // main thread, then await Aether and Xray before releasing the TUN descriptor.
         CoroutineScope(Dispatchers.IO).launch {
-            try {
-                tunnel?.stopTun2Socks()
-                RootLanSharing.stopClientSharing(this@CoreVpnService)
-
-                if (!CoreServiceManager.stopCoreLoopAndAwait()) {
-                    LogUtil.w(AppConfig.TAG, "StartCore-VPN: one or more native components did not confirm shutdown")
+            runCatching { tunnel?.stopTun2Socks() }
+                .onFailure { LogUtil.e(AppConfig.TAG, "StartCore-VPN: HEV shutdown failed", it) }
+            runCatching { RootLanSharing.stopClientSharing(this@CoreVpnService) }
+                .onFailure { LogUtil.e(AppConfig.TAG, "StartCore-VPN: LAN sharing shutdown failed", it) }
+            runCatching { CoreServiceManager.stopCoreLoopAndAwait() }
+                .onSuccess { stopped ->
+                    if (!stopped) LogUtil.w(AppConfig.TAG, "StartCore-VPN: one or more native components did not confirm shutdown")
                 }
-            } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "StartCore-VPN: error while stopping tunnel components", e)
-            } finally {
+                .onFailure { LogUtil.e(AppConfig.TAG, "StartCore-VPN: core shutdown failed", it) }
+            try {
                 if (isForced) {
                     // Preserve the required ordering: request service stop before closing
                     // the descriptor, but do not guess how long native shutdown needs.
