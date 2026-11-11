@@ -118,8 +118,8 @@ object SimpleVpnRepository {
 
         emergencySource?.takeIf(::sourceHasFreshConfigs)?.let { return listOf(it.id) }
 
-        // Preserve stale cached entries for visibility/diagnostics, but canConnect()
-        // remains false until a source has a fresh cache.
+        // Preserve stale cached entries for visibility and offline use. Freshness
+        // determines whether a refresh is due, not whether cached profiles can connect.
         val cachedPrimary = primarySources.filter { sourceGuids(it).isNotEmpty() }
         if (cachedPrimary.isNotEmpty()) return cachedPrimary.map { it.id }
         return listOfNotNull(emergencySource?.takeIf { sourceGuids(it).isNotEmpty() }?.id)
