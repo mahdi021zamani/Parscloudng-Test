@@ -608,7 +608,12 @@ object CoreServiceManager {
             when (intent?.getIntExtra("key", 0)) {
                 AppConfig.MSG_REGISTER_CLIENT -> {
                     if (isRunning()) {
-                        MessageHelper.sendMsg2UI(serviceControl.getService(), AppConfig.MSG_STATE_RUNNING, "")
+                        val state = if (aetherWarmUpJob?.isActive == true) {
+                            AppConfig.MSG_STATE_CONNECTING
+                        } else {
+                            AppConfig.MSG_STATE_RUNNING
+                        }
+                        MessageHelper.sendMsg2UI(serviceControl.getService(), state, "")
                     } else {
                         MessageHelper.sendMsg2UI(serviceControl.getService(), AppConfig.MSG_STATE_NOT_RUNNING, "")
                     }
