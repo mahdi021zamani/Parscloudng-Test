@@ -218,11 +218,6 @@ object CoreServiceManager {
     }
 
     /**
-     * Stops the V2Ray core service.
-     * Unregisters broadcast receivers, stops notifications, and shuts down plugins.
-     * @return True if the core was stopped successfully, false otherwise.
-     */
-    /**
      * Stops Aether and Xray in order, and reports completion only after both native
      * cores have returned. Callers that own the VPN descriptor can therefore close it
      * after this function completes instead of relying on a fixed sleep.
@@ -230,14 +225,18 @@ object CoreServiceManager {
     suspend fun stopCoreLoopAndAwait(): Boolean = stopMutex.withLock {
         val service = getService() ?: return@withLock false
 
-        val aetherStopped = withContext(Dispatchers.IO) {
-            AetherCoreManager.stopAndWait()
+        val aetherStopped = runCatching {
+            withContext(Dispatchers.IO) { AetherCoreManager.stopAndWait() }
+        }.getOrElse {
+            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Aether shutdown failed", it)
+            false
         }
         if (!aetherStopped) {
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Aether shutdown did not complete within its deadline")
         }
 
-        networkMonitor?.unregister()
+        runCatching { networkMonitor?.unregister() }
+            .onFailure { LogUtil.w(AppConfig.TAG, "StartCore-Manager: Failed to unregister network monitor", it) }
         networkMonitor = null
         currentVpnInterface = null
 
@@ -255,7 +254,8 @@ object CoreServiceManager {
 
         CoreNativeManager.reconcileBrowserDialer("")
         if (browserDialer != null) {
-            browserDialer!!.stop()
+            runCatching { browserDialer!!.stop() }
+                .onFailure { LogUtil.w(AppConfig.TAG, "StartCore-Manager: Failed to stop browser dialer", it) }
             browserDialer = null
         }
 
