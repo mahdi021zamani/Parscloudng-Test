@@ -142,8 +142,8 @@ object SimpleVpnRepository {
         val source = primarySources.firstOrNull { it.id == sourceId } ?: return emptyList()
         if (sourceHasFreshConfigs(source)) return sourceGuids(source).distinct()
 
-        // Visibility is independent of freshness: stale cached profiles remain visible
-        // for diagnostics and can be refreshed, but canConnect() still rejects stale data.
+        // Visibility and connectability are independent of freshness: cached profiles
+        // remain usable after transient outages while their source is refreshed manually.
         val cached = sourceGuids(source).filter { MmkvManager.decodeServerConfig(it) != null }
         if (cached.isNotEmpty()) return cached.distinct()
 
@@ -199,7 +199,7 @@ object SimpleVpnRepository {
         if (sourceHasCachedProfiles(source)) return true
 
         // The emergency feed is a V2Ray-tab fallback only, and only when neither
-        // primary source has any cached profiles.
+        // primary source currently has a fresh feed.
         if (sourceId == SIMPLE_SUB_ID && primarySources.none(::sourceHasFreshConfigs)) {
             return emergencySource?.let(::sourceHasCachedProfiles) == true
         }
