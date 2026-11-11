@@ -324,8 +324,23 @@ object AngConfigManager {
         val keyToProfile = linkedMapOf<String, ProfileItem>()
         val rawConfigs = mutableMapOf<String, String>()
 
-        configs.forEach { parsed ->
-            val key = Utils.getUuid()
+        // A replacement feed should not mint new GUIDs for profiles that have
+        // not changed. GUIDs own ping history and are also used by the selection
+        // state, so match by the connection-defining fields before allocating IDs.
+        val existingProfiles = if (append) {
+            emptyMap()
+        } else {
+            MmkvManager.decodeServerList(subid).mapNotNull { guid ->
+                MmkvManager.decodeServerConfig(guid)?.let { guid to it }
+            }.toMap()
+        }
+        val reusableGuids = ProfileReplacement.reusableGuids(
+            replacements = configs.map { it.profile },
+            existingProfiles = existingProfiles,
+        )
+
+        configs.forEachIndexed { index, parsed ->
+            val key = reusableGuids.getOrNull(index) ?: Utils.getUuid()
             keyToProfile[key] = parsed.profile
             parsed.rawConfig?.let { raw -> rawConfigs[key] = raw }
         }
