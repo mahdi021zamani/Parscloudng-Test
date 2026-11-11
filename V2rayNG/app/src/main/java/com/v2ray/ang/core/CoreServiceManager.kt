@@ -222,7 +222,7 @@ object CoreServiceManager {
      * cores have returned. Callers that own the VPN descriptor can therefore close it
      * after this function completes instead of relying on a fixed sleep.
      */
-    suspend fun stopCoreLoopAndAwait(): Boolean = stopMutex.withLock {
+    suspend fun stopCoreLoopAndAwait(notifyUi: Boolean = true): Boolean = stopMutex.withLock {
         val service = getService() ?: return@withLock false
 
         val aetherStopped = runCatching {
@@ -259,8 +259,9 @@ object CoreServiceManager {
             browserDialer = null
         }
 
-        // Do not publish STOP_SUCCESS until native shutdown has actually returned.
-        MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+        // VPN mode reports STOP_SUCCESS from onDestroy, after its TUN descriptor
+        // has also been closed. Other run modes report it here after core shutdown.
+        if (notifyUi) MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
         NotificationManager.cancelNotification()
 
         try {
