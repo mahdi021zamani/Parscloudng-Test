@@ -37,6 +37,7 @@ internal object ProfileReplacement {
     ): String? {
         if (profiles.isEmpty()) return null
         if (currentSelection.isNullOrBlank()) return profiles.keys.first()
+        if (currentSelection in profiles) return currentSelection
         if (selectedProfile == null) return null
 
         if (selectedProfile.remarks.isNotBlank()) {
