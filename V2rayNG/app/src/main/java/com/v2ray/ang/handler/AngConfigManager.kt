@@ -327,7 +327,7 @@ object AngConfigManager {
         // A replacement feed should not mint new GUIDs for profiles that have
         // not changed. GUIDs own ping history and are also used by the selection
         // state, so match by the connection-defining fields before allocating IDs.
-        val existingProfiles = if (append) {
+        val existingProfiles: Map<String, ProfileItem> = if (append) {
             emptyMap()
         } else {
             MmkvManager.decodeServerList(subid).mapNotNull { guid ->
