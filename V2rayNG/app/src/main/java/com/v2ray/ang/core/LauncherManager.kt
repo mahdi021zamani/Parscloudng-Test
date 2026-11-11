@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
+import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.extension.isComplexType
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastError
@@ -68,6 +69,12 @@ object LauncherManager {
         }
     }
 
+    internal fun hasUsableServer(config: com.v2ray.ang.dto.entities.ProfileItem): Boolean =
+        config.configType.isComplexType()
+            || config.configType == EConfigType.AETHER
+            || Utils.isPureIpAddress(config.server.orEmpty())
+            || Utils.isValidUrl(config.server)
+
     @Throws(Exception::class)
     private fun startContextService(context: Context) {
         // Note: isRunning check is removed here to avoid loading Native libraries in the UI process.
@@ -85,10 +92,7 @@ object LauncherManager {
                 error(context.getString(R.string.toast_config_file_invalid))
             }
 
-        if (!config.configType.isComplexType()
-            && !Utils.isValidUrl(config.server)
-            && !Utils.isPureIpAddress(config.server.orEmpty())
-        ) {
+        if (!hasUsableServer(config)) {
             LogUtil.e(AppConfig.TAG, "LauncherManager: Invalid server configuration")
             error(context.getString(R.string.toast_config_file_invalid))
         }
