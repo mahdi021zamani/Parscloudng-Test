@@ -100,13 +100,16 @@ object SimpleVpnRepository {
         return System.currentTimeMillis() - sub.lastUpdated > expiryMillis
     }
 
-    private fun sourceHasFreshConfigs(source: Source): Boolean {
-        val sub = MmkvManager.decodeSubscription(source.id) ?: return false
-        return MmkvManager.decodeServerList(source.id).isNotEmpty() && !isCacheExpired(sub)
-    }
-
     private fun sourceGuids(source: Source): List<String> =
         MmkvManager.decodeServerList(source.id).toList()
+
+    private fun sourceHasCachedProfiles(source: Source): Boolean =
+        sourceGuids(source).any { MmkvManager.decodeServerConfig(it) != null }
+
+    private fun sourceHasFreshConfigs(source: Source): Boolean {
+        val sub = MmkvManager.decodeSubscription(source.id) ?: return false
+        return sourceHasCachedProfiles(source) && !isCacheExpired(sub)
+    }
 
     /**
      * Fresh primary feeds are exposed independently to their respective tabs.
@@ -120,9 +123,9 @@ object SimpleVpnRepository {
 
         // Preserve stale cached entries for visibility and offline use. Freshness
         // determines whether a refresh is due, not whether cached profiles can connect.
-        val cachedPrimary = primarySources.filter { sourceGuids(it).isNotEmpty() }
+        val cachedPrimary = primarySources.filter(::sourceHasCachedProfiles)
         if (cachedPrimary.isNotEmpty()) return cachedPrimary.map { it.id }
-        return listOfNotNull(emergencySource?.takeIf { sourceGuids(it).isNotEmpty() }?.id)
+        return listOfNotNull(emergencySource?.takeIf(::sourceHasCachedProfiles)?.id)
     }
 
     fun getServerGuids(): List<String> {
@@ -141,7 +144,7 @@ object SimpleVpnRepository {
 
         // Visibility is independent of freshness: stale cached profiles remain visible
         // for diagnostics and can be refreshed, but canConnect() still rejects stale data.
-        val cached = sourceGuids(source)
+        val cached = sourceGuids(source).filter { MmkvManager.decodeServerConfig(it) != null }
         if (cached.isNotEmpty()) return cached.distinct()
 
         val anyFreshPrimary = primarySources.any(::sourceHasFreshConfigs)
@@ -184,7 +187,7 @@ object SimpleVpnRepository {
 
     fun canConnect(): Boolean = visibleSourceIds().any { id ->
         val source = allConfiguredSources().firstOrNull { it.id == id } ?: return@any false
-        sourceHasFreshConfigs(source)
+        sourceHasCachedProfiles(source)
     }
 
     fun canConnect(sourceId: String): Boolean {
@@ -193,12 +196,12 @@ object SimpleVpnRepository {
         // Freshness controls when a refresh is due, not whether a previously
         // downloaded profile can be used. Each tab owns its cache independently:
         // a fresh V2Ray feed must never disable cached Aether profiles, or vice versa.
-        if (sourceGuids(source).isNotEmpty()) return true
+        if (sourceHasCachedProfiles(source)) return true
 
         // The emergency feed is a V2Ray-tab fallback only, and only when neither
         // primary source has any cached profiles.
         if (sourceId == SIMPLE_SUB_ID && primarySources.none(::sourceHasFreshConfigs)) {
-            return emergencySource?.let { sourceGuids(it).isNotEmpty() } == true
+            return emergencySource?.let(::sourceHasCachedProfiles) == true
         }
         return false
     }
@@ -290,7 +293,7 @@ object SimpleVpnRepository {
                 // A stale but previously valid cache remains usable after a temporary
                 // feed outage or malformed payload. Only an explicit entitlement failure
                 // blocks the cached Aether feed.
-                if (sourceGuids(source).isNotEmpty() && !explicitLicenseFailure) {
+                if (sourceHasCachedProfiles(source) && !explicitLicenseFailure) {
                     return RefreshOutcome.KeepingCacheAfterNetworkError
                 }
                 return RefreshOutcome.CacheUnavailableAfterNetworkError(refresh.aetherFailure)
