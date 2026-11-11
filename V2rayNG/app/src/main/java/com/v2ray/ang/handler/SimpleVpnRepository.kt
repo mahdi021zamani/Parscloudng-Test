@@ -189,10 +189,18 @@ object SimpleVpnRepository {
 
     fun canConnect(sourceId: String): Boolean {
         val source = primarySources.firstOrNull { it.id == sourceId } ?: return false
-        if (sourceHasFreshConfigs(source)) return true
-        if (primarySources.any(::sourceHasFreshConfigs)) return false
-        return sourceId == SIMPLE_SUB_ID &&
-            emergencySource?.let(::sourceHasFreshConfigs) == true
+
+        // Freshness controls when a refresh is due, not whether a previously
+        // downloaded profile can be used. Each tab owns its cache independently:
+        // a fresh V2Ray feed must never disable cached Aether profiles, or vice versa.
+        if (sourceGuids(source).isNotEmpty()) return true
+
+        // The emergency feed is a V2Ray-tab fallback only, and only when neither
+        // primary source has any cached profiles.
+        if (sourceId == SIMPLE_SUB_ID && primarySources.none { sourceGuids(it).isNotEmpty() }) {
+            return emergencySource?.let { sourceGuids(it).isNotEmpty() } == true
+        }
+        return false
     }
 
     private fun clearSourceCache(source: Source) {
