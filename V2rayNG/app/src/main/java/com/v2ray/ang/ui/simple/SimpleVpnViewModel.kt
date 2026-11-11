@@ -738,7 +738,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         refreshJob?.cancel()
         refreshJob = null
         cancelPingWorker()
-        val app = getApplication<Application>
+        val app = getApplication<Application>()
         runCatching { MessageHelper.sendMsg2Service(app, AppConfig.MSG_UNREGISTER_CLIENT, "") }
         runCatching { app.unregisterReceiver(serviceReceiver) }
     }
