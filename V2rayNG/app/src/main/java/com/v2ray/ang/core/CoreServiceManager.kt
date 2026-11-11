@@ -268,7 +268,9 @@ object CoreServiceManager {
                 error(service.getString(AetherCoreManager.takenMessage(check), check.port))
             }
             is AetherCoreManager.PortCheck.Unchecked -> {
-                LogUtil.w(AppConfig.TAG, "StartCore-Manager: Aether session port check could not complete, guid=$guid", check.cause)
+                check.cause?.let {
+                    LogUtil.w(AppConfig.TAG, "StartCore-Manager: Aether session port check could not complete, guid=$guid", it)
+                } ?: LogUtil.w(AppConfig.TAG, "StartCore-Manager: Aether session port check could not complete without a cause, guid=$guid")
                 throw IllegalStateException("The ports of the Aether session could not be checked", check.cause)
             }
         }
