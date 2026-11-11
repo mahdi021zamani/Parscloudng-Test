@@ -356,14 +356,26 @@ object SimpleVpnRepository {
             }
         }
 
-        val anyFreshCache = allConfiguredSources().any(::sourceHasFreshConfigs)
-        if (anyFreshCache) {
-            return RefreshOutcome.Updated(getServerGuids().size, aetherFailure)
+        val explicitAetherLicenseFailure = aetherFailure in setOf(
+            AetherFailure.LICENSE_MISSING,
+            AetherFailure.LICENSE_EXPIRED,
+            AetherFailure.UNAUTHORIZED,
+        )
+        val cachedPrimaryGuids = primarySources
+            .filter { source ->
+                sourceHasCachedProfiles(source) &&
+                    !(source.id == AETHER_SUB_ID && explicitAetherLicenseFailure)
+            }
+            .flatMap(::sourceGuids)
+            .distinct()
+        if (cachedPrimaryGuids.isNotEmpty()) {
+            // Temporary network/HTTP/content errors do not invalidate a previously
+            // downloaded profile. A definitive Aether entitlement failure blocks
+            // only Aether, not the independent V2Ray source.
+            return RefreshOutcome.Updated(cachedPrimaryGuids.size, aetherFailure)
         }
 
         if (sawNetworkError) {
-            // A stale cache may remain visible for diagnostics, but it must never
-            // be treated as a usable offline cache after its expiry window.
             LauncherManager.stopService(context)
             return RefreshOutcome.CacheUnavailableAfterNetworkError(aetherFailure)
         }
