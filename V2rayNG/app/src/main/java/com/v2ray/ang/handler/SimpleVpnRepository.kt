@@ -282,7 +282,15 @@ object SimpleVpnRepository {
             }
             AngConfigManager.SimpleRefreshResult.InvalidContent,
             AngConfigManager.SimpleRefreshResult.NetworkError -> {
-                if (sourceHasFreshConfigs(source)) {
+                val explicitLicenseFailure = refresh.aetherFailure in setOf(
+                    AetherFailure.LICENSE_MISSING,
+                    AetherFailure.LICENSE_EXPIRED,
+                    AetherFailure.UNAUTHORIZED,
+                )
+                // A stale but previously valid cache remains usable after a temporary
+                // feed outage or malformed payload. Only an explicit entitlement failure
+                // blocks the cached Aether feed.
+                if (sourceGuids(source).isNotEmpty() && !explicitLicenseFailure) {
                     return RefreshOutcome.KeepingCacheAfterNetworkError
                 }
                 return RefreshOutcome.CacheUnavailableAfterNetworkError(refresh.aetherFailure)
