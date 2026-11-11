@@ -1054,18 +1054,21 @@ object AetherCoreManager {
      * descriptor; a fire-and-forget stop could otherwise leave a child core alive
      * while the next session is already being prepared.
      */
-    @Synchronized
     fun stopAndWait(timeoutMs: Long = EXIT_WAIT_MS * 4 + 2_000L): Boolean {
-        val current = session
-        session = null
-        val completion = FutureTask {
-            current?.process?.let { end(it, current.context) }
-            true
+        // Clear the current session and enqueue the barrier while holding the same
+        // monitor as start()/stop(), but never hold that monitor while waiting.
+        // open() may need it to release a failed or cancelled session.
+        val completion = synchronized(this) {
+            val current = session
+            session = null
+            FutureTask {
+                current?.process?.let { end(it, current.context) }
+                true
+            }.also(lifecycle::execute)
         }
         return try {
             // Even with no current Session, this barrier waits for an earlier stop()
             // task that may still be ending the previous process.
-            lifecycle.execute(completion)
             completion.get(timeoutMs, TimeUnit.MILLISECONDS)
         } catch (_: TimeoutException) {
             LogUtil.e(AppConfig.TAG, "AetherCore: timed out waiting for session shutdown")
