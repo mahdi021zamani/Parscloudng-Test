@@ -9,6 +9,7 @@ import com.v2ray.ang.R
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.extension.isComplexType
 import com.v2ray.ang.extension.toast
+import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
@@ -69,7 +70,7 @@ object LauncherManager {
         }
     }
 
-    internal fun hasUsableServer(config: com.v2ray.ang.dto.entities.ProfileItem): Boolean =
+    internal fun hasUsableServer(config: ProfileItem): Boolean =
         config.configType.isComplexType()
             || config.configType == EConfigType.AETHER
             || Utils.isPureIpAddress(config.server.orEmpty())
