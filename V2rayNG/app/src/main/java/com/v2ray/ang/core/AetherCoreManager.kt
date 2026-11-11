@@ -1238,6 +1238,12 @@ object AetherCoreManager {
         awaitUntil(EXIT_WAIT_MS, EXIT_POLL_MS) { orphans.none { File(procDir, it.toString()).isDirectory } }
         val killed = orphans.filter { File(procDir, it.toString()).isDirectory }.toSet()
         killed.forEach { android.os.Process.killProcess(it) }
+        if (killed.isNotEmpty() && !awaitUntil(EXIT_WAIT_MS, EXIT_POLL_MS) {
+                killed.none { File(procDir, it.toString()).isDirectory }
+            }
+        ) {
+            LogUtil.w(AppConfig.TAG, "AetherCore: helper process(es) remained after force stop, pids=$killed")
+        }
         return killed
     }
 
@@ -1675,7 +1681,12 @@ object AetherCoreManager {
             LogUtil.w(AppConfig.TAG, "AetherCore: a core of a test or scan is still up; the session starts beside it")
         }
         if (session !== target) return
-        reapStale(context, listenerAddressOf(arguments))
+        val killed = reapStale(context, listenerAddressOf(arguments))
+        if (!awaitGone(killed)) {
+            LogUtil.e(AppConfig.TAG, "AetherCore: a previous core or helper still holds resources; refusing to start the session")
+            if (release(target)) target.onExit()
+            return
+        }
         val process = try {
             startProcess(context, arguments, markSession = true, exitKey = exitKey)
         } catch (e: IOException) {
