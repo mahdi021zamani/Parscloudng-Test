@@ -1055,7 +1055,7 @@ object AetherCoreManager {
      * while the next session is already being prepared.
      */
     @Synchronized
-    fun stopAndWait(timeoutMs: Long = EXIT_WAIT_MS * 2 + 2_000L): Boolean {
+    fun stopAndWait(timeoutMs: Long = EXIT_WAIT_MS * 4 + 2_000L): Boolean {
         val current = session
         session = null
         val completion = FutureTask {
