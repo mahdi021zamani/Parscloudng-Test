@@ -9,6 +9,39 @@ import org.junit.Test
 class ProfileReplacementTest {
 
     @Test
+    fun `reuses existing guids by connection identity one time per profile`() {
+        val existing = linkedMapOf(
+            "old-a" to profile(remarks = "old label A", server = "host", port = "443", password = "secret"),
+            "old-b" to profile(remarks = "old label B", server = "host", port = "443", password = "secret"),
+        )
+        val replacements = listOf(
+            profile(remarks = "new label A", server = "host", port = "443", password = "secret"),
+            profile(remarks = "new label B", server = "host", port = "443", password = "secret"),
+            profile(remarks = "different", server = "other", port = "443", password = "secret"),
+        )
+
+        assertEquals(
+            listOf("old-a", "old-b", null),
+            ProfileReplacement.reusableGuids(replacements, existing),
+        )
+    }
+
+    @Test
+    fun `does not reuse a guid when connection settings changed`() {
+        val existing = mapOf(
+            "old" to profile(server = "host", port = "443", password = "old-secret"),
+        )
+
+        assertEquals(
+            listOf(null),
+            ProfileReplacement.reusableGuids(
+                listOf(profile(server = "host", port = "443", password = "new-secret")),
+                existing,
+            ),
+        )
+    }
+
+    @Test
     fun `prefers a full match over a remarks-only match`() {
         val profiles = linkedMapOf(
             "remarks" to profile(remarks = "selected", server = "other"),
