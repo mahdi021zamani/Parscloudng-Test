@@ -233,7 +233,9 @@ private fun ServerRow(
 @Composable
 private fun DelayLabel(delayMillis: Long?, testing: Boolean) {
     val text = when {
-        testing || delayMillis == null -> stringResource(R.string.simple_testing)
+        testing -> stringResource(R.string.simple_testing)
+        // AetherDelayTester uses 0 as its explicit "not tested" sentinel.
+        delayMillis == null || delayMillis == 0L -> stringResource(R.string.simple_not_tested)
         delayMillis < 0 -> stringResource(R.string.simple_timeout)
         else -> stringResource(R.string.simple_delay_ms, delayMillis)
     }
