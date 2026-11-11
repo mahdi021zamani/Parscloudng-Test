@@ -86,6 +86,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         override fun onReceive(context: Context?, intent: Intent?) {
             val safeIntent = intent ?: return
             when (safeIntent.getIntExtra("key", 0)) {
+                AppConfig.MSG_STATE_CONNECTING ->
+                    _uiState.update { it.copy(status = SimpleConnectionStatus.CONNECTING, message = null) }
+
                 AppConfig.MSG_STATE_RUNNING, AppConfig.MSG_STATE_START_SUCCESS ->
                     _uiState.update { it.copy(status = SimpleConnectionStatus.CONNECTED) }
 
