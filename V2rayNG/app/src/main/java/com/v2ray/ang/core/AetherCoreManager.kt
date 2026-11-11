@@ -1238,10 +1238,10 @@ object AetherCoreManager {
         awaitUntil(EXIT_WAIT_MS, EXIT_POLL_MS) { orphans.none { File(procDir, it.toString()).isDirectory } }
         val killed = orphans.filter { File(procDir, it.toString()).isDirectory }.toSet()
         killed.forEach { android.os.Process.killProcess(it) }
-        if (killed.isNotEmpty() && !awaitUntil(EXIT_WAIT_MS, EXIT_POLL_MS) {
-                killed.none { File(procDir, it.toString()).isDirectory }
-            }
-        ) {
+        val helpersGone = killed.isEmpty() || awaitUntil(EXIT_WAIT_MS, EXIT_POLL_MS) {
+            killed.none { File(procDir, it.toString()).isDirectory }
+        }
+        if (!helpersGone) {
             LogUtil.w(AppConfig.TAG, "AetherCore: helper process(es) remained after force stop, pids=$killed")
         }
         return killed
