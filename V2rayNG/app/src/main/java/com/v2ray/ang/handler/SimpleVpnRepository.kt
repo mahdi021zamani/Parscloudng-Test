@@ -375,6 +375,15 @@ object SimpleVpnRepository {
             return RefreshOutcome.Updated(cachedPrimaryGuids.size, aetherFailure)
         }
 
+        val cachedFallbackGuids = if (primarySources.none(::sourceHasFreshConfigs)) {
+            fallback?.takeIf(::sourceHasCachedProfiles)?.let(::sourceGuids).orEmpty()
+        } else {
+            emptyList()
+        }
+        if (cachedFallbackGuids.isNotEmpty()) {
+            return RefreshOutcome.Updated(cachedFallbackGuids.size, aetherFailure)
+        }
+
         if (sawNetworkError) {
             LauncherManager.stopService(context)
             return RefreshOutcome.CacheUnavailableAfterNetworkError(aetherFailure)
