@@ -27,6 +27,25 @@ class ProfileReplacementTest {
     }
 
     @Test
+    fun `matches duplicate connection identities by label before using fallback order`() {
+        val existing = linkedMapOf(
+            "old-a" to profile(remarks = "A", server = "host", port = "443", password = "secret"),
+            "old-b" to profile(remarks = "B", server = "host", port = "443", password = "secret"),
+        )
+
+        assertEquals(
+            listOf("old-b", "old-a"),
+            ProfileReplacement.reusableGuids(
+                replacements = listOf(
+                    profile(remarks = "B", server = "host", port = "443", password = "secret"),
+                    profile(remarks = "A", server = "host", port = "443", password = "secret"),
+                ),
+                existingProfiles = existing,
+            ),
+        )
+    }
+
+    @Test
     fun `does not reuse a guid when connection settings changed`() {
         val existing = mapOf(
             "old" to profile(server = "host", port = "443", password = "old-secret"),
