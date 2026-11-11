@@ -34,6 +34,7 @@ import com.v2ray.ang.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -45,6 +46,8 @@ import java.net.InetSocketAddress
 
 object CoreServiceManager {
 
+    private const val AETHER_WARM_UP_MS = 30_000L
+
     private val coreController: CoreController = CoreNativeManager.newCoreController(CoreCallback())
     private val mMsgReceive = ReceiveMessageHandler()
     private val stopMutex = Mutex()
@@ -52,6 +55,14 @@ object CoreServiceManager {
     private var processFinder: XrayProcessFinder? = null
     private var browserDialer: IDialerService? = null
     private var networkMonitor: NetworkMonitor? = null
+
+    /** Owns the Aether readiness wait; a stale wait must not report after a stop or reload. */
+    private val aetherScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+    @Volatile
+    private var aetherWarmUpJob: kotlinx.coroutines.Job? = null
+
+    @Volatile
+    private var aetherExitHandled = false
 
     @Volatile
     private var isReloading = false
@@ -156,6 +167,24 @@ object CoreServiceManager {
             error(result.errorMessage.ifBlank { "Failed to get V2Ray config" })
         }
 
+        val aetherCore = result.aetherCore
+        if (aetherCore != null) {
+            if (!AetherCoreManager.isSupported(service)) {
+                error(service.getString(R.string.aether_unsupported_abi))
+            }
+            AetherCoreManager.refusalOf(aetherCore, result.content)?.let { refusal ->
+                LogUtil.w(AppConfig.TAG, "StartCore-Manager: Aether start refused: ${refusal.reason}, guid=$guid")
+                error(service.getString(refusal.message, refusal.argument))
+            }
+        }
+
+        // End any previous Aether session and its warm-up before checking ports or starting Xray.
+        cancelAetherWarmUp()
+        AetherCoreManager.stop()
+        if (aetherCore != null) {
+            checkAetherPorts(service, guid, aetherCore, result.content, isReload)
+        }
+
         currentConfig = config
         var tunFd = vpnInterface?.fd ?: 0
         val dialerMode = BrowserDialerMode.from(config.browserDialerMode)
@@ -172,21 +201,19 @@ object CoreServiceManager {
         if (dialerAddr.isNotNullEmpty()) {
             CoreNativeManager.reconcileBrowserDialer(dialerAddr)
         }
-        val aetherCore = result.aetherCore
-        if (aetherCore != null) {
-            if (!AetherCoreManager.isSupported(service)) error(service.getString(R.string.aether_unsupported_abi))
-            // Start the local Aether listener before Xray begins accepting traffic through its SOCKS outbound.
-            AetherCoreManager.start(service, aetherCore, afterProbes = true) {
-                CoroutineScope(Dispatchers.Main).launch {
-                    if (isRunning()) stopCoreLoop()
-                }
-            }
-        }
 
         try {
+            // Aether dials an inbound owned by Xray. Start Xray first so that inbound is
+            // already listening when Aether makes its first outbound connection.
             coreController.startLoop(result.content, tunFd)
             if (!isRunning()) error("Core failed to start")
-            if (aetherCore != null && !AetherCoreManager.isRunning) error("Aether core failed to start")
+
+            if (aetherCore != null) {
+                aetherExitHandled = false
+                AetherCoreManager.start(service, aetherCore, afterProbes = !isReload) {
+                    onAetherExit(guid)
+                }
+            }
         } catch (e: Exception) {
             if (aetherCore != null) AetherCoreManager.stop()
             throw e
@@ -210,11 +237,83 @@ object CoreServiceManager {
             else -> {}
         }
 
-        if (!isReload) {
+        if (aetherCore != null) {
+            announceAetherWarmUp(service, guid, isReload)
+        } else if (!isReload) {
             MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
         }
         NotificationManager.startSpeedNotification()
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core started successfully")
+    }
+
+    private fun checkAetherPorts(
+        service: Service,
+        guid: String,
+        aether: AetherCore,
+        content: String,
+        isReload: Boolean,
+    ) {
+        val ports = AetherCoreManager.sessionPorts(aether, content)
+        val check = AetherCoreManager.checkSessionPorts(
+            service,
+            aether,
+            ports,
+            afterProbes = !isReload,
+            timeoutMs = AetherCoreManager.PORT_CHECK_WAIT_MS,
+        )
+        when (check) {
+            AetherCoreManager.PortCheck.Free -> Unit
+            is AetherCoreManager.PortCheck.Taken -> {
+                LogUtil.w(AppConfig.TAG, "StartCore-Manager: Aether port ${check.port} is already in use, guid=$guid")
+                error(service.getString(AetherCoreManager.takenMessage(check), check.port))
+            }
+            is AetherCoreManager.PortCheck.Unchecked -> {
+                LogUtil.w(AppConfig.TAG, "StartCore-Manager: Aether session port check could not complete, guid=$guid", check.cause)
+                throw IllegalStateException("The ports of the Aether session could not be checked", check.cause)
+            }
+        }
+    }
+
+    private fun announceAetherWarmUp(service: Service, guid: String, isReload: Boolean) {
+        MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_CONNECTING, "")
+        aetherWarmUpJob = aetherScope.launch {
+            var listening = false
+            while (isActive && !listening && AetherCoreManager.isRunning) {
+                listening = AetherCoreManager.awaitListening(AETHER_WARM_UP_MS)
+            }
+            when (AetherCoreManager.warmUpOutcome(listening, isActive, isRunning())) {
+                AetherCoreManager.WarmUpOutcome.ABANDONED -> Unit
+                AetherCoreManager.WarmUpOutcome.CORE_EXITED -> onAetherExit(guid)
+                AetherCoreManager.WarmUpOutcome.LISTENING -> {
+                    if (!isReload) {
+                        MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun cancelAetherWarmUp() {
+        aetherWarmUpJob?.cancel()
+        aetherWarmUpJob = null
+    }
+
+    private fun onAetherExit(guid: String) {
+        val control = serviceControl?.get() ?: return
+        val service = control.getService()
+        ContextCompat.getMainExecutor(service).execute {
+            if (aetherExitHandled || AetherCoreManager.isRunning || !isRunning() ||
+                serviceControl?.get() !== control
+            ) return@execute
+            aetherExitHandled = true
+            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Aether core exited while running, guid=$guid")
+            MessageHelper.sendMsg2UI(
+                service,
+                AppConfig.MSG_STATE_START_FAILURE,
+                AetherCoreManager.stoppedMessage(service),
+            )
+            control.stopService()
+        }
     }
 
     /**
@@ -224,6 +323,7 @@ object CoreServiceManager {
      */
     suspend fun stopCoreLoopAndAwait(notifyUi: Boolean = true): Boolean = stopMutex.withLock {
         val service = getService()
+        cancelAetherWarmUp()
 
         val aetherStopped = runCatching {
             withContext(Dispatchers.IO) { AetherCoreManager.stopAndWait() }
