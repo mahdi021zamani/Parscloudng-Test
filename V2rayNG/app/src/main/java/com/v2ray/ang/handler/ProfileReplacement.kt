@@ -21,10 +21,24 @@ internal object ProfileReplacement {
 
         return replacements.map { profile ->
             available[profile.duplicateIdentity()]?.let { guids ->
-                if (guids.isEmpty()) null else guids.removeAt(0)
+                if (guids.isEmpty()) {
+                    null
+                } else {
+                    // When several entries share the same connection identity, keep
+                    // their IDs attached to their existing labels where possible.
+                    val matchingLabel = guids.indexOfFirst { guid ->
+                        val existing = existingProfiles[guid] ?: return@indexOfFirst false
+                        sameMetadata(existing.remarks, profile.remarks) &&
+                            sameMetadata(existing.description, profile.description)
+                    }
+                    guids.removeAt(if (matchingLabel >= 0) matchingLabel else 0)
+                }
             }
         }
     }
+
+    private fun sameMetadata(left: String?, right: String?): Boolean =
+        left.orEmpty().trim().equals(right.orEmpty().trim(), ignoreCase = true)
 
     /**
      * Finds the profile that should become selected after publishing a replacement batch.
