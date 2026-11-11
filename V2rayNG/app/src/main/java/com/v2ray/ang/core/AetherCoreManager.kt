@@ -167,7 +167,7 @@ object AetherCoreManager {
     private const val PSIPHON_PROBE_DIR = "psiphon-probe"
 
     /** How long a session start waits for the cores of cancelled tests to be gone, and how often it looks. */
-    private const val PROBE_EXIT_WAIT_MS = 3_000L
+    private const val PROBE_EXIT_WAIT_MS = 10_000L
     private const val PROBE_POLL_MS = 100L
 
     /**
@@ -1678,7 +1678,9 @@ object AetherCoreManager {
     private fun open(target: Session, context: Context, arguments: List<String>, afterProbes: Boolean, exitKey: String) {
         if (session !== target) return
         if (afterProbes && !awaitProbeCores(context)) {
-            LogUtil.w(AppConfig.TAG, "AetherCore: a core of a test or scan is still up; the session starts beside it")
+            LogUtil.e(AppConfig.TAG, "AetherCore: a test or scan core did not exit; refusing to start a session beside it")
+            if (release(target)) target.onExit()
+            return
         }
         if (session !== target) return
         val killed = reapStale(context, listenerAddressOf(arguments))
