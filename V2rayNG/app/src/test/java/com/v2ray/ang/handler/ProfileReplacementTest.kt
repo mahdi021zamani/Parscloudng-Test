@@ -63,6 +63,23 @@ class ProfileReplacementTest {
     }
 
     @Test
+    fun `keeps the selected guid when the replacement reuses it`() {
+        val profiles = linkedMapOf(
+            "selected-guid" to profile(remarks = "renamed", server = "host"),
+            "other-guid" to profile(remarks = "other", server = "other"),
+        )
+
+        assertEquals(
+            "selected-guid",
+            ProfileReplacement.findSelectedReplacement(
+                profiles = profiles,
+                currentSelection = "selected-guid",
+                selectedProfile = profile(remarks = "old name", server = "host"),
+            ),
+        )
+    }
+
+    @Test
     fun `uses a remarks match when no full match exists`() {
         val profiles = linkedMapOf(
             "other" to profile(remarks = "other", server = "host"),
