@@ -557,6 +557,7 @@
     <string name="simple_connect">اتصال</string>
     <string name="simple_disconnect">قطع اتصال</string>
     <string name="simple_testing">در حال تست…</string>
+    <string name="simple_not_tested">آزمایش نشده</string>
     <string name="simple_timeout">Timeout</string>
     <string name="simple_delay_ms">%1$d ms</string>
     <string name="simple_no_servers_available">در حال حاضر هیچ سروری در دسترس نیست</string>
