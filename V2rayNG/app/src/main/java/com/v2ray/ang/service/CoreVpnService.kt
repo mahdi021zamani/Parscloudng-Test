@@ -22,6 +22,7 @@ import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.NotificationManager
+import com.v2ray.ang.helper.MessageHelper
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.root.RootLanSharing
 import com.v2ray.ang.util.LogUtil
@@ -109,6 +110,7 @@ class CoreVpnService : VpnService(), ServiceControl {
         closeVpnInterface()
 
         unlockStart()
+        MessageHelper.sendMsg2UI(this, AppConfig.MSG_STATE_STOP_SUCCESS, "")
         NotificationManager.cancelNotification()
     }
 
@@ -366,7 +368,7 @@ class CoreVpnService : VpnService(), ServiceControl {
                 .onFailure { LogUtil.e(AppConfig.TAG, "StartCore-VPN: HEV shutdown failed", it) }
             runCatching { RootLanSharing.stopClientSharing(this@CoreVpnService) }
                 .onFailure { LogUtil.e(AppConfig.TAG, "StartCore-VPN: LAN sharing shutdown failed", it) }
-            runCatching { CoreServiceManager.stopCoreLoopAndAwait() }
+            runCatching { CoreServiceManager.stopCoreLoopAndAwait(notifyUi = false) }
                 .onSuccess { stopped ->
                     if (!stopped) LogUtil.w(AppConfig.TAG, "StartCore-VPN: one or more native components did not confirm shutdown")
                 }
@@ -382,13 +384,14 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
     }
 
+    @Synchronized
     private fun closeVpnInterface() {
-        if (!::mInterface.isInitialized || !isInterfaceClosed.compareAndSet(false, true)) return
+        if (!::mInterface.isInitialized || isInterfaceClosed.get()) return
         try {
             mInterface.close()
+            isInterfaceClosed.set(true)
             LogUtil.i(AppConfig.TAG, "StartCore-VPN: VPN interface closed")
         } catch (e: Exception) {
-            isInterfaceClosed.set(false)
             LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to close interface", e)
         }
     }
