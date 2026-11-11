@@ -5,6 +5,28 @@ import com.v2ray.ang.dto.entities.ProfileItem
 internal object ProfileReplacement {
 
     /**
+     * Reuses existing profile IDs for connection-identical replacements, one-to-one.
+     * This keeps per-profile ping history and selection stable across feed refreshes.
+     * Metadata such as remarks and descriptions is deliberately ignored by
+     * ProfileItem.duplicateIdentity(), while distinct duplicate entries still get
+     * distinct IDs because each old ID can be consumed only once.
+     */
+    fun reusableGuids(
+        replacements: List<ProfileItem>,
+        existingProfiles: Map<String, ProfileItem>,
+    ): List<String?> {
+        val available = existingProfiles.entries
+            .groupBy { (_, profile) -> profile.duplicateIdentity() }
+            .mapValues { (_, entries) -> entries.map { it.key }.toMutableList() }
+
+        return replacements.map { profile ->
+            available[profile.duplicateIdentity()]?.let { guids ->
+                if (guids.isEmpty()) null else guids.removeAt(0)
+            }
+        }
+    }
+
+    /**
      * Finds the profile that should become selected after publishing a replacement batch.
      * The first profile becomes selected when the store has no current selection.
      */
