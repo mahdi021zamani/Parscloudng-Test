@@ -183,6 +183,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 return@launch
             }
 
+            validateStoredLicense(stored.key, showDialogOnFailure = true)
             // Feed refresh remains user-driven. License validation on resume must
             // not unexpectedly refresh whichever protocol tab happens to be selected.
         }
@@ -212,6 +213,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         if (sourceId != SimpleVpnRepository.SIMPLE_SUB_ID &&
             sourceId != SimpleVpnRepository.AETHER_SUB_ID
         ) return
+        refreshJob?.cancel()
+        refreshJob = null
+        cancelPingWorker()
         val servers = SimpleVpnRepository.getServersForSource(sourceId)
         val selected = MmkvManager.getSelectServer()
             ?.takeIf { guid -> servers.any { it.guid == guid } }
