@@ -87,8 +87,11 @@ class RealPingWorkerService(
             } catch (_: CancellationException) {
                 // Cancellation is a completed batch from the UI's point of view.
             } finally {
-                finishOnce()
-                close()
+                try {
+                    finishOnce()
+                } finally {
+                    close()
+                }
             }
         }
     }
@@ -98,8 +101,11 @@ class RealPingWorkerService(
         // The parent coroutine may not get scheduled after immediate cancellation.
         // Complete the UI batch and release its dispatcher here as well; finishOnce
         // prevents the coroutine's finally block from emitting a duplicate event.
-        finishOnce()
-        close()
+        try {
+            finishOnce()
+        } finally {
+            close()
+        }
     }
 
     private fun finishOnce() {
