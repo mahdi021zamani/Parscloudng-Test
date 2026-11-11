@@ -197,7 +197,7 @@ object SimpleVpnRepository {
 
         // The emergency feed is a V2Ray-tab fallback only, and only when neither
         // primary source has any cached profiles.
-        if (sourceId == SIMPLE_SUB_ID && primarySources.none { sourceGuids(it).isNotEmpty() }) {
+        if (sourceId == SIMPLE_SUB_ID && primarySources.none(::sourceHasFreshConfigs)) {
             return emergencySource?.let { sourceGuids(it).isNotEmpty() } == true
         }
         return false
