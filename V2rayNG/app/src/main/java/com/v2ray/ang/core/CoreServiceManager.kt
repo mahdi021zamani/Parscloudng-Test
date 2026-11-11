@@ -223,7 +223,7 @@ object CoreServiceManager {
      * after this function completes instead of relying on a fixed sleep.
      */
     suspend fun stopCoreLoopAndAwait(notifyUi: Boolean = true): Boolean = stopMutex.withLock {
-        val service = getService() ?: return@withLock false
+        val service = getService()
 
         val aetherStopped = runCatching {
             withContext(Dispatchers.IO) { AetherCoreManager.stopAndWait() }
@@ -261,13 +261,17 @@ object CoreServiceManager {
 
         // VPN mode reports STOP_SUCCESS from onDestroy, after its TUN descriptor
         // has also been closed. Other run modes report it here after core shutdown.
-        if (notifyUi) MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+        if (notifyUi && service != null) {
+            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+        }
         NotificationManager.cancelNotification()
 
-        try {
-            service.unregisterReceiver(mMsgReceive)
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister receiver", e)
+        if (service != null) {
+            try {
+                service.unregisterReceiver(mMsgReceive)
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister receiver", e)
+            }
         }
 
         aetherStopped && xrayStopped
