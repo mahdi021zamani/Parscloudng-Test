@@ -371,15 +371,13 @@ class CoreVpnService : VpnService(), ServiceControl {
                     if (!stopped) LogUtil.w(AppConfig.TAG, "StartCore-VPN: one or more native components did not confirm shutdown")
                 }
                 .onFailure { LogUtil.e(AppConfig.TAG, "StartCore-VPN: core shutdown failed", it) }
-            try {
-                if (isForced) {
-                    // Preserve the required ordering: request service stop before closing
-                    // the descriptor, but do not guess how long native shutdown needs.
-                    stopSelf()
-                    closeVpnInterface()
-                } else {
-                    isStoppingLock.set(false)
-                }
+            if (isForced) {
+                // Preserve the required ordering: request service stop before closing
+                // the descriptor, but do not guess how long native shutdown needs.
+                stopSelf()
+                closeVpnInterface()
+            } else {
+                isStoppingLock.set(false)
             }
         }
     }
