@@ -54,6 +54,7 @@ class CoreVpnService : VpnService(), ServiceControl {
         val policy = StrictMode.ThreadPolicy.Builder().permitAll().build()
         StrictMode.setThreadPolicy(policy)
         CoreServiceManager.serviceControl = SoftReference(this)
+        CoreServiceManager.registerServiceReceiver(this)
         registerSubscriptionNetworkCallback()
     }
 
@@ -105,6 +106,7 @@ class CoreVpnService : VpnService(), ServiceControl {
 
     override fun onDestroy() {
         unregisterSubscriptionNetworkCallback()
+        CoreServiceManager.unregisterServiceReceiver(this)
         super.onDestroy()
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service destroyed")
 
