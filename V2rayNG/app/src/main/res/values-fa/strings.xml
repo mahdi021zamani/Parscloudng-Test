@@ -568,6 +568,9 @@
 
     <!-- PARSCLOUD subscription license -->
     <string name="simple_license_required">برای اتصال، اشتراک PARSCLOUD خود را فعال کنید.</string>
+    <string name="simple_aether_license_required">برای دریافت سرورهای این بخش، اشتراک PARSCLOUD خود را فعال کنید.</string>
+    <string name="simple_aether_license_expired">اشتراک PARSCLOUD شما منقضی شده است. برای ادامه آن را تمدید کنید.</string>
+    <string name="simple_aether_license_rejected">کلید اشتراک توسط سرور تأیید نشد. کلید را بررسی کنید یا با پشتیبانی تماس بگیرید.</string>
     <string name="simple_license_title">اشتراک PARSCLOUD</string>
     <string name="simple_license_prompt">برای فعال‌کردن دسترسی VPN، کلید اشتراکی را که دریافت کرده‌اید وارد کنید.</string>
     <string name="simple_license_key_hint">کلید اشتراک</string>
