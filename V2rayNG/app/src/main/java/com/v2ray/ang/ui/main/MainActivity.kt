@@ -111,7 +111,7 @@ class MainActivity : HelperBaseComponentActivity() {
                     MainAction.ImportQRcode -> importQRcode()
                     MainAction.ImportClipboard -> importClipboard()
                     MainAction.ImportConfigLocal -> importConfigLocal()
-                    MainAction.AddSubscription -> startActivity(Intent(this, SubEditActivity::class.java))
+                    MainAction.AddSubscription -> settingsActivityLauncher.launch(Intent(this, SubEditActivity::class.java))
                     is MainAction.ImportManually -> importManually(action.type)
                     MainAction.RestartService -> LauncherManager.restartServiceOrStart(this, ::requestServiceStart)
                     MainAction.LocateSelectedServer -> mainViewModel.triggerLocateSelectedServer()

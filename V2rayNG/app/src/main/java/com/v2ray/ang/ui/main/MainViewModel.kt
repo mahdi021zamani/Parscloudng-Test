@@ -155,7 +155,7 @@ class MainViewModel(
     internal fun formatStatus(status: MainStatus): String = when (status) {
         MainStatus.Disconnected -> dataSource.getString(R.string.connection_not_connected)
         MainStatus.Connected -> dataSource.getString(R.string.connection_connected)
-        MainStatus.Connecting -> dataSource.getString(R.string.aether_core_connecting)
+        MainStatus.Connecting -> dataSource.getString(R.string.simple_status_connecting)
         MainStatus.Testing -> dataSource.getString(R.string.connection_test_testing)
         is MainStatus.TestProgress -> dataSource.getString(
             R.string.connection_running_task_left,
