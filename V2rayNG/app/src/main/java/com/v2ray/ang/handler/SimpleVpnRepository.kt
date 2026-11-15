@@ -87,7 +87,7 @@ object SimpleVpnRepository {
             autoUpdate = false,
         )
         if (existing == null || existing.url != source.url || existing.remarks != source.remarks ||
-            (source.kind == SourceKind.AETHER && subItem.enabled)
+            subItem.enabled != (source.kind != SourceKind.AETHER) || subItem.autoUpdate
         ) {
             subItem.url = source.url
             subItem.remarks = source.remarks
