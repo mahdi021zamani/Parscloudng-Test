@@ -170,7 +170,14 @@ class CoreVpnService : VpnService(), ServiceControl {
         when (decision) {
             VpnServiceSessionGate.StartDecision.START_NOW -> startSession(request)
             VpnServiceSessionGate.StartDecision.QUEUED -> Unit
-            VpnServiceSessionGate.StartDecision.IGNORED -> Unit
+            VpnServiceSessionGate.StartDecision.IGNORED -> {
+                if (sessionGate.teardownCause == VpnServiceSessionGate.TeardownCause.USER_STOP) {
+                    MmkvManager.retireServiceSession(request.sessionId)
+                } else {
+                    MmkvManager.retireServiceSession(request.sessionId)
+                    sessionGate.owner?.sessionId?.let(MmkvManager::setActiveServiceSession)
+                }
+            }
         }
         return if (decision == VpnServiceSessionGate.StartDecision.IGNORED) START_NOT_STICKY else START_STICKY
     }
@@ -218,8 +225,11 @@ class CoreVpnService : VpnService(), ServiceControl {
 
     override fun stopService() {
         val owner = sessionGate.owner
-        owner?.let { MmkvManager.retireServiceSession(it.sessionId) }
-        stopAllService(true, VpnServiceSessionGate.TeardownCause.USER_STOP)
+        if (owner != null) {
+            stopService(owner.sessionId)
+        } else {
+            stopAllService(true, VpnServiceSessionGate.TeardownCause.USER_STOP)
+        }
     }
 
     override fun stopService(sessionId: Long?) {
