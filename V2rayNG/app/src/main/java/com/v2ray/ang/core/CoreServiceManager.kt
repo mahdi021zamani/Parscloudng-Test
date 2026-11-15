@@ -24,6 +24,7 @@ import com.v2ray.ang.extension.isNotNullEmpty
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.SubscriptionLicenseRepository
 import com.v2ray.ang.handler.SpeedtestManager
 import com.v2ray.ang.helper.MessageHelper
 import com.v2ray.ang.service.DialerNativeService
@@ -127,6 +128,16 @@ object CoreServiceManager {
         val service = getService()
         if (service == null) {
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Service is null")
+            return false
+        }
+
+        // Final daemon-side guard: Android Always-on VPN and other direct service
+        // restarts must not bypass the PARSCLOUD entitlement check in LauncherManager.
+        if (!SubscriptionLicenseRepository.hasActiveLocalLicense()) {
+            val message = service.getString(R.string.simple_license_required)
+            LogUtil.w(AppConfig.TAG, "StartCore-Manager: refusing to start without an active local license")
+            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
+            NotificationManager.cancelNotification()
             return false
         }
 
