@@ -228,6 +228,37 @@ class VpnServiceSessionGateTest {
     }
 
     @Test
+    fun stopDuringActiveTeardownMarksUserStopWithoutRestartingTeardown() {
+        val gate = VpnServiceSessionGate()
+        gate.requestStart(user(5), alwaysOnEnabled = true)
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+
+        assertEquals(
+            VpnServiceSessionGate.StopDecision.CANCEL_TEARDOWN_RECOVERY,
+            gate.requestStop(5),
+        )
+        assertEquals(VpnServiceSessionGate.TeardownCause.USER_STOP, gate.teardownCause)
+        assertEquals(5L, gate.owner?.sessionId)
+        assertEquals(
+            VpnServiceSessionGate.StartDecision.IGNORED,
+            gate.requestStart(system(6), alwaysOnEnabled = true),
+        )
+        assertNull(gate.finishTeardown())
+        assertTrue(gate.finishServiceIfIdle())
+    }
+
+    @Test
+    fun finalIdleCheckDoesNotDiscardPendingExplicitStart() {
+        val gate = VpnServiceSessionGate()
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+        gate.requestStart(user(7), alwaysOnEnabled = true)
+
+        assertFalse(gate.finishServiceIfIdle())
+        assertEquals(7L, gate.pending?.sessionId)
+        assertEquals(7L, gate.finishTeardown()?.sessionId)
+    }
+
+    @Test
     fun stopInFinalIdleWindowSuppressesLateAlwaysOnRecovery() {
         val gate = VpnServiceSessionGate()
         gate.requestStart(user(5), alwaysOnEnabled = true)
