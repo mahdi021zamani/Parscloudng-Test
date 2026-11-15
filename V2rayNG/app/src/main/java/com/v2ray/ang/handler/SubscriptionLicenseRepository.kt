@@ -139,6 +139,10 @@ object SubscriptionLicenseRepository {
     fun isExpired(license: StoredLicense, nowMillis: Long = System.currentTimeMillis()): Boolean =
         license.expiresAtMillis <= nowMillis
 
+    /** Fast, offline entitlement gate used by every service-start path. */
+    fun hasActiveLocalLicense(nowMillis: Long = System.currentTimeMillis()): Boolean =
+        getStoredLicense()?.let { !isExpired(it, nowMillis) } == true
+
     fun validate(key: String): ValidationResult {
         if (!isValidKeyFormat(key)) return ValidationResult.Rejected("invalid")
 
