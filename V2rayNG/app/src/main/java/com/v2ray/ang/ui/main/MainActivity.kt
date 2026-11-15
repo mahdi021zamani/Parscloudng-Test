@@ -218,7 +218,11 @@ class MainActivity : HelperBaseComponentActivity() {
                 putExtra("createConfigType", createConfigType)
             }
         }.apply {
-            putExtra("subscriptionId", mainViewModel.uiState.value.selectedGroupId)
+            val selectedGroupId = mainViewModel.uiState.value.selectedGroupId
+            putExtra(
+                "subscriptionId",
+                if (MmkvManager.isCentralSubscriptionId(selectedGroupId)) "" else selectedGroupId
+            )
         }
         profileEditorLauncher.launch(intent)
     }
@@ -254,6 +258,10 @@ class MainActivity : HelperBaseComponentActivity() {
     }
 
     private fun editServer(guid: String, profile: ProfileItem) {
+        if (MmkvManager.isCentralSubscriptionId(profile.subscriptionId)) {
+            toastError(R.string.toast_action_not_allowed)
+            return
+        }
         val activityClass = when (profile.configType) {
             EConfigType.CUSTOM -> ServerCustomConfigActivity::class.java
             EConfigType.POLICYGROUP -> ServerGroupActivity::class.java
