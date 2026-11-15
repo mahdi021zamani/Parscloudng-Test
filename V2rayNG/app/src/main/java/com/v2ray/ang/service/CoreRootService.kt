@@ -60,15 +60,22 @@ class CoreRootService : Service(), ServiceControl {
                 MmkvManager.retireServiceSession(sessionId)
                 MmkvManager.setActiveServiceSession(activeSessionId)
             } else if (activeSessionId == 0L) {
+                if (!MmkvManager.setActiveServiceSession(sessionId)) {
+                    LogUtil.w(AppConfig.TAG, "StartCore: session retired before owner recovery")
+                    return START_NOT_STICKY
+                }
                 activeSessionId = sessionId
-                MmkvManager.setActiveServiceSession(sessionId)
             }
             CoreServiceManager.reportCurrentStateToUi()
             LogUtil.i(AppConfig.TAG, "StartCore-Root: Core is already running")
             return START_STICKY
         }
+        if (!MmkvManager.setActiveServiceSession(sessionId)) {
+            LogUtil.w(AppConfig.TAG, "StartCore: session retired before service start")
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         activeSessionId = sessionId
-        MmkvManager.setActiveServiceSession(sessionId)
         LogUtil.i(AppConfig.TAG, "StartCore-Root: command received")
 
         // Start the in-process core first (this also posts the foreground notification),
