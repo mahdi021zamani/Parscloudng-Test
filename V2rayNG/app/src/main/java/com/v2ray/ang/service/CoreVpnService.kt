@@ -205,8 +205,13 @@ class CoreVpnService : VpnService(), ServiceControl {
             stopSelf(latestStartId)
             return
         }
+        if (!MmkvManager.setActiveServiceSession(request.sessionId)) {
+            LogUtil.w(AppConfig.TAG, "StartCore-VPN: session was retired before ownership could be acquired")
+            sessionGate.clearOwner()
+            stopSelf(latestStartId)
+            return
+        }
         activeSessionId = request.sessionId
-        MmkvManager.setActiveServiceSession(request.sessionId)
         if (!tryLockStart()) {
             LogUtil.w(AppConfig.TAG, "StartCore-VPN: start lock unavailable for session=${request.sessionId}")
             sessionGate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
