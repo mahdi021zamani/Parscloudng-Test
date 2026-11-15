@@ -527,6 +527,7 @@ class CoreVpnService : VpnService(), ServiceControl {
 
             if (isForced) {
                 closeVpnInterface()
+                val pendingBeforeFinish = sessionGate.pending
                 val next = sessionGate.finishTeardown()
                 isStoppingLock.set(false)
                 if (next != null && !MmkvManager.isServiceSessionRetired(next.sessionId)) {
@@ -535,6 +536,9 @@ class CoreVpnService : VpnService(), ServiceControl {
                         startSession(next)
                     }
                 } else {
+                    pendingBeforeFinish?.takeIf { it.sessionId != next?.sessionId }?.let {
+                        MmkvManager.retireServiceSession(it.sessionId)
+                    }
                     next?.let { MmkvManager.retireServiceSession(it.sessionId) }
                     sessionGate.clearOwner()
                     MmkvManager.clearActiveServiceSession(activeSessionId)
