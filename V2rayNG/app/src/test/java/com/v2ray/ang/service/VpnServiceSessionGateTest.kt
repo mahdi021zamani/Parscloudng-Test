@@ -30,6 +30,26 @@ class VpnServiceSessionGateTest {
     }
 
     @Test
+    fun systemOwnerRetainsOriginalRecoveryTargetAcrossItsOwnTeardown() {
+        val gate = VpnServiceSessionGate()
+        gate.requestStart(user(5), alwaysOnEnabled = true)
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+        gate.requestStart(system(6), alwaysOnEnabled = true)
+        val promoted = gate.finishTeardown()
+        assertEquals(5L, promoted?.recoversSession)
+
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+        assertEquals(5L, gate.teardownSession)
+        assertEquals(
+            VpnServiceSessionGate.StartDecision.QUEUED,
+            gate.requestStart(system(7), alwaysOnEnabled = true),
+        )
+        assertEquals(5L, gate.pending?.recoversSession)
+        assertEquals(VpnServiceSessionGate.StopDecision.CANCEL_PENDING, gate.requestStop(5))
+        assertNull(gate.finishTeardown())
+    }
+
+    @Test
     fun stopOldSessionStillCancelsSystemRecoveryAfterPromotion() {
         val gate = VpnServiceSessionGate()
         gate.requestStart(user(5), alwaysOnEnabled = true)
