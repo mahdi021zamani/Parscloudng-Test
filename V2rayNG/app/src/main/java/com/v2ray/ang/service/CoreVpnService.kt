@@ -320,8 +320,12 @@ class CoreVpnService : VpnService(), ServiceControl {
         when (sessionGate.requestStop(sessionId)) {
             VpnServiceSessionGate.StopDecision.CANCEL_PENDING -> {
                 userDisconnectRequested = true
-                pendingBeforeStop?.let { MmkvManager.retireServiceSession(it.sessionId) }
-                LogUtil.i(AppConfig.TAG, "StartCore-VPN: cancelled pending recovery for teardown session=$sessionId")
+                pendingBeforeStop?.let {
+                    MmkvManager.retireServiceSession(it.sessionId)
+                    it.recoversSession?.let(MmkvManager::retireServiceSession)
+                }
+                sessionGate.teardownSession?.let(MmkvManager::retireServiceSession)
+                LogUtil.i(AppConfig.TAG, "StartCore-VPN: cancelled pending start for session=$sessionId")
             }
 
             VpnServiceSessionGate.StopDecision.STOP_OWNER -> {
