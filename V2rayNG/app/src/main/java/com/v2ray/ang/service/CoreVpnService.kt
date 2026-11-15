@@ -312,6 +312,9 @@ class CoreVpnService : VpnService(), ServiceControl {
 
     override fun stopService(sessionId: Long?) {
         if (sessionId == null || sessionId <= 0L) return
+        // Persist the exact STOP even if the broadcast arrives after a pending start
+        // has been promoted or the command receiver is racing teardown completion.
+        MmkvManager.retireServiceSession(sessionId)
         val ownerBeforeStop = sessionGate.owner
         val pendingBeforeStop = sessionGate.pending
         when (sessionGate.requestStop(sessionId)) {
