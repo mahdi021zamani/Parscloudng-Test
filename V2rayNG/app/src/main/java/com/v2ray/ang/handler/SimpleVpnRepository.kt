@@ -106,7 +106,7 @@ object SimpleVpnRepository {
 
     /** Initialize all central source identities without performing any network request. */
     fun ensureSubscriptions() {
-        primarySources.forEach(::ensureSubscription)
+        primarySources.forEach { ensureSubscription(it) }
         emergencySource?.let(::ensureSubscription)
     }
 
