@@ -52,7 +52,7 @@ class CoreRootService : Service(), ServiceControl {
         }
         if ((!internalStart && !stickyRecovery) || sessionId <= 0L || MmkvManager.isServiceSessionRetired(sessionId)) {
             LogUtil.w(AppConfig.TAG, "StartCore-Root: rejecting unmarked or retired start")
-            stopSelf(startId)
+            if (activeSessionId <= 0L && !CoreServiceManager.isRunning()) stopSelf(startId)
             return START_NOT_STICKY
         }
         NotificationManager.ensureForeground()
