@@ -1,5 +1,10 @@
 name: Build Test APK
 
+# Keep only the newest isolated build for this branch running.
+concurrency:
+  group: parscloud-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
     inputs:
