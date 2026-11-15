@@ -361,7 +361,8 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                                 testingGuids = emptySet(),
                                 canConnect = false,
                                 isRefreshing = false,
-                                status = SimpleConnectionStatus.DISCONNECTED,
+                                // The refresh may target a different tab than the running VPN.
+                                // The service receiver alone reports an actual disconnect.
                                 message = app.getString(R.string.simple_no_servers_available),
                             )
                         }
@@ -399,7 +400,8 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             state.copy(
                                 isRefreshing = false,
                                 canConnect = false,
-                                status = SimpleConnectionStatus.DISCONNECTED,
+                                // A feed error does not stop an already-running tunnel.
+                                status = state.status,
                                 message = app.getString(messageId),
                                 licenseDialogVisible = state.licenseDialogVisible ||
                                     outcome.aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_MISSING ||
