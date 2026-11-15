@@ -74,8 +74,16 @@ object MessageHelper {
      * @param what The message identifier.
      * @param content The message content.
      */
-    fun sendMsg2UI(ctx: Context, what: Int, content: Serializable) {
-        sendMsg(ctx, AppConfig.BROADCAST_ACTION_ACTIVITY, what, content)
+    fun sendMsg2UI(ctx: Context, what: Int, content: Serializable, sessionId: Long? = null) {
+        try {
+            val intent = messageIntent(AppConfig.BROADCAST_ACTION_ACTIVITY, what, content)
+            if (sessionId != null && sessionId > 0L) {
+                intent.putExtra(ServiceSessionContract.EXTRA_SESSION_ID, sessionId)
+            }
+            ctx.sendBroadcast(intent)
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to send session status to UI", e)
+        }
     }
 
     /**
