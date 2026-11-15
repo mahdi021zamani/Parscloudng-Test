@@ -142,6 +142,28 @@ class VpnServiceSessionGateTest {
     }
 
     @Test
+    fun nullStickyRedeliveryDoesNotDisplaceOrInvalidatePendingSystemRecovery() {
+        val gate = VpnServiceSessionGate()
+        gate.requestStart(user(5), alwaysOnEnabled = true)
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+        gate.requestStart(system(6), alwaysOnEnabled = true)
+
+        val sticky = VpnServiceSessionGate.Start(
+            sessionId = 5L,
+            startId = 7,
+            origin = VpnServiceSessionGate.Origin.USER,
+            stickyRecovery = true,
+        )
+        assertEquals(
+            VpnServiceSessionGate.StartDecision.IGNORED,
+            gate.requestStart(sticky, alwaysOnEnabled = true),
+        )
+        assertEquals(6L, gate.pending?.sessionId)
+        assertEquals(5L, gate.pending?.recoversSession)
+        assertEquals(6L, gate.finishTeardown()?.sessionId)
+    }
+
+    @Test
     fun explicitStopCancelsQueuedUserStartWithoutStoppingOldOwnerDirectly() {
         val gate = VpnServiceSessionGate()
         gate.requestStart(user(5), alwaysOnEnabled = true)
