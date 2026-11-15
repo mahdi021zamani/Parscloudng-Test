@@ -7,12 +7,16 @@ import android.os.IBinder
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.contracts.ServiceControl
 import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.ServiceSessionContract
+import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.util.LogUtil
 import java.lang.ref.SoftReference
 
 class CoreProxyOnlyService : Service(), ServiceControl {
+
+    private var activeSessionId: Long = 0L
     /**
      * Initializes the service.
      */
@@ -30,6 +34,19 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      * @return The start mode.
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val internalStart = intent?.getBooleanExtra(ServiceSessionContract.EXTRA_INTERNAL_START, false) == true
+        val sessionId = intent?.getLongExtra(ServiceSessionContract.EXTRA_SESSION_ID, 0L) ?: 0L
+        if (!internalStart || sessionId <= 0L || MmkvManager.isServiceSessionRetired(sessionId)) {
+            LogUtil.w(AppConfig.TAG, "StartCore-Proxy: rejecting unmarked or retired start")
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+        if (CoreServiceManager.isRunning()) {
+            if (activeSessionId != sessionId) MmkvManager.retireServiceSession(sessionId)
+            LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Core is already running")
+            return START_STICKY
+        }
+        activeSessionId = sessionId
         NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Service command received")
 
@@ -74,6 +91,14 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      * Stops the service.
      */
     override fun stopService() {
+        stopSelf()
+    }
+
+    override fun stopService(sessionId: Long?) {
+        if (sessionId == null || sessionId != activeSessionId) {
+            LogUtil.i(AppConfig.TAG, "StartCore-Proxy: ignoring stale STOP session=$sessionId")
+            return
+        }
         stopSelf()
     }
 
