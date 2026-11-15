@@ -33,7 +33,7 @@ import java.lang.ref.SoftReference
 class CoreRootService : Service(), ServiceControl {
 
     private var setupJob: Job? = null
-    private var activeSessionId: Long = 0L
+    @Volatile private var activeSessionId: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -60,6 +60,7 @@ class CoreRootService : Service(), ServiceControl {
             return START_STICKY
         }
         activeSessionId = sessionId
+        MmkvManager.setActiveServiceSession(sessionId)
         NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Root: command received")
 
@@ -102,6 +103,7 @@ class CoreRootService : Service(), ServiceControl {
     }
 
     override fun stopService() {
+        if (activeSessionId > 0L) MmkvManager.retireServiceSession(activeSessionId)
         stopSelf()
     }
 
@@ -110,8 +112,12 @@ class CoreRootService : Service(), ServiceControl {
             LogUtil.i(AppConfig.TAG, "StartCore-Root: ignoring stale STOP session=$sessionId")
             return
         }
+        MmkvManager.retireServiceSession(sessionId)
         stopSelf()
     }
+
+    override val serviceSessionId: Long
+        get() = activeSessionId
 
     override fun vpnProtect(socket: Int): Boolean = true
 
