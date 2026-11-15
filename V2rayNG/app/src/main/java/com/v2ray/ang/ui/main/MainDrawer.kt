@@ -84,8 +84,7 @@ fun MainDrawerContent(drawerState: DrawerState, onNavigate: (MainDestination) ->
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    // PattNG: full-color circular logo, no dark-mode tint (tinting a photo logo
-                    // would flatten it into a white disc)
+                    // Use the app's own launcher artwork rather than upstream branding.
                     Image(
                         painter = painterResource(R.mipmap.ic_launcher_round),
                         contentDescription = null,
