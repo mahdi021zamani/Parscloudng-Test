@@ -32,6 +32,18 @@ import java.net.URI
 
 object AngConfigManager {
 
+    // Central PARSCLOUD profiles are usable in-app but must never be exported by
+    // ordinary user actions. Personal Aether imports use a different subscription ID.
+    private val centralSubscriptionIds = setOf(
+        "simple_free_vpn",
+        "simple_aether",
+        "simple_emergency",
+        "PARSCLOUD_AETHER_FEED",
+    )
+
+    private fun isCentralProfile(guid: String): Boolean =
+        MmkvManager.decodeServerConfig(guid)?.subscriptionId in centralSubscriptionIds
+
     private data class ParsedProfile(
         val profile: ProfileItem,
         val rawConfig: String? = null,
@@ -134,7 +146,7 @@ object AngConfigManager {
      */
     fun shareFullContent2Clipboard(context: Context, guid: String?): Int {
         try {
-            if (guid == null) return -1
+            if (guid == null || isCentralProfile(guid)) return -1
             val result = CoreConfigManager.getV2rayConfig(context, guid)
             if (result.status) {
                 Utils.setClipboard(context, result.content)
@@ -157,6 +169,7 @@ object AngConfigManager {
     private fun shareConfig(guid: String): String {
         try {
             val config = MmkvManager.decodeServerConfig(guid) ?: return ""
+            if (config.subscriptionId in centralSubscriptionIds) return ""
 
             return config.configType.protocolScheme + when (config.configType) {
                 EConfigType.VMESS -> VmessFmt.toUri(config)
