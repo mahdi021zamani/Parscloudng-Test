@@ -35,11 +35,15 @@ import kotlinx.coroutines.withContext
 
 enum class SimpleConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED }
 
+enum class SimpleVpnProfileTab { WIREGUARD, V2RAY, COMBINED, SERVICES_FOR_IRAN }
+
 data class SimpleVpnUiState(
     val servers: List<SimpleServerUiModel> = emptyList(),
     val testingGuids: Set<String> = emptySet(),
     val selectedGuid: String? = null,
+    /** The actual feed currently shown; V2Ray has two independently cached subtabs. */
     val selectedSourceId: String = SimpleVpnRepository.SIMPLE_SUB_ID,
+    val selectedV2RaySourceId: String = SimpleVpnRepository.SIMPLE_SUB_ID,
     val status: SimpleConnectionStatus = SimpleConnectionStatus.DISCONNECTED,
     val isRefreshing: Boolean = false,
     val canConnect: Boolean = false,
@@ -57,13 +61,21 @@ internal fun selectSimpleVpnSourceTab(
     selectedGuid: String?,
     canConnect: Boolean,
 ): SimpleVpnUiState? {
-    if (sourceId != SimpleVpnRepository.SIMPLE_SUB_ID &&
-        sourceId != SimpleVpnRepository.AETHER_SUB_ID
+    if (sourceId !in setOf(
+            SimpleVpnRepository.SIMPLE_SUB_ID,
+            SimpleVpnRepository.HAMRAH_SUB_ID,
+            SimpleVpnRepository.AETHER_SUB_ID,
+            SimpleVpnRepository.COMBINED_SUB_ID,
+            SimpleVpnRepository.SERVICES_SUB_ID,
+        )
     ) return null
 
     val validSelection = selectedGuid?.takeIf { guid -> servers.any { it.guid == guid } }
     return current.copy(
         selectedSourceId = sourceId,
+        selectedV2RaySourceId = if (sourceId == SimpleVpnRepository.SIMPLE_SUB_ID ||
+            sourceId == SimpleVpnRepository.HAMRAH_SUB_ID
+        ) sourceId else current.selectedV2RaySourceId,
         servers = servers,
         selectedGuid = validSelection,
         canConnect = canConnect && validSelection != null,
@@ -197,16 +209,16 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun loadLocalState() {
-        SimpleVpnRepository.ensureSubscription()
+        SimpleVpnRepository.ensureSubscriptions()
         val sourceId = _uiState.value.selectedSourceId
         refreshJob?.cancel()
         refreshJob = null
         cancelPingWorker()
         val servers = SimpleVpnRepository.getServersForSource(sourceId)
-        val selected = MmkvManager.getSelectServer()
+        val selected = MmkvManager.getSelectServer(sourceId)
             ?.takeIf { guid -> servers.any { it.guid == guid } }
             ?: servers.firstOrNull()?.guid
-        selected?.let { MmkvManager.setSelectServer(it) }
+        selected?.let { MmkvManager.setSelectServer(it, sourceId) }
         _uiState.update {
             it.copy(
                 servers = servers,
@@ -216,18 +228,43 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun onSelectSource(sourceId: String) {
+    fun onSelectProfile(tab: SimpleVpnProfileTab) {
+        val sourceId = when (tab) {
+            SimpleVpnProfileTab.WIREGUARD -> SimpleVpnRepository.AETHER_SUB_ID
+            SimpleVpnProfileTab.V2RAY -> _uiState.value.selectedV2RaySourceId
+            SimpleVpnProfileTab.COMBINED -> SimpleVpnRepository.COMBINED_SUB_ID
+            SimpleVpnProfileTab.SERVICES_FOR_IRAN -> SimpleVpnRepository.SERVICES_SUB_ID
+        }
+        onSelectSource(sourceId)
+    }
+
+    fun onSelectV2RaySubtab(sourceId: String) {
         if (sourceId != SimpleVpnRepository.SIMPLE_SUB_ID &&
-            sourceId != SimpleVpnRepository.AETHER_SUB_ID
+            sourceId != SimpleVpnRepository.HAMRAH_SUB_ID
+        ) return
+        val isV2RayVisible = _uiState.value.selectedSourceId == SimpleVpnRepository.SIMPLE_SUB_ID ||
+            _uiState.value.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID
+        _uiState.update { it.copy(selectedV2RaySourceId = sourceId) }
+        if (isV2RayVisible) onSelectSource(sourceId)
+    }
+
+    fun onSelectSource(sourceId: String) {
+        if (sourceId !in setOf(
+                SimpleVpnRepository.SIMPLE_SUB_ID,
+                SimpleVpnRepository.HAMRAH_SUB_ID,
+                SimpleVpnRepository.AETHER_SUB_ID,
+                SimpleVpnRepository.COMBINED_SUB_ID,
+                SimpleVpnRepository.SERVICES_SUB_ID,
+            )
         ) return
         refreshJob?.cancel()
         refreshJob = null
         cancelPingWorker()
         val servers = SimpleVpnRepository.getServersForSource(sourceId)
-        val selected = MmkvManager.getSelectServer()
+        val selected = MmkvManager.getSelectServer(sourceId)
             ?.takeIf { guid -> servers.any { it.guid == guid } }
             ?: servers.firstOrNull()?.guid
-        selected?.let(MmkvManager::setSelectServer)
+        selected?.let { MmkvManager.setSelectServer(it, sourceId) }
         val current = _uiState.value
         val next = selectSimpleVpnSourceTab(
             current = current,
@@ -240,8 +277,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun onSelectServer(guid: String) {
+        val sourceId = _uiState.value.selectedSourceId
         if (_uiState.value.servers.none { it.guid == guid }) return
-        MmkvManager.setSelectServer(guid)
+        MmkvManager.setSelectServer(guid, sourceId)
         _uiState.update { it.copy(selectedGuid = guid) }
     }
 
@@ -261,7 +299,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     val sourceId = requestedSourceId
                     val servers = SimpleVpnRepository.getServersForSource(sourceId)
                     val sourceGuids = servers.map { it.guid }
-                    val selected = MmkvManager.getSelectServer()
+                    val selected = MmkvManager.getSelectServer(sourceId)
                         ?.takeIf { guid -> servers.any { it.guid == guid } }
                         ?: servers.firstOrNull()?.guid
                     val aetherFailure = outcome.aetherFailure.takeIf {
@@ -287,7 +325,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                                     canConnect = SimpleVpnRepository.canConnect(state.selectedSourceId) && state.licenseValid,
                                 )
                             } else {
-                                selected?.let(MmkvManager::setSelectServer)
+                                selected?.let { MmkvManager.setSelectServer(it, sourceId) }
                                 state.copy(
                                     servers = servers,
                                     selectedGuid = selected,
