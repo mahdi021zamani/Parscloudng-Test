@@ -88,6 +88,11 @@ object CoreServiceManager {
      */
     fun isRunning() = coreController.isRunning
 
+    private fun sendSessionStatus(service: Service, what: Int, content: String) {
+        val sessionId = serviceControl?.get()?.serviceSessionId?.takeIf { it > 0L }
+        MessageHelper.sendMsg2UI(service, what, content, sessionId)
+    }
+
     /**
      * Stops the active daemon service directly when a subscription is definitively revoked.
      * Called by a manifest receiver running in this same daemon process.
@@ -136,7 +141,7 @@ object CoreServiceManager {
         if (!SubscriptionLicenseRepository.hasActiveLocalLicense()) {
             val message = service.getString(R.string.simple_license_required)
             LogUtil.w(AppConfig.TAG, "StartCore-Manager: refusing to start without an active local license")
-            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
+            sendSessionStatus(service, AppConfig.MSG_STATE_START_FAILURE, message)
             NotificationManager.cancelNotification()
             return false
         }
@@ -147,7 +152,7 @@ object CoreServiceManager {
         } catch (e: Exception) {
             val message = e.message?.takeUnless { it.isBlank() } ?: e.javaClass.simpleName
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: $message", e)
-            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
+            sendSessionStatus(service, AppConfig.MSG_STATE_START_FAILURE, message)
             NotificationManager.cancelNotification()
             return false
         }
@@ -251,7 +256,7 @@ object CoreServiceManager {
         if (aetherCore != null) {
             announceAetherWarmUp(service, guid, isReload)
         } else if (!isReload) {
-            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
+            sendSessionStatus(service, AppConfig.MSG_STATE_START_SUCCESS, "")
         }
         NotificationManager.startSpeedNotification()
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core started successfully")
@@ -288,7 +293,7 @@ object CoreServiceManager {
     }
 
     private fun announceAetherWarmUp(service: Service, guid: String, isReload: Boolean) {
-        MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_CONNECTING, "")
+        sendSessionStatus(service, AppConfig.MSG_STATE_CONNECTING, "")
         aetherWarmUpJob = aetherScope.launch {
             var listening = false
             while (isActive && !listening && AetherCoreManager.isRunning) {
@@ -299,7 +304,7 @@ object CoreServiceManager {
                 AetherCoreManager.WarmUpOutcome.CORE_EXITED -> onAetherExit(guid)
                 AetherCoreManager.WarmUpOutcome.LISTENING -> {
                     if (!isReload) {
-                        MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_SUCCESS, "")
+                        sendSessionStatus(service, AppConfig.MSG_STATE_START_SUCCESS, "")
                     }
                 }
             }
@@ -320,7 +325,7 @@ object CoreServiceManager {
             ) return@execute
             aetherExitHandled = true
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Aether core exited while running, guid=$guid")
-            MessageHelper.sendMsg2UI(
+            sendSessionStatus(
                 service,
                 AppConfig.MSG_STATE_START_FAILURE,
                 AetherCoreManager.stoppedMessage(service),
@@ -375,7 +380,7 @@ object CoreServiceManager {
         // VPN mode reports STOP_SUCCESS from onDestroy, after its TUN descriptor
         // has also been closed. Other run modes report it here after core shutdown.
         if (notifyUi && service != null) {
-            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+            sendSessionStatus(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
         }
         NotificationManager.cancelNotification()
 
@@ -445,7 +450,7 @@ object CoreServiceManager {
         } catch (e: Exception) {
             val message = e.message?.takeUnless { it.isBlank() } ?: e.javaClass.simpleName
             LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to reload core: $message", e)
-            MessageHelper.sendMsg2UI(service, AppConfig.MSG_STATE_START_FAILURE, message)
+            sendSessionStatus(service, AppConfig.MSG_STATE_START_FAILURE, message)
             false
         } finally {
             isReloading = false
@@ -626,9 +631,9 @@ object CoreServiceManager {
                         } else {
                             AppConfig.MSG_STATE_RUNNING
                         }
-                        MessageHelper.sendMsg2UI(serviceControl.getService(), state, "")
+                        sendSessionStatus(serviceControl.getService(), state, "")
                     } else {
-                        MessageHelper.sendMsg2UI(serviceControl.getService(), AppConfig.MSG_STATE_NOT_RUNNING, "")
+                        sendSessionStatus(serviceControl.getService(), AppConfig.MSG_STATE_NOT_RUNNING, "")
                     }
                 }
 
