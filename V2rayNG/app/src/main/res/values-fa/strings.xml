@@ -587,4 +587,6 @@
     <string name="simple_tab_services_iran">Services for Iran</string>
     <string name="simple_subtab_hamrah">Hamrah</string>
     <string name="simple_subtab_irancell">irancell</string>
+    <string name="simple_always_on_remains_enabled">VPN قطع شد، اما گزینهٔ Always-on در تنظیمات اندروید همچنان روشن است.</string>
+    <string name="simple_always_on_lockdown_notice">VPN قطع شد. گزینهٔ Always-on همچنان روشن است و Lockdown ترافیک خارج از VPN را مسدود نگه می‌دارد.</string>
 </resources>
