@@ -70,6 +70,19 @@ class VpnServiceSessionGateTest {
     }
 
     @Test
+    fun explicitStopCancelsQueuedUserStartWithoutStoppingOldOwnerDirectly() {
+        val gate = VpnServiceSessionGate()
+        gate.requestStart(user(5), alwaysOnEnabled = true)
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+        gate.requestStart(user(7), alwaysOnEnabled = true)
+
+        assertEquals(VpnServiceSessionGate.StopDecision.CANCEL_PENDING, gate.requestStop(7))
+        assertNull(gate.pending)
+        assertEquals(VpnServiceSessionGate.TeardownCause.USER_STOP, gate.teardownCause)
+        assertNull(gate.finishTeardown())
+    }
+
+    @Test
     fun alwaysOnCannotQueueDuringUserStopTeardown() {
         val gate = VpnServiceSessionGate()
         gate.requestStart(user(5), alwaysOnEnabled = true)
