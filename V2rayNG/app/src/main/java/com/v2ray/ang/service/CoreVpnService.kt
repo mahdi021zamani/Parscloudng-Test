@@ -603,6 +603,9 @@ class CoreVpnService : VpnService(), ServiceControl {
                     next?.let { MmkvManager.retireServiceSession(it.sessionId) }
                     sessionGate.clearOwner()
                     ContextCompat.getMainExecutor(this@CoreVpnService).execute {
+                        // A second teardown may have started after the IO shutdown
+                        // finished but before this callback was dispatched.
+                        if (isStoppingLock.get()) return@execute
                         // Keep the original teardown identity alive until this final
                         // idle check. A late system start can still be rejected after
                         // a user STOP, while a new explicit user start can be promoted.
