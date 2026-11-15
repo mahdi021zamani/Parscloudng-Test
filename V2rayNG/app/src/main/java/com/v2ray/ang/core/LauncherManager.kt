@@ -39,7 +39,7 @@ object LauncherManager {
         return true
     }
 
-    fun startService(context: Context, guid: String? = null) {
+    fun startService(context: Context, guid: String? = null): Long? {
         LogUtil.i(AppConfig.TAG, "LauncherManager: startService from ${context::class.java.simpleName}")
 
         if (guid != null) {
@@ -47,21 +47,26 @@ object LauncherManager {
         }
 
         try {
-            startContextService(context)
+            return startContextService(context)
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "LauncherManager: ${e.message}", e)
             context.toast(e.message ?: e.javaClass.simpleName)
+            return null
         }
     }
 
-    fun stopService(context: Context) {
-        val sessionId = MmkvManager.getActiveServiceSession()
-        if (sessionId <= 0L) {
-            LogUtil.w(AppConfig.TAG, "LauncherManager: no active service session to stop")
+    fun stopService(context: Context, sessionId: Long? = null) {
+        val targetSession = sessionId
+            ?: MmkvManager.getActiveServiceSession().takeIf { it > 0L }
+            ?: MmkvManager.getLastIssuedServiceSession().takeIf {
+                it > 0L && !MmkvManager.isServiceSessionRetired(it)
+            }
+        if (targetSession == null || targetSession <= 0L) {
+            LogUtil.w(AppConfig.TAG, "LauncherManager: no live service session to stop")
             return
         }
-        MmkvManager.retireServiceSession(sessionId)
-        MessageHelper.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "", sessionId)
+        MmkvManager.retireServiceSession(targetSession)
+        MessageHelper.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "", targetSession)
     }
 
     /** Restarts the active daemon without starting a stopped service. */
@@ -83,7 +88,7 @@ object LauncherManager {
             || Utils.isValidUrl(config.server)
 
     @Throws(Exception::class)
-    private fun startContextService(context: Context) {
+    private fun startContextService(context: Context): Long {
         // Every entry point (launcher, tile, Tasker, boot, and restart) passes through
         // this local entitlement gate. The daemon also checks independently.
         if (!SubscriptionLicenseRepository.hasActiveLocalLicense()) {
@@ -146,10 +151,13 @@ object LauncherManager {
 
         try {
             ContextCompat.startForegroundService(context, intent)
+            return sessionId
         } catch (e: SecurityException) {
+            MmkvManager.retireServiceSession(sessionId)
             LogUtil.e(AppConfig.TAG, "LauncherManager: Missing permission to start foreground service", e)
             throw IllegalStateException(e.message ?: e.javaClass.simpleName, e)
         } catch (e: RuntimeException) {
+            MmkvManager.retireServiceSession(sessionId)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                 e.javaClass.name == "android.app.ForegroundServiceStartNotAllowedException"
             ) {
