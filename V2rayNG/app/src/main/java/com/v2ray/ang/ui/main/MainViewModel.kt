@@ -581,12 +581,14 @@ class MainViewModel(
         launchLoading {
             withContext(ioDispatcher) {
                 try {
-                    val seen = HashSet<ProfileItem>()
+                    // A profile is a duplicate only within the same owner/feed.
+                    // Identical personal and central profiles must never delete each other.
+                    val seen = HashSet<Pair<String, ProfileItem>>()
                     val duplicates = ArrayList<String>()
                     currentServers().forEach { server ->
                         val profile = server.profile
                         if (!profile.configType.isComplexType()) {
-                            val identity = profile.duplicateIdentity()
+                            val identity = profile.subscriptionId to profile.duplicateIdentity()
                             if (!seen.add(identity)) duplicates += server.guid
                         }
                     }
