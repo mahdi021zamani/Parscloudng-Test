@@ -51,6 +51,7 @@ object CoreServiceManager {
 
     private val coreController: CoreController = CoreNativeManager.newCoreController(CoreCallback())
     private val mMsgReceive = ReceiveMessageHandler()
+    @Volatile private var receiverService: Service? = null
     private val stopMutex = Mutex()
     private var currentConfig: ProfileItem? = null
     private var processFinder: XrayProcessFinder? = null
@@ -101,6 +102,36 @@ object CoreServiceManager {
             else -> AppConfig.MSG_STATE_RUNNING
         }
         sendSessionStatus(service, state, "")
+    }
+
+    /**
+     * Keep the command receiver registered for the entire service lifetime, not only
+     * while the native core is running. STOP must still be delivered during teardown
+     * so it can cancel a queued Always-on recovery.
+     */
+    fun registerServiceReceiver(service: Service) {
+        if (receiverService === service) return
+        receiverService?.let { previous ->
+            runCatching { previous.unregisterReceiver(mMsgReceive) }
+        }
+        val filter = IntentFilter(AppConfig.BROADCAST_ACTION_SERVICE).apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        ContextCompat.registerReceiver(service, mMsgReceive, filter, Utils.receiverFlags())
+        receiverService = service
+    }
+
+    fun unregisterServiceReceiver(service: Service) {
+        if (receiverService !== service) return
+        try {
+            service.unregisterReceiver(mMsgReceive)
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister service receiver", e)
+        } finally {
+            receiverService = null
+        }
     }
 
     /**
@@ -170,12 +201,6 @@ object CoreServiceManager {
 
     @Throws(Exception::class)
     private fun doStartCoreLoop(service: Service, vpnInterface: ParcelFileDescriptor?) {
-        val mFilter = IntentFilter(AppConfig.BROADCAST_ACTION_SERVICE)
-        mFilter.addAction(Intent.ACTION_SCREEN_ON)
-        mFilter.addAction(Intent.ACTION_SCREEN_OFF)
-        mFilter.addAction(Intent.ACTION_USER_PRESENT)
-        ContextCompat.registerReceiver(service, mMsgReceive, mFilter, Utils.receiverFlags())
-
         currentVpnInterface = vpnInterface
         launchCore(service, vpnInterface)
         startNetworkMonitor(service)
@@ -393,14 +418,6 @@ object CoreServiceManager {
             sendSessionStatus(service, AppConfig.MSG_STATE_STOP_SUCCESS, "")
         }
         NotificationManager.cancelNotification()
-
-        if (service != null) {
-            try {
-                service.unregisterReceiver(mMsgReceive)
-            } catch (e: Exception) {
-                LogUtil.e(AppConfig.TAG, "StartCore-Manager: Failed to unregister receiver", e)
-            }
-        }
 
         aetherStopped && xrayStopped
     }
