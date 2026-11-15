@@ -400,7 +400,11 @@ object MmkvManager {
 
         withProfileIndexLock {
             val config = decodeServerConfig(guid)
-            val knownGroups = (decodeSubsList() + DEFAULT_SUBSCRIPTION_ID).distinct()
+            val indexedGroupIds = mainStorage.allKeys()
+                ?.filter { it.startsWith(KEY_SUB_SERVER_PREFIX) }
+                ?.map { it.removePrefix(KEY_SUB_SERVER_PREFIX) }
+                .orEmpty()
+            val knownGroups = (decodeSubsList() + indexedGroupIds + DEFAULT_SUBSCRIPTION_ID).distinct()
             val indexedGroups = knownGroups.filter { guid in decodeServerList(it) }
             val targetGroups = indexedGroups.ifEmpty {
                 listOf(getSubscriptionId(config?.subscriptionId))
@@ -547,7 +551,11 @@ object MmkvManager {
 
         // Clear every known group index before deleting profile payloads. Include the
         // default (ungrouped) bucket explicitly: it is not guaranteed to exist in SUB_IDS.
-        val groupIds = (decodeSubsList() + DEFAULT_SUBSCRIPTION_ID).distinct()
+        val indexedGroupIds = mainStorage.allKeys()
+            ?.filter { it.startsWith(KEY_SUB_SERVER_PREFIX) }
+            ?.map { it.removePrefix(KEY_SUB_SERVER_PREFIX) }
+            .orEmpty()
+        val groupIds = (decodeSubsList() + indexedGroupIds + DEFAULT_SUBSCRIPTION_ID).distinct()
         groupIds.forEach { subscriptionId ->
             requireStorageWrite(
                 persistServerList(emptyList(), subscriptionId),
