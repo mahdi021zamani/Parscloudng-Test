@@ -18,6 +18,11 @@ class SimpleVpnSessionEventTest {
     }
 
     @Test
+    fun rejectsExpectedOldSessionOnceNewerOwnerIsActive() {
+        assertFalse(shouldAcceptSimpleVpnSessionEvent(5L, 7L, 5L))
+    }
+
+    @Test
     fun rejectsLateStopFromOldOwnerAfterNewOwnerStarts() {
         assertFalse(shouldAcceptSimpleVpnSessionEvent(7L, 7L, 5L))
     }
