@@ -153,7 +153,12 @@ class CoreVpnService : VpnService(), ServiceControl {
                     LogUtil.i(AppConfig.TAG, "StartCore-VPN: no live session to recover from null sticky Intent")
                     return START_NOT_STICKY
                 }
-                VpnServiceSessionGate.Start(sessionId, startId, VpnServiceSessionGate.Origin.USER)
+                VpnServiceSessionGate.Start(
+                    sessionId,
+                    startId,
+                    VpnServiceSessionGate.Origin.USER,
+                    stickyRecovery = true,
+                )
             }
 
             else -> {
