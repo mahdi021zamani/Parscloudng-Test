@@ -39,6 +39,10 @@ internal class VpnServiceSessionGate {
                 if (!alwaysOnEnabled || teardownCause == TeardownCause.USER_STOP) {
                     return StartDecision.IGNORED
                 }
+                // An explicit user request already waiting for teardown has priority.
+                // Keep the first system recovery too; duplicate system intents must not
+                // replace its session identity or leave an untracked pending request.
+                if (pending != null) return StartDecision.IGNORED
                 val recovering = teardownSession ?: return StartDecision.IGNORED
                 pending = request.copy(recoversSession = recovering)
                 return StartDecision.QUEUED
