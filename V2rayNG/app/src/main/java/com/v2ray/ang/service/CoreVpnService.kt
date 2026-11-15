@@ -46,6 +46,7 @@ class CoreVpnService : VpnService(), ServiceControl {
     private val sessionGate = VpnServiceSessionGate()
     @Volatile private var latestStartId = 0
     @Volatile private var activeSessionId = 0L
+    @Volatile private var userDisconnectRequested = false
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -117,7 +118,15 @@ class CoreVpnService : VpnService(), ServiceControl {
         closeVpnInterface()
 
         unlockStart()
-        MessageHelper.sendMsg2UI(this, AppConfig.MSG_STATE_STOP_SUCCESS, "", activeSessionId)
+        val stopMessage = if (userDisconnectRequested && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isAlwaysOn()) {
+            getString(
+                if (isLockdownEnabled()) R.string.simple_always_on_lockdown_notice
+                else R.string.simple_always_on_remains_enabled
+            )
+        } else {
+            ""
+        }
+        MessageHelper.sendMsg2UI(this, AppConfig.MSG_STATE_STOP_SUCCESS, stopMessage, activeSessionId)
         NotificationManager.cancelNotification()
     }
 
@@ -228,6 +237,7 @@ class CoreVpnService : VpnService(), ServiceControl {
             }
             return
         }
+        userDisconnectRequested = false
         if (!MmkvManager.setActiveServiceSession(request.sessionId)) {
             LogUtil.w(AppConfig.TAG, "StartCore-VPN: session was retired before ownership could be acquired")
             sessionGate.clearOwner()
@@ -305,11 +315,13 @@ class CoreVpnService : VpnService(), ServiceControl {
         val pendingBeforeStop = sessionGate.pending
         when (sessionGate.requestStop(sessionId)) {
             VpnServiceSessionGate.StopDecision.CANCEL_PENDING -> {
+                userDisconnectRequested = true
                 pendingBeforeStop?.let { MmkvManager.retireServiceSession(it.sessionId) }
                 LogUtil.i(AppConfig.TAG, "StartCore-VPN: cancelled pending recovery for teardown session=$sessionId")
             }
 
             VpnServiceSessionGate.StopDecision.STOP_OWNER -> {
+                userDisconnectRequested = true
                 ownerBeforeStop?.let { MmkvManager.retireServiceSession(it.sessionId) }
                 MmkvManager.retireServiceSession(activeSessionId)
                 stopAllService(true, VpnServiceSessionGate.TeardownCause.USER_STOP)
@@ -517,6 +529,7 @@ class CoreVpnService : VpnService(), ServiceControl {
         isForced: Boolean = true,
         cause: VpnServiceSessionGate.TeardownCause = VpnServiceSessionGate.TeardownCause.INTERNAL,
     ) {
+        if (cause == VpnServiceSessionGate.TeardownCause.USER_STOP) userDisconnectRequested = true
         if (!isStoppingLock.compareAndSet(false, true)) {
             if (cause == VpnServiceSessionGate.TeardownCause.USER_STOP) {
                 sessionGate.beginTeardown(VpnServiceSessionGate.TeardownCause.USER_STOP)
