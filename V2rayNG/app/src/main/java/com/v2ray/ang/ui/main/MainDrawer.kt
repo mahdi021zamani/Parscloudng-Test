@@ -55,7 +55,6 @@ private val drawerItems = primaryDrawerItems + listOf(
     MainDestination.Promotion,
     MainDestination.Logcat,
     MainDestination.CheckUpdate,
-    MainDestination.BackupRestore,
     MainDestination.About
 )
 
@@ -88,7 +87,7 @@ fun MainDrawerContent(drawerState: DrawerState, onNavigate: (MainDestination) ->
                     // PattNG: full-color circular logo, no dark-mode tint (tinting a photo logo
                     // would flatten it into a white disc)
                     Image(
-                        painter = painterResource(R.drawable.ic_pattng_logo),
+                        painter = painterResource(R.mipmap.ic_launcher_round),
                         contentDescription = null,
                         modifier = Modifier.size(120.dp)
                     )
