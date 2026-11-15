@@ -27,6 +27,8 @@ internal class VpnServiceSessionGate {
         private set
     @Volatile var teardownSession: Long? = null
         private set
+    @Volatile var teardownInProgress: Boolean = false
+        private set
     @Volatile var teardownCause: TeardownCause? = null
         private set
 
@@ -34,7 +36,7 @@ internal class VpnServiceSessionGate {
     fun requestStart(request: Start, alwaysOnEnabled: Boolean): StartDecision {
         if (request.sessionId <= 0L) return StartDecision.IGNORED
 
-        if (teardownSession != null) {
+        if (teardownInProgress) {
             if (request.origin == Origin.SYSTEM) {
                 if (!alwaysOnEnabled || teardownCause == TeardownCause.USER_STOP) {
                     return StartDecision.IGNORED
@@ -65,6 +67,7 @@ internal class VpnServiceSessionGate {
 
     @Synchronized
     fun beginTeardown(cause: TeardownCause) {
+        teardownInProgress = true
         if (teardownSession == null) {
             teardownSession = owner?.let {
                 if (it.origin == Origin.SYSTEM && it.recoversSession != null) it.recoversSession
@@ -87,6 +90,7 @@ internal class VpnServiceSessionGate {
             (queued.recoversSession == sessionId || queued.sessionId == sessionId)
         ) {
             pending = null
+            teardownInProgress = true
             teardownCause = TeardownCause.USER_STOP
             return StopDecision.CANCEL_PENDING
         }
@@ -109,6 +113,7 @@ internal class VpnServiceSessionGate {
                 }
             }
             owner = null
+            teardownInProgress = true
             teardownCause = TeardownCause.USER_STOP
             return StopDecision.STOP_OWNER
         }
@@ -127,6 +132,7 @@ internal class VpnServiceSessionGate {
         val queued = pending
         pending = null
         teardownSession = null
+        teardownInProgress = false
         teardownCause = null
 
         val next = when {
