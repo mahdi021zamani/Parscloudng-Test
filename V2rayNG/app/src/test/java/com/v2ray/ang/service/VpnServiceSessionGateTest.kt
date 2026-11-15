@@ -167,6 +167,44 @@ class VpnServiceSessionGateTest {
     }
 
     @Test
+    fun teardownIdentitySurvivesUntilFinalIdleCheckForLateSystemStart() {
+        val gate = VpnServiceSessionGate()
+        gate.requestStart(user(5), alwaysOnEnabled = true)
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+
+        assertNull(gate.finishTeardown())
+        assertTrue(gate.teardownInProgress)
+        assertEquals(5L, gate.teardownSession)
+        assertEquals(
+            VpnServiceSessionGate.StartDecision.QUEUED,
+            gate.requestStart(system(6), alwaysOnEnabled = true),
+        )
+        assertEquals(5L, gate.pending?.recoversSession)
+        assertEquals(6L, gate.finishTeardown()?.sessionId)
+        assertFalse(gate.teardownInProgress)
+    }
+
+    @Test
+    fun userStopCauseSurvivesUntilIdleAndRejectsLateSystemStart() {
+        val gate = VpnServiceSessionGate()
+        gate.requestStart(user(5), alwaysOnEnabled = true)
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.USER_STOP)
+
+        assertNull(gate.finishTeardown())
+        assertTrue(gate.teardownInProgress)
+        assertEquals(
+            VpnServiceSessionGate.StartDecision.IGNORED,
+            gate.requestStart(system(6), alwaysOnEnabled = true),
+        )
+        assertTrue(gate.finishServiceIfIdle())
+        assertFalse(gate.teardownInProgress)
+        assertEquals(
+            VpnServiceSessionGate.StartDecision.START_NOW,
+            gate.requestStart(system(7), alwaysOnEnabled = true),
+        )
+    }
+
+    @Test
     fun systemStartWithoutRecoveryTargetIsIgnoredDuringTeardownButUserStartQueues() {
         val gate = VpnServiceSessionGate()
         gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
