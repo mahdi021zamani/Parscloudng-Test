@@ -573,8 +573,15 @@ class CoreVpnService : VpnService(), ServiceControl {
                     }
                     next?.let { MmkvManager.retireServiceSession(it.sessionId) }
                     sessionGate.clearOwner()
-                    MmkvManager.clearActiveServiceSession(activeSessionId)
-                    stopSelf(latestStartId)
+                    ContextCompat.getMainExecutor(this@CoreVpnService).execute {
+                        // A fresh start may arrive after finishTeardown but before this
+                        // callback. Never stop that newly accepted owner.
+                        if (sessionGate.owner != null || sessionGate.pending != null || sessionGate.teardownInProgress) {
+                            return@execute
+                        }
+                        MmkvManager.clearActiveServiceSession(activeSessionId)
+                        stopSelf(latestStartId)
+                    }
                 }
             } else {
                 isStoppingLock.set(false)
