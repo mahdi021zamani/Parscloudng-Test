@@ -82,6 +82,13 @@ internal class VpnServiceSessionGate {
             (current.sessionId == sessionId ||
                 (current.origin == Origin.SYSTEM && current.recoversSession == sessionId))
         ) {
+            if (teardownSession == null) {
+                teardownSession = if (current.origin == Origin.SYSTEM && current.recoversSession != null) {
+                    current.recoversSession
+                } else {
+                    current.sessionId
+                }
+            }
             owner = null
             teardownCause = TeardownCause.USER_STOP
             return StopDecision.STOP_OWNER
