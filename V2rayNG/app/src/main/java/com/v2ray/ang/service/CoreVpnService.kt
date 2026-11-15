@@ -205,7 +205,12 @@ class CoreVpnService : VpnService(), ServiceControl {
                     MmkvManager.retireServiceSession(request.sessionId)
                 } else {
                     val currentOwner = sessionGate.owner
-                    if (currentOwner?.sessionId != request.sessionId) {
+                    val pendingRecoveryTarget = sessionGate.pending
+                        ?.takeIf { it.origin == VpnServiceSessionGate.Origin.SYSTEM }
+                        ?.recoversSession
+                    val isTargetOfPendingRecovery = request.stickyRecovery &&
+                        pendingRecoveryTarget == request.sessionId
+                    if (!isTargetOfPendingRecovery && currentOwner?.sessionId != request.sessionId) {
                         MmkvManager.retireServiceSession(request.sessionId)
                     }
                     currentOwner?.sessionId?.let {
