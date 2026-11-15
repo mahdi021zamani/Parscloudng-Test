@@ -4,6 +4,10 @@ import android.app.Service
 import android.net.Network
 
 interface ServiceControl {
+    /** Stable identity of the service session currently owned by this service instance. */
+    val serviceSessionId: Long
+        get() = 0L
+
     /**
      * Gets the service instance.
      * @return The service instance.
