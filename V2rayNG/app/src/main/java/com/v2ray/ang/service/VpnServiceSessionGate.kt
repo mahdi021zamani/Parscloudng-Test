@@ -20,15 +20,16 @@ internal class VpnServiceSessionGate {
         val recoversSession: Long? = null,
     )
 
-    var owner: Start? = null
+    @Volatile var owner: Start? = null
         private set
-    var pending: Start? = null
+    @Volatile var pending: Start? = null
         private set
-    var teardownSession: Long? = null
+    @Volatile var teardownSession: Long? = null
         private set
-    var teardownCause: TeardownCause? = null
+    @Volatile var teardownCause: TeardownCause? = null
         private set
 
+    @Synchronized
     fun requestStart(request: Start, alwaysOnEnabled: Boolean): StartDecision {
         if (request.sessionId <= 0L) return StartDecision.IGNORED
 
@@ -53,6 +54,7 @@ internal class VpnServiceSessionGate {
         return StartDecision.START_NOW
     }
 
+    @Synchronized
     fun beginTeardown(cause: TeardownCause) {
         if (teardownSession == null) {
             teardownSession = owner?.let {
@@ -67,6 +69,7 @@ internal class VpnServiceSessionGate {
         }
     }
 
+    @Synchronized
     fun requestStop(sessionId: Long): StopDecision {
         if (sessionId <= 0L) return StopDecision.IGNORED
 
@@ -101,6 +104,7 @@ internal class VpnServiceSessionGate {
      * Completes teardown and promotes only a still-valid pending request.
      * The promoted system owner retains recoversSession for a late STOP.
      */
+    @Synchronized
     fun finishTeardown(): Start? {
         val previousTeardownSession = teardownSession
         val previousCause = teardownCause
@@ -121,6 +125,7 @@ internal class VpnServiceSessionGate {
         return next
     }
 
+    @Synchronized
     fun clearOwner() {
         owner = null
     }
