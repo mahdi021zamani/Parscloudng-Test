@@ -82,16 +82,67 @@ class SimpleVpnSourceTabStateTest {
     }
 
     @Test
-    fun rejectsSelectionNotPresentInTheActiveTab() {
+    fun selectsHamrahAndRemembersItAsTheActiveV2RaySubtab() {
         val result = selectSimpleVpnSourceTab(
             current = SimpleVpnUiState(licenseValid = true),
-            sourceId = SimpleVpnRepository.SIMPLE_SUB_ID,
-            servers = listOf(server("v2ray-1")),
-            selectedGuid = "aether-1",
+            sourceId = SimpleVpnRepository.HAMRAH_SUB_ID,
+            servers = listOf(server("hamrah-1")),
+            selectedGuid = "hamrah-1",
             canConnect = true,
         )
 
-        assertNull(result?.selectedGuid)
-        assertTrue(result?.canConnect == false)
+        assertEquals(SimpleVpnRepository.HAMRAH_SUB_ID, result?.selectedSourceId)
+        assertEquals(SimpleVpnRepository.HAMRAH_SUB_ID, result?.selectedV2RaySourceId)
+        assertEquals("hamrah-1", result?.selectedGuid)
+    }
+
+    @Test
+    fun combinedAndServicesTabsKeepTheRememberedV2RaySubtab() {
+        val current = SimpleVpnUiState(
+            licenseValid = true,
+            selectedV2RaySourceId = SimpleVpnRepository.HAMRAH_SUB_ID,
+        )
+        val combined = selectSimpleVpnSourceTab(
+            current = current,
+            sourceId = SimpleVpnRepository.COMBINED_SUB_ID,
+            servers = listOf(server("combined-1")),
+            selectedGuid = "combined-1",
+            canConnect = true,
+        )
+        val services = selectSimpleVpnSourceTab(
+            current = current,
+            sourceId = SimpleVpnRepository.SERVICES_SUB_ID,
+            servers = listOf(server("services-1")),
+            selectedGuid = "services-1",
+            canConnect = true,
+        )
+
+        assertEquals(SimpleVpnRepository.HAMRAH_SUB_ID, combined?.selectedV2RaySourceId)
+        assertEquals(SimpleVpnRepository.HAMRAH_SUB_ID, services?.selectedV2RaySourceId)
+        assertEquals("combined-1", combined?.selectedGuid)
+        assertEquals("services-1", services?.selectedGuid)
+    }
+
+    @Test
+    fun selectsCombinedAndServicesAsIndependentSources() {
+        val combined = selectSimpleVpnSourceTab(
+            current = SimpleVpnUiState(licenseValid = true),
+            sourceId = SimpleVpnRepository.COMBINED_SUB_ID,
+            servers = listOf(server("combined-1")),
+            selectedGuid = "combined-1",
+            canConnect = true,
+        )
+        val services = selectSimpleVpnSourceTab(
+            current = SimpleVpnUiState(licenseValid = true),
+            sourceId = SimpleVpnRepository.SERVICES_SUB_ID,
+            servers = listOf(server("services-1")),
+            selectedGuid = "services-1",
+            canConnect = true,
+        )
+
+        assertEquals(SimpleVpnRepository.COMBINED_SUB_ID, combined?.selectedSourceId)
+        assertEquals(SimpleVpnRepository.SERVICES_SUB_ID, services?.selectedSourceId)
+        assertTrue(combined?.canConnect == true)
+        assertTrue(services?.canConnect == true)
     }
 }
