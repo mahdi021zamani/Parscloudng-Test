@@ -399,6 +399,10 @@ object MmkvManager {
         if (guid.isBlank()) return
 
         withProfileIndexLock {
+            // Central feed profiles are owned by PARSCLOUD. User-facing delete actions
+            // must never remove them; an explicit source refresh uses removeServers().
+            if (isCentralProfileGuid(guid)) return@withProfileIndexLock
+
             val config = decodeServerConfig(guid)
             val indexedGroupIds = mainStorage.allKeys()
                 ?.filter { it.startsWith(KEY_SUB_SERVER_PREFIX) }
@@ -436,6 +440,7 @@ object MmkvManager {
      */
     fun removeServerViaSubid(subscriptionId: String?) {
         val subId = getSubscriptionId(subscriptionId)
+        if (isCentralSubscriptionId(subId)) return
         withProfileIndexLock {
             val serverList = decodeServerList(subId)
             val removedGuids = serverList.toList()
@@ -473,9 +478,18 @@ object MmkvManager {
 
         withProfileIndexLock {
             val subId = getSubscriptionId(subscriptionId)
+            // A source refresh may clear its own central cache, but a personal-group
+            // operation cannot delete a profile owned by a central PARSCLOUD feed.
+            val requestedGuids = if (isCentralSubscriptionId(subId)) {
+                guids.distinct().filter(::isCentralProfileGuid)
+            } else {
+                guids.distinct().filterNot(::isCentralProfileGuid)
+            }
+            if (requestedGuids.isEmpty()) return@withProfileIndexLock
+
             val referencedByOtherGroups = decodeServersReferencedByOtherGroups(subId)
             val serverList = decodeServerList(subId)
-            if (serverList.removeAll(guids.toSet())) {
+            if (serverList.removeAll(requestedGuids.toSet())) {
                 requireStorageWrite(
                     persistServerList(serverList, subId),
                     "Failed to update subscription profile index",
@@ -483,7 +497,7 @@ object MmkvManager {
             }
 
             val removableGuids = referencedByOtherGroups
-                ?.let { referenced -> guids.filterNot { it in referenced } }
+                ?.let { referenced -> requestedGuids.filterNot { it in referenced } }
                 .orEmpty()
             if (getSelectServer()?.let { it in removableGuids } == true) {
                 mainStorage.remove(KEY_SELECTED_SERVER)
@@ -545,42 +559,65 @@ object MmkvManager {
      */
     fun removeAllServer(): Int = withProfileIndexLock {
         // Rebuild SUB_IDS from subscription metadata first if an older installation
-        // has a missing/empty index; otherwise central or personal group indexes could
-        // be left pointing at deleted profile payloads.
+        // has a missing/empty index.
         initSubsList()
 
-        // Clear every known group index before deleting profile payloads. Include the
-        // default (ungrouped) bucket explicitly: it is not guaranteed to exist in SUB_IDS.
         val indexedGroupIds = mainStorage.allKeys()
             ?.filter { it.startsWith(KEY_SUB_SERVER_PREFIX) }
             ?.map { it.removePrefix(KEY_SUB_SERVER_PREFIX) }
             .orEmpty()
         val groupIds = (decodeSubsList() + indexedGroupIds + DEFAULT_SUBSCRIPTION_ID).distinct()
+
+        val profileKeys = profileFullStorage.allKeys()?.toList().orEmpty()
+        // Keep profiles identified by central ownership, plus orphaned IDs still
+        // referenced by a central index. Unknown/unreadable profile payloads fail closed.
+        val protectedGuids = linkedSetOf<String>().apply {
+            CENTRAL_SUBSCRIPTION_IDS.forEach { addAll(decodeServerList(it)) }
+            profileKeys.forEach { guid ->
+                val profile = decodeServerConfig(guid)
+                if (profile == null || isCentralSubscriptionId(profile.subscriptionId)) add(guid)
+            }
+        }
+        val removableGuids = profileKeys.filter { guid ->
+            guid !in protectedGuids && decodeServerConfig(guid) != null
+        }
+
+        // Clear personal indexes, but retain the central indexes and any central IDs
+        // that were accidentally referenced by a personal index.
         groupIds.forEach { subscriptionId ->
+            if (isCentralSubscriptionId(subscriptionId)) return@forEach
+            val retained = decodeServerList(subscriptionId).filter { it in protectedGuids }
             requireStorageWrite(
-                persistServerList(emptyList(), subscriptionId),
-                "Failed to clear subscription profile index",
+                persistServerList(retained, subscriptionId),
+                "Failed to clear personal subscription profile index",
             )
         }
 
-        // The selected GUID must not survive an all-profile deletion. Subscription
-        // metadata is intentionally retained so central feeds can repopulate on refresh.
-        mainStorage.remove(KEY_SELECTED_SERVER)
-
-        val profileKeys = profileFullStorage.allKeys()?.toList().orEmpty()
-        val affiliationKeys = serverAffStorage.allKeys()?.toList().orEmpty()
-        val rawKeys = serverRawStorage.allKeys()?.toList().orEmpty()
-        if (profileKeys.isNotEmpty()) profileFullStorage.removeValuesForKeys(profileKeys.toTypedArray())
-        if (affiliationKeys.isNotEmpty()) serverAffStorage.removeValuesForKeys(affiliationKeys.toTypedArray())
-        if (rawKeys.isNotEmpty()) serverRawStorage.removeValuesForKeys(rawKeys.toTypedArray())
-
-        if (!profileFullStorage.allKeys().isNullOrEmpty() ||
-            !serverAffStorage.allKeys().isNullOrEmpty() ||
-            !serverRawStorage.allKeys().isNullOrEmpty()
-        ) {
-            throw ProfileStorageException("Failed to remove all profile payloads")
+        // Preserve the active central profile; clear selection only when it belongs
+        // to a profile that is actually being removed.
+        getSelectServer()?.takeIf { it !in protectedGuids }?.let {
+            mainStorage.remove(KEY_SELECTED_SERVER)
         }
-        profileKeys.size
+
+        val keys = removableGuids.toTypedArray()
+        if (keys.isNotEmpty()) {
+            profileFullStorage.removeValuesForKeys(keys)
+            serverAffStorage.removeValuesForKeys(keys)
+            serverRawStorage.removeValuesForKeys(keys)
+        }
+
+        val remainingProfileKeys = profileFullStorage.allKeys()?.toSet().orEmpty()
+        val remainingAffiliationKeys = serverAffStorage.allKeys()?.toSet().orEmpty()
+        val remainingRawKeys = serverRawStorage.allKeys()?.toSet().orEmpty()
+        if (removableGuids.any { guid ->
+                guid in remainingProfileKeys ||
+                    guid in remainingAffiliationKeys ||
+                    guid in remainingRawKeys
+            }
+        ) {
+            throw ProfileStorageException("Failed to remove all personal profile payloads")
+        }
+        removableGuids.size
     }
 
     /**
@@ -591,21 +628,13 @@ object MmkvManager {
      */
     fun removeInvalidServer(guid: String): Int {
         var count = 0
-        if (guid.isNotEmpty()) {
-            decodeServerAffiliationInfo(guid)?.let { aff ->
-                if (aff.testDelayMillis < 0L) {
-                    removeServer(guid)
-                    count++
-                }
-            }
-        } else {
-            serverAffStorage.allKeys()?.forEach { key ->
-                decodeServerAffiliationInfo(key)?.let { aff ->
-                    if (aff.testDelayMillis < 0L) {
-                        removeServer(key)
-                        count++
-                    }
-                }
+        val candidates = if (guid.isNotEmpty()) listOf(guid) else serverAffStorage.allKeys()?.toList().orEmpty()
+        candidates.forEach { key ->
+            if (isCentralProfileGuid(key)) return@forEach
+            val aff = decodeServerAffiliationInfo(key) ?: return@forEach
+            if (aff.testDelayMillis < 0L) {
+                removeServer(key)
+                if (decodeServerConfig(key) == null) count++
             }
         }
         return count
@@ -663,10 +692,14 @@ object MmkvManager {
                     subscriptionId = decodeServerConfig(guid)?.subscriptionId,
                 )
             }
+            val centralProfileGuids = profiles
+                .filter { isCentralSubscriptionId(it.subscriptionId) }
+                .mapTo(mutableSetOf()) { it.guid }
             val orphans = OrphanProfileCleaner.findOrphans(
                 profiles = profiles,
                 indexedServersBySubscription = indexedServersBySubscription,
                 selectedServer = getSelectServer(),
+                protectedProfileGuids = centralProfileGuids,
             ) ?: return@synchronized null
 
             if (orphans.isNotEmpty()) {
@@ -728,12 +761,9 @@ object MmkvManager {
      * @param subid The subscription ID.
      */
     fun removeSubscription(subid: String) {
-        if (subid in CENTRAL_SUBSCRIPTION_IDS) {
-            // Keep the central source ID and its metadata; only the downloaded
-            // profiles are user-deletable. The next refresh can repopulate them.
-            removeServerViaSubid(subid)
-            return
-        }
+        // Central subscriptions are managed by PARSCLOUD, not by the generic
+        // subscription editor. Their metadata and profile index remain protected.
+        if (isCentralSubscriptionId(subid)) return
 
         subStorage.remove(subid)
         val subsList = decodeSubsList()
@@ -768,6 +798,15 @@ object MmkvManager {
      */
     fun isCentralSubscriptionId(subscriptionId: String?): Boolean =
         subscriptionId?.let { it in CENTRAL_SUBSCRIPTION_IDS } == true
+
+    private fun isCentralProfileGuid(guid: String): Boolean {
+        if (guid.isBlank()) return false
+        val profile = decodeServerConfig(guid)
+        return isCentralSubscriptionId(profile?.subscriptionId) ||
+            CENTRAL_SUBSCRIPTION_IDS.any { guid in decodeServerList(it) }
+    }
+
+    fun isCentralProfile(guid: String): Boolean = isCentralProfileGuid(guid)
 
     fun decodeSubscription(subscriptionId: String): SubscriptionItem? {
         val json = subStorage.decodeString(subscriptionId) ?: return null

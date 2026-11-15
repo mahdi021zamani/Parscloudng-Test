@@ -32,17 +32,9 @@ import java.net.URI
 
 object AngConfigManager {
 
-    // Central PARSCLOUD profiles are usable in-app but must never be exported by
-    // ordinary user actions. Personal Aether imports use a different subscription ID.
-    private val centralSubscriptionIds = setOf(
-        "simple_free_vpn",
-        "simple_aether",
-        "simple_emergency",
-        "PARSCLOUD_AETHER_FEED",
-    )
-
+    // Central ownership is defined once in MmkvManager and shared by all user-facing paths.
     private fun isCentralProfile(guid: String): Boolean =
-        MmkvManager.decodeServerConfig(guid)?.subscriptionId?.let { it in centralSubscriptionIds } == true
+        MmkvManager.isCentralProfile(guid)
 
     private data class ParsedProfile(
         val profile: ProfileItem,
@@ -169,7 +161,7 @@ object AngConfigManager {
     private fun shareConfig(guid: String): String {
         try {
             val config = MmkvManager.decodeServerConfig(guid) ?: return ""
-            if (config.subscriptionId in centralSubscriptionIds) return ""
+            if (MmkvManager.isCentralProfile(guid)) return ""
 
             return config.configType.protocolScheme + when (config.configType) {
                 EConfigType.VMESS -> VmessFmt.toUri(config)
@@ -684,6 +676,9 @@ object AngConfigManager {
      * @param subId The subscription ID.
      */
     fun removeInvalidServer(subId: String) {
+        // This is a user-facing cleanup action. Central feeds are refreshed and
+        // cleared only by their own repository, never by the generic manager UI.
+        if (MmkvManager.isCentralSubscriptionId(subId)) return
         val serverList = MmkvManager.decodeServerList(subId)
         val invalidServers = serverList.filter {
             val aff = MmkvManager.decodeServerAffiliationInfo(it)

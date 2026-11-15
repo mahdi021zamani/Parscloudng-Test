@@ -31,7 +31,7 @@ echo 'include $(call all-subdir-makefiles)' > jni/Android.mk
     NDK_PROJECT_PATH=. \
     APP_BUILD_SCRIPT=jni/Android.mk \
     "APP_ABI=$ABIS" \
-    APP_PLATFORM=android-24 \
+    APP_PLATFORM=android-29 \
     NDK_LIBS_OUT="$TMPDIR/libs" \
     NDK_OUT="$TMPDIR/obj" \
     "APP_CFLAGS=-O3 -DPKGNAME=com/v2ray/ang/service" \
@@ -51,6 +51,7 @@ ifeq ($(filter $(modules-get-list),lwip),)
     include $(TOP_PATH)/third-part/lwip/Android.mk
 endif
 ifeq ($(filter $(modules-get-list),hev-task-system),)
+    ENABLE_MEMALLOC_SLICE := 0
     include $(TOP_PATH)/third-part/hev-task-system/Android.mk
 endif
 
@@ -70,7 +71,7 @@ LOCAL_C_INCLUDES := \
 	$(LOCAL_PATH)/third-part/lwip/src/ports/include \
 	$(LOCAL_PATH)/third-part/hev-task-system/include
 LOCAL_CFLAGS += -DFD_SET_DEFINED -DSOCKLEN_T_DEFINED
-LOCAL_CFLAGS += $(VERSION_CFLAGS)
+LOCAL_CFLAGS += -fno-stack-clash-protection $(VERSION_CFLAGS)
 ifeq ($(TARGET_ARCH_ABI),armeabi-v7a)
 LOCAL_CFLAGS += -mfpu=neon
 endif
@@ -84,7 +85,7 @@ EXECMK
     NDK_PROJECT_PATH=. \
     APP_BUILD_SCRIPT=jni/exec.mk \
     "APP_ABI=$ABIS" \
-    APP_PLATFORM=android-24 \
+    APP_PLATFORM=android-29 \
     NDK_LIBS_OUT="$TMPDIR/libs-exec" \
     NDK_OUT="$TMPDIR/obj-exec" \
     "APP_CFLAGS=-O3" \

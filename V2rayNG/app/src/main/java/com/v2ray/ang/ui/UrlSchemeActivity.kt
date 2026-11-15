@@ -11,7 +11,7 @@ import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.ui.base.BaseComponentActivity
-import com.v2ray.ang.ui.main.MainActivity
+import com.v2ray.ang.ui.simple.SimpleVpnActivity
 import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,39 +23,47 @@ class UrlSchemeActivity : BaseComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
-            intent.apply {
-                if (action == Intent.ACTION_SEND) {
-                    if ("text/plain" == type) {
-                        intent.getStringExtra(Intent.EXTRA_TEXT)?.let {
-                            parseUri(it, null)
-                        }
+            when {
+                intent.action == Intent.ACTION_SEND && "text/plain" == intent.type -> {
+                    val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+                    if (!sharedText.isNullOrBlank()) {
+                        parseUri(sharedText, null)
+                    } else {
+                        openSimpleScreen()
                     }
-                } else if (action == Intent.ACTION_VIEW) {
-                    when (data?.host) {
-                        "install-config" -> {
-                            val uri: Uri? = intent.data
-                            val shareUrl = uri?.getQueryParameter("url").orEmpty()
-                            parseUri(shareUrl, uri?.fragment)
-                        }
+                }
 
-                        "install-sub" -> {
-                            val uri: Uri? = intent.data
-                            val shareUrl = uri?.getQueryParameter("url").orEmpty()
-                            parseUri(shareUrl, uri?.fragment)
+                intent.action == Intent.ACTION_VIEW -> {
+                    val uri = intent.data
+                    when (uri?.host) {
+                        "install-config", "install-sub" -> {
+                            val shareUrl = uri.getQueryParameter("url").orEmpty()
+                            if (shareUrl.isNotBlank()) {
+                                parseUri(shareUrl, uri.fragment)
+                            } else {
+                                toastError(R.string.toast_failure)
+                                openSimpleScreen()
+                            }
                         }
 
                         else -> {
                             toastError(R.string.toast_failure)
+                            openSimpleScreen()
                         }
                     }
                 }
-            }
 
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
+                else -> openSimpleScreen()
+            }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Error processing URL scheme", e)
+            openSimpleScreen()
         }
+    }
+
+    private fun openSimpleScreen() {
+        startActivity(Intent(this, SimpleVpnActivity::class.java))
+        finish()
     }
 
     @Composable
@@ -66,24 +74,23 @@ class UrlSchemeActivity : BaseComponentActivity() {
         if (uriString.isNullOrEmpty()) {
             return
         }
-        LogUtil.i(AppConfig.TAG, uriString)
-
-        var decodedUrl = URLDecoder.decode(uriString, "UTF-8")
+        val decodedUrl = URLDecoder.decode(uriString, "UTF-8")
         val uri = Uri.parse(decodedUrl)
-        if (uri != null) {
-            if (uri.fragment.isNullOrEmpty() && !fragment.isNullOrEmpty()) {
-                decodedUrl += "#${fragment}"
-            }
-            LogUtil.i(AppConfig.TAG, decodedUrl)
-            lifecycleScope.launch(Dispatchers.IO) {
-                val (count, countSub) = AngConfigManager.importBatchConfig(decodedUrl, "", true)
-                withContext(Dispatchers.Main) {
-                    if (count + countSub > 0) {
-                        toast(R.string.import_subscription_success)
-                    } else {
-                        toast(R.string.import_subscription_failure)
-                    }
+        val importValue = if (uri.fragment.isNullOrEmpty() && !fragment.isNullOrEmpty()) {
+            "$decodedUrl#$fragment"
+        } else {
+            decodedUrl
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val (count, countSub) = AngConfigManager.importBatchConfig(importValue, "", true)
+            withContext(Dispatchers.Main) {
+                if (count + countSub > 0) {
+                    toast(R.string.import_subscription_success)
+                } else {
+                    toast(R.string.import_subscription_failure)
                 }
+                openSimpleScreen()
             }
         }
     }

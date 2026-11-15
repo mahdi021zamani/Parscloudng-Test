@@ -76,6 +76,24 @@ class OrphanProfileCleanerTest {
     }
 
     @Test
+    fun `keeps protected central profiles even when their group index is empty`() {
+        val result = OrphanProfileCleaner.findOrphans(
+            profiles = listOf(
+                StoredProfileReference("central-orphan", "simple_free_vpn"),
+                StoredProfileReference("personal-orphan", "personal-group"),
+            ),
+            indexedServersBySubscription = mapOf(
+                "simple_free_vpn" to emptySet(),
+                "personal-group" to emptySet(),
+            ),
+            selectedServer = null,
+            protectedProfileGuids = setOf("central-orphan"),
+        )
+
+        assertEquals(setOf("personal-orphan"), result)
+    }
+
+    @Test
     fun `keeps selected and undecodable profiles`() {
         val result = OrphanProfileCleaner.findOrphans(
             profiles = listOf(
