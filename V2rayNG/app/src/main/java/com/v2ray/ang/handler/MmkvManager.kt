@@ -461,7 +461,7 @@ object MmkvManager {
                 )
             }
 
-            if (getSelectServer() in guids) {
+            if (getSelectServer()?.let { it in guids } == true) {
                 mainStorage.remove(KEY_SELECTED_SERVER)
             }
             removeProfilePayloads(guids)
