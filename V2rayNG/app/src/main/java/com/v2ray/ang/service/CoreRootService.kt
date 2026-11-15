@@ -7,6 +7,8 @@ import android.os.IBinder
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.contracts.ServiceControl
 import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.ServiceSessionContract
+import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.root.RootProxyManager
@@ -31,6 +33,7 @@ import java.lang.ref.SoftReference
 class CoreRootService : Service(), ServiceControl {
 
     private var setupJob: Job? = null
+    private var activeSessionId: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -39,6 +42,19 @@ class CoreRootService : Service(), ServiceControl {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val internalStart = intent?.getBooleanExtra(ServiceSessionContract.EXTRA_INTERNAL_START, false) == true
+        val sessionId = intent?.getLongExtra(ServiceSessionContract.EXTRA_SESSION_ID, 0L) ?: 0L
+        if (!internalStart || sessionId <= 0L || MmkvManager.isServiceSessionRetired(sessionId)) {
+            LogUtil.w(AppConfig.TAG, "StartCore-Root: rejecting unmarked or retired start")
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+        if (CoreServiceManager.isRunning()) {
+            if (activeSessionId != sessionId) MmkvManager.retireServiceSession(sessionId)
+            LogUtil.i(AppConfig.TAG, "StartCore-Root: Core is already running")
+            return START_STICKY
+        }
+        activeSessionId = sessionId
         NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Root: command received")
 
@@ -86,6 +102,14 @@ class CoreRootService : Service(), ServiceControl {
     }
 
     override fun stopService() {
+        stopSelf()
+    }
+
+    override fun stopService(sessionId: Long?) {
+        if (sessionId == null || sessionId != activeSessionId) {
+            LogUtil.i(AppConfig.TAG, "StartCore-Root: ignoring stale STOP session=$sessionId")
+            return
+        }
         stopSelf()
     }
 
