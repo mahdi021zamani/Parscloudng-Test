@@ -569,6 +569,7 @@
 
 
     <!-- PARSCLOUD subscription license -->
+    <string name="simple_license_required">Activate your PARSCLOUD subscription before connecting.</string>
     <string name="simple_license_title">PARSCLOUD subscription</string>
     <string name="simple_license_prompt">Enter the subscription key provided to you to enable VPN access.</string>
     <string name="simple_license_key_hint">Subscription key</string>
