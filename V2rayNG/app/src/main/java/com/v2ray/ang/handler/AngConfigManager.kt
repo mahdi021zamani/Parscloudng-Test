@@ -42,7 +42,7 @@ object AngConfigManager {
     )
 
     private fun isCentralProfile(guid: String): Boolean =
-        MmkvManager.decodeServerConfig(guid)?.subscriptionId in centralSubscriptionIds
+        MmkvManager.decodeServerConfig(guid)?.subscriptionId?.let { it in centralSubscriptionIds } == true
 
     private data class ParsedProfile(
         val profile: ProfileItem,
