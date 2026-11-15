@@ -21,6 +21,14 @@ interface ServiceControl {
     fun stopService()
 
     /**
+     * Stops only the session identified by the caller. Implementations that do not
+     * support session ownership retain the legacy stop behavior.
+     */
+    fun stopService(sessionId: Long?) {
+        stopService()
+    }
+
+    /**
      * Protects the VPN socket.
      * @param socket The socket to protect.
      * @return True if the socket is protected, false otherwise.
