@@ -247,6 +247,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun onSelectV2RaySubtab(sourceId: String) {
+        if (_uiState.value.status == SimpleConnectionStatus.CONNECTING) return
         if (sourceId != SimpleVpnRepository.SIMPLE_SUB_ID &&
             sourceId != SimpleVpnRepository.HAMRAH_SUB_ID
         ) return
