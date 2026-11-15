@@ -133,19 +133,51 @@ fun SimpleVpnScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) { Snackbar(it) } }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            TabRow(
-                selectedTabIndex = if (uiState.selectedSourceId == SimpleVpnRepository.AETHER_SUB_ID) 1 else 0,
-            ) {
+            val selectedProfileIndex = when (uiState.selectedSourceId) {
+                SimpleVpnRepository.AETHER_SUB_ID -> 0
+                SimpleVpnRepository.SIMPLE_SUB_ID,
+                SimpleVpnRepository.HAMRAH_SUB_ID -> 1
+                SimpleVpnRepository.COMBINED_SUB_ID -> 2
+                SimpleVpnRepository.SERVICES_SUB_ID -> 3
+                else -> 1
+            }
+            TabRow(selectedTabIndex = selectedProfileIndex) {
                 Tab(
-                    selected = uiState.selectedSourceId == SimpleVpnRepository.SIMPLE_SUB_ID,
-                    onClick = { viewModel.onSelectSource(SimpleVpnRepository.SIMPLE_SUB_ID) },
+                    selected = selectedProfileIndex == 0,
+                    onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.WIREGUARD) },
+                    text = { Text(stringResource(R.string.simple_tab_aether)) },
+                )
+                Tab(
+                    selected = selectedProfileIndex == 1,
+                    onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.V2RAY) },
                     text = { Text(stringResource(R.string.simple_tab_v2ray)) },
                 )
                 Tab(
-                    selected = uiState.selectedSourceId == SimpleVpnRepository.AETHER_SUB_ID,
-                    onClick = { viewModel.onSelectSource(SimpleVpnRepository.AETHER_SUB_ID) },
-                    text = { Text(stringResource(R.string.simple_tab_aether)) },
+                    selected = selectedProfileIndex == 2,
+                    onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.COMBINED) },
+                    text = { Text(stringResource(R.string.simple_tab_combined)) },
                 )
+                Tab(
+                    selected = selectedProfileIndex == 3,
+                    onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.SERVICES_FOR_IRAN) },
+                    text = { Text(stringResource(R.string.simple_tab_services_iran)) },
+                )
+            }
+            if (selectedProfileIndex == 1) {
+                TabRow(
+                    selectedTabIndex = if (uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID) 0 else 1,
+                ) {
+                    Tab(
+                        selected = uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID,
+                        onClick = { viewModel.onSelectV2RaySubtab(SimpleVpnRepository.HAMRAH_SUB_ID) },
+                        text = { Text(stringResource(R.string.simple_subtab_hamrah)) },
+                    )
+                    Tab(
+                        selected = uiState.selectedSourceId == SimpleVpnRepository.SIMPLE_SUB_ID,
+                        onClick = { viewModel.onSelectV2RaySubtab(SimpleVpnRepository.SIMPLE_SUB_ID) },
+                        text = { Text(stringResource(R.string.simple_subtab_irancell)) },
+                    )
+                }
             }
             Box(modifier = Modifier.weight(1f)) {
                 if (uiState.isRefreshing && uiState.servers.isEmpty()) {
