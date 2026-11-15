@@ -79,6 +79,11 @@ internal class VpnServiceSessionGate {
             teardownCause = TeardownCause.USER_STOP
             return StopDecision.CANCEL_PENDING
         }
+        if (queued?.origin == Origin.USER && queued.sessionId == sessionId) {
+            pending = null
+            teardownCause = TeardownCause.USER_STOP
+            return StopDecision.CANCEL_PENDING
+        }
 
         val current = owner
         if (current != null &&
