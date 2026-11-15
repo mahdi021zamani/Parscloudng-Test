@@ -50,18 +50,18 @@ class CoreRootService : Service(), ServiceControl {
             return START_NOT_STICKY
         }
         if (CoreServiceManager.isRunning()) {
-            if (activeSessionId != sessionId) MmkvManager.retireServiceSession(sessionId)
+            if (activeSessionId > 0L && activeSessionId != sessionId) {
+                MmkvManager.retireServiceSession(sessionId)
+                MmkvManager.setActiveServiceSession(activeSessionId)
+            } else if (activeSessionId == 0L) {
+                activeSessionId = sessionId
+            }
             LogUtil.i(AppConfig.TAG, "StartCore-Root: Core is already running")
             return START_STICKY
         }
         activeSessionId = sessionId
         NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Root: command received")
-
-        if (CoreServiceManager.isRunning()) {
-            LogUtil.i(AppConfig.TAG, "StartCore-Root: Core is already running")
-            return START_STICKY
-        }
 
         // Start the in-process core first (this also posts the foreground notification),
         // then install the root routing off the main thread.
