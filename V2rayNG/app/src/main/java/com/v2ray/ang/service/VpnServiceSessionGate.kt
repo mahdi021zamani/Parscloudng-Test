@@ -11,7 +11,7 @@ internal class VpnServiceSessionGate {
     internal enum class Origin { USER, SYSTEM }
     internal enum class TeardownCause { INTERNAL, USER_STOP }
     internal enum class StartDecision { START_NOW, QUEUED, IGNORED }
-    internal enum class StopDecision { STOP_OWNER, CANCEL_PENDING, IGNORED }
+    internal enum class StopDecision { STOP_OWNER, CANCEL_PENDING, CANCEL_TEARDOWN_RECOVERY, IGNORED }
 
     internal data class Start(
         val sessionId: Long,
@@ -99,6 +99,14 @@ internal class VpnServiceSessionGate {
             teardownInProgress = true
             teardownCause = TeardownCause.USER_STOP
             return StopDecision.CANCEL_PENDING
+        }
+
+        if (teardownInProgress && teardownSession == sessionId) {
+            // The old owner has already finished tearing down, but the service
+            // has not completed its final idle/stop callback yet. Preserve a
+            // different explicit user start, while suppressing Always-on recovery.
+            teardownCause = TeardownCause.USER_STOP
+            return StopDecision.CANCEL_TEARDOWN_RECOVERY
         }
 
         val current = owner
