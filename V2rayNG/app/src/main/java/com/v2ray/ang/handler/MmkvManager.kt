@@ -169,6 +169,7 @@ object MmkvManager {
     // Session metadata is shared by the UI and daemon processes through MULTI_PROCESS_MODE.
     private const val KEY_SERVICE_SESSION_COUNTER = "SERVICE_SESSION_COUNTER"
     private const val KEY_ACTIVE_SERVICE_SESSION = "ACTIVE_SERVICE_SESSION"
+    private const val KEY_LAST_ISSUED_SERVICE_SESSION = "LAST_ISSUED_SERVICE_SESSION"
     private const val KEY_RETIRED_SERVICE_SESSION_PREFIX = "RETIRED_SERVICE_SESSION_"
 
     /**
@@ -178,11 +179,25 @@ object MmkvManager {
     fun beginServiceSession(): Long = withProfileIndexLock {
         val next = mainStorage.decodeLong(KEY_SERVICE_SESSION_COUNTER, 0L) + 1L
         requireStorageWrite(mainStorage.encode(KEY_SERVICE_SESSION_COUNTER, next), "Failed to persist service session counter")
-        requireStorageWrite(mainStorage.encode(KEY_ACTIVE_SERVICE_SESSION, next), "Failed to persist active service session")
+        requireStorageWrite(mainStorage.encode(KEY_LAST_ISSUED_SERVICE_SESSION, next), "Failed to persist last issued service session")
         next
     }
 
     fun getActiveServiceSession(): Long = mainStorage.decodeLong(KEY_ACTIVE_SERVICE_SESSION, 0L)
+
+    fun getLastIssuedServiceSession(): Long = mainStorage.decodeLong(KEY_LAST_ISSUED_SERVICE_SESSION, 0L)
+
+    fun clearActiveServiceSession(sessionId: Long): Boolean {
+        if (sessionId <= 0L) return false
+        return withProfileIndexLock {
+            if (mainStorage.decodeLong(KEY_ACTIVE_SERVICE_SESSION, 0L) == sessionId) {
+                mainStorage.remove(KEY_ACTIVE_SERVICE_SESSION)
+                true
+            } else {
+                false
+            }
+        }
+    }
 
     fun setActiveServiceSession(sessionId: Long): Boolean {
         if (sessionId <= 0L) return false
