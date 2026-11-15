@@ -510,16 +510,35 @@ object MmkvManager {
      *
      * @return The number of server configurations removed.
      */
-    fun removeAllServer(): Int {
-        val count = profileFullStorage.allKeys()?.count() ?: 0
-        profileFullStorage.clearAll()
-        serverAffStorage.clearAll()
-        serverRawStorage.clearAll()
-
-        decodeSubscriptions().forEach { sub ->
-            encodeServerList(mutableListOf(), sub.guid)
+    fun removeAllServer(): Int = withProfileIndexLock {
+        // Clear every known group index before deleting profile payloads. Include the
+        // default (ungrouped) bucket explicitly: it is not guaranteed to exist in SUB_IDS.
+        val groupIds = (decodeSubsList() + DEFAULT_SUBSCRIPTION_ID).distinct()
+        groupIds.forEach { subscriptionId ->
+            requireStorageWrite(
+                persistServerList(emptyList(), subscriptionId),
+                "Failed to clear subscription profile index",
+            )
         }
-        return count
+
+        // The selected GUID must not survive an all-profile deletion. Subscription
+        // metadata is intentionally retained so central feeds can repopulate on refresh.
+        mainStorage.remove(KEY_SELECTED_SERVER)
+
+        val profileKeys = profileFullStorage.allKeys()?.toList().orEmpty()
+        val affiliationKeys = serverAffStorage.allKeys()?.toList().orEmpty()
+        val rawKeys = serverRawStorage.allKeys()?.toList().orEmpty()
+        if (profileKeys.isNotEmpty()) profileFullStorage.removeValuesForKeys(profileKeys.toTypedArray())
+        if (affiliationKeys.isNotEmpty()) serverAffStorage.removeValuesForKeys(affiliationKeys.toTypedArray())
+        if (rawKeys.isNotEmpty()) serverRawStorage.removeValuesForKeys(rawKeys.toTypedArray())
+
+        if (!profileFullStorage.allKeys().isNullOrEmpty() ||
+            !serverAffStorage.allKeys().isNullOrEmpty() ||
+            !serverRawStorage.allKeys().isNullOrEmpty()
+        ) {
+            throw ProfileStorageException("Failed to remove all profile payloads")
+        }
+        profileKeys.size
     }
 
     /**
