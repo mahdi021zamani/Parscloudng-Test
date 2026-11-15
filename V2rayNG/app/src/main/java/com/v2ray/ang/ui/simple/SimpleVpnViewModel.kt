@@ -131,10 +131,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiState.update { it.copy(licenseDialogVisible = true) }
             } else {
                 SubscriptionLicenseWorker.schedule(application)
+                // Restore entitlement state only. Do not refresh feeds or run ping
+                // tests on app launch/resume; users explicitly control refresh.
                 validateStoredLicense(storedLicense.key, showDialogOnFailure = false)
-                if (_uiState.value.licenseValid) {
-                    onRefresh()
-                }
             }
         }
 
