@@ -137,6 +137,19 @@ class VpnServiceSessionGateTest {
     }
 
     @Test
+    fun explicitStopOfPendingSystemSessionCancelsThatExactPendingRequest() {
+        val gate = VpnServiceSessionGate()
+        gate.requestStart(user(5), alwaysOnEnabled = true)
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+        gate.requestStart(system(6), alwaysOnEnabled = true)
+
+        assertEquals(VpnServiceSessionGate.StopDecision.CANCEL_PENDING, gate.requestStop(6))
+        assertNull(gate.pending)
+        assertEquals(VpnServiceSessionGate.TeardownCause.USER_STOP, gate.teardownCause)
+        assertNull(gate.finishTeardown())
+    }
+
+    @Test
     fun systemRecoveryRequiresAlwaysOnAndKeepsExactRecoveryLink() {
         val gate = VpnServiceSessionGate()
         gate.requestStart(user(5), alwaysOnEnabled = true)
