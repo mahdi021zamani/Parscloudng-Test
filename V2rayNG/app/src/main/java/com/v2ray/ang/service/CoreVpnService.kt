@@ -248,8 +248,12 @@ class CoreVpnService : VpnService(), ServiceControl {
 
     override fun stopService() {
         val owner = sessionGate.owner
-        if (owner != null) {
-            stopService(owner.sessionId)
+        val pending = sessionGate.pending
+        val targetSessionId = owner?.sessionId
+            ?: pending?.recoversSession
+            ?: pending?.sessionId
+        if (targetSessionId != null) {
+            stopService(targetSessionId)
         } else {
             stopAllService(true, VpnServiceSessionGate.TeardownCause.USER_STOP)
         }
