@@ -440,6 +440,7 @@ object MmkvManager {
      */
     fun removeServerViaSubid(subscriptionId: String?) {
         val subId = getSubscriptionId(subscriptionId)
+        if (isCentralSubscriptionId(subId)) return
         withProfileIndexLock {
             val serverList = decodeServerList(subId)
             val removedGuids = serverList.toList()
@@ -756,12 +757,9 @@ object MmkvManager {
      * @param subid The subscription ID.
      */
     fun removeSubscription(subid: String) {
-        if (subid in CENTRAL_SUBSCRIPTION_IDS) {
-            // Keep the central source ID and its metadata; only the downloaded
-            // profiles are user-deletable. The next refresh can repopulate them.
-            removeServerViaSubid(subid)
-            return
-        }
+        // Central subscriptions are managed by PARSCLOUD, not by the generic
+        // subscription editor. Their metadata and profile index remain protected.
+        if (isCentralSubscriptionId(subid)) return
 
         subStorage.remove(subid)
         val subsList = decodeSubsList()
