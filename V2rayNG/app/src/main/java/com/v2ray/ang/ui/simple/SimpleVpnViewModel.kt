@@ -125,7 +125,12 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             // owner, while rejecting late status from a retired, unrelated session.
             if (!shouldAcceptSimpleVpnSessionEvent(expectedSessionId, activeSessionId, eventSessionId)) return
             if (eventSessionId > 0L &&
-                (expectedSessionId == null || (eventSessionId == activeSessionId && eventSessionId > expectedSessionId))
+                (expectedSessionId == null ||
+                    (eventSessionId == activeSessionId &&
+                        (expectedSessionId == null ||
+                            eventSessionId > expectedSessionId ||
+                            MmkvManager.isServiceSessionRetired(expectedSessionId)))
+                )
             ) {
                 this@SimpleVpnViewModel.expectedServiceSessionId = eventSessionId
             }
