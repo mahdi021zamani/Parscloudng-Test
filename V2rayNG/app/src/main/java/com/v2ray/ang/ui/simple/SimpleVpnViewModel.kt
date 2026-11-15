@@ -43,7 +43,7 @@ data class SimpleVpnUiState(
     val testingGuids: Set<String> = emptySet(),
     val selectedGuid: String? = null,
     /** The actual feed currently shown; V2Ray has two independently cached subtabs. */
-    val selectedSourceId: String = SimpleVpnRepository.SIMPLE_SUB_ID,
+    val selectedSourceId: String = SimpleVpnRepository.AETHER_SUB_ID,
     val selectedV2RaySourceId: String = SimpleVpnRepository.SIMPLE_SUB_ID,
     val status: SimpleConnectionStatus = SimpleConnectionStatus.DISCONNECTED,
     val isRefreshing: Boolean = false,

@@ -18,6 +18,11 @@ class SimpleVpnSourceTabStateTest {
     )
 
     @Test
+    fun defaultsToWireGuardTabOnAppLaunch() {
+        assertEquals(SimpleVpnRepository.AETHER_SUB_ID, SimpleVpnUiState().selectedSourceId)
+    }
+
+    @Test
     fun selectsV2RayTabAndKeepsOnlyItsSelectedGuid() {
         val servers = listOf(server("v2ray-1"), server("v2ray-2"))
 

@@ -34,15 +34,21 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.v2ray.ang.R
 import com.v2ray.ang.handler.SimpleVpnRepository
 import com.v2ray.ang.handler.SimpleVpnRepository.SimpleServerUiModel
@@ -133,37 +139,75 @@ fun SimpleVpnScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) { Snackbar(it) } }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            val isV2RaySelected = uiState.selectedSourceId == SimpleVpnRepository.SIMPLE_SUB_ID ||
+                uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID
+            // Keep the central tabs in the user's requested left-to-right order,
+            // regardless of the app's Persian RTL layout direction.
             val selectedProfileIndex = when (uiState.selectedSourceId) {
                 SimpleVpnRepository.AETHER_SUB_ID -> 0
+                SimpleVpnRepository.COMBINED_SUB_ID -> 1
+                SimpleVpnRepository.SERVICES_SUB_ID -> 2
                 SimpleVpnRepository.SIMPLE_SUB_ID,
-                SimpleVpnRepository.HAMRAH_SUB_ID -> 1
-                SimpleVpnRepository.COMBINED_SUB_ID -> 2
-                SimpleVpnRepository.SERVICES_SUB_ID -> 3
-                else -> 1
+                SimpleVpnRepository.HAMRAH_SUB_ID -> 3
+                else -> 0
             }
-            TabRow(selectedTabIndex = selectedProfileIndex) {
-                Tab(
-                    selected = selectedProfileIndex == 0,
-                    onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.WIREGUARD) },
-                    text = { Text(stringResource(R.string.simple_tab_aether)) },
-                )
-                Tab(
-                    selected = selectedProfileIndex == 1,
-                    onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.V2RAY) },
-                    text = { Text(stringResource(R.string.simple_tab_v2ray)) },
-                )
-                Tab(
-                    selected = selectedProfileIndex == 2,
-                    onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.COMBINED) },
-                    text = { Text(stringResource(R.string.simple_tab_combined)) },
-                )
-                Tab(
-                    selected = selectedProfileIndex == 3,
-                    onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.SERVICES_FOR_IRAN) },
-                    text = { Text(stringResource(R.string.simple_tab_services_iran)) },
-                )
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                TabRow(selectedTabIndex = selectedProfileIndex) {
+                    Tab(
+                        selected = selectedProfileIndex == 0,
+                        onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.WIREGUARD) },
+                        text = {
+                            Text(
+                                stringResource(R.string.simple_tab_aether),
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                fontSize = 12.sp,
+                            )
+                        },
+                    )
+                    Tab(
+                        selected = selectedProfileIndex == 1,
+                        onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.COMBINED) },
+                        text = {
+                            Text(
+                                stringResource(R.string.simple_tab_combined),
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                fontSize = 12.sp,
+                            )
+                        },
+                    )
+                    Tab(
+                        selected = selectedProfileIndex == 2,
+                        onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.SERVICES_FOR_IRAN) },
+                        text = {
+                            Text(
+                                stringResource(R.string.simple_tab_services_iran),
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                fontSize = 12.sp,
+                            )
+                        },
+                    )
+                    Tab(
+                        selected = selectedProfileIndex == 3,
+                        onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.V2RAY) },
+                        text = {
+                            Text(
+                                stringResource(R.string.simple_tab_v2ray),
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                fontSize = 12.sp,
+                            )
+                        },
+                    )
+                }
             }
-            if (selectedProfileIndex == 1) {
+            if (isV2RaySelected) {
                 TabRow(
                     selectedTabIndex = if (uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID) 0 else 1,
                 ) {
