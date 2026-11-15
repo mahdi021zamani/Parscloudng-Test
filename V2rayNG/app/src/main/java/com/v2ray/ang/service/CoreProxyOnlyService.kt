@@ -16,7 +16,7 @@ import java.lang.ref.SoftReference
 
 class CoreProxyOnlyService : Service(), ServiceControl {
 
-    private var activeSessionId: Long = 0L
+    @Volatile private var activeSessionId: Long = 0L
     /**
      * Initializes the service.
      */
@@ -52,12 +52,14 @@ class CoreProxyOnlyService : Service(), ServiceControl {
             return START_STICKY
         }
         activeSessionId = sessionId
+        MmkvManager.setActiveServiceSession(sessionId)
         NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Service command received")
 
         if (!CoreServiceManager.startCoreLoop(null)) {
             LogUtil.e(AppConfig.TAG, "StartCore-Proxy: Failed to start core loop")
-            stopSelf()
+            MmkvManager.retireServiceSession(sessionId)
+            stopSelf(startId)
             return START_NOT_STICKY
         }
 
@@ -91,6 +93,7 @@ class CoreProxyOnlyService : Service(), ServiceControl {
      * Stops the service.
      */
     override fun stopService() {
+        if (activeSessionId > 0L) MmkvManager.retireServiceSession(activeSessionId)
         stopSelf()
     }
 
@@ -99,8 +102,12 @@ class CoreProxyOnlyService : Service(), ServiceControl {
             LogUtil.i(AppConfig.TAG, "StartCore-Proxy: ignoring stale STOP session=$sessionId")
             return
         }
+        MmkvManager.retireServiceSession(sessionId)
         stopSelf()
     }
+
+    override val serviceSessionId: Long
+        get() = activeSessionId
 
     /**
      * Protects the VPN socket.
