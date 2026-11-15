@@ -152,14 +152,25 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         )
                     }
 
-                AppConfig.MSG_STATE_NOT_RUNNING, AppConfig.MSG_STATE_STOP_SUCCESS ->
+                AppConfig.MSG_STATE_NOT_RUNNING ->
                     _uiState.update { state ->
                         state.selectedGuid?.takeIf { MmkvManager.decodeServerConfig(it) != null }?.let(MmkvManager::setSelectServer)
                         if (eventSessionId == 0L || expectedServiceSessionId == eventSessionId) {
                             this@SimpleVpnViewModel.expectedServiceSessionId = null
                         }
-                        state.copy(status = SimpleConnectionStatus.DISCONNECTED)
+                        state.copy(status = SimpleConnectionStatus.DISCONNECTED, message = null)
                     }
+
+                AppConfig.MSG_STATE_STOP_SUCCESS -> {
+                    val stopNotice = safeIntent.getStringExtra("content")?.takeIf { it.isNotBlank() }
+                    _uiState.update { state ->
+                        state.selectedGuid?.takeIf { MmkvManager.decodeServerConfig(it) != null }?.let(MmkvManager::setSelectServer)
+                        if (eventSessionId == 0L || expectedServiceSessionId == eventSessionId) {
+                            this@SimpleVpnViewModel.expectedServiceSessionId = null
+                        }
+                        state.copy(status = SimpleConnectionStatus.DISCONNECTED, message = stopNotice)
+                    }
+                }
 
                 AppConfig.MSG_STATE_START_FAILURE ->
                     _uiState.update { state ->
