@@ -583,4 +583,8 @@
     <string name="simple_license_key_required">کلید اشتراک را وارد کنید.</string>
     <string name="simple_tab_v2ray">V2Ray</string>
     <string name="simple_tab_aether">WireGuard</string>
+    <string name="simple_tab_combined">ترکیبی</string>
+    <string name="simple_tab_services_iran">سرویس‌های ایران</string>
+    <string name="simple_subtab_hamrah">Hamrah</string>
+    <string name="simple_subtab_irancell">irancell</string>
 </resources>
