@@ -231,6 +231,7 @@ class CoreVpnService : VpnService(), ServiceControl {
         if (!isStartStillValid(request) ||
             sessionGate.owner?.sessionId != request.sessionId
         ) {
+            MmkvManager.retireServiceSession(request.sessionId)
             if (sessionGate.owner?.sessionId == request.sessionId) sessionGate.clearOwner()
             if (sessionGate.owner == null && sessionGate.pending == null && !isStoppingLock.get()) {
                 stopSelf(latestStartId)
