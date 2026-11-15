@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.v2ray.ang.dto.GroupMapItem
@@ -35,7 +36,7 @@ fun GroupTabBar(
         modifier = modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)),
-        edgePadding = 16.dp,
+        edgePadding = 8.dp,
         indicator = { tabPositions ->
             TabRowDefaults.SecondaryIndicator(
                 modifier = Modifier.tabIndicatorOffset(tabPositions[selectedIndex]),
@@ -75,13 +76,14 @@ private fun GroupTabItem(
         selected = selected,
         onClick = onClick,
         modifier = Modifier
-            .widthIn(min = 56.dp)
+            .widthIn(min = 52.dp)
             .heightIn(min = 48.dp),
         text = {
             Text(
                 text = text,
-                maxLines = 1,
-                softWrap = false,
+                style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                maxLines = 2,
+                softWrap = true,
                 overflow = TextOverflow.Ellipsis
             )
         }

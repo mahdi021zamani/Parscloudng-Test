@@ -1,6 +1,9 @@
 package com.v2ray.ang.ui.main
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +36,7 @@ import com.v2ray.ang.ui.compose.AppDivider
 import com.v2ray.ang.ui.compose.colorFabActive
 import com.v2ray.ang.ui.compose.colorFabInactiveDark
 import com.v2ray.ang.ui.compose.colorFabInactiveLight
+import com.v2ray.ang.ui.compose.colorPing
 
 @Composable
 fun MainBottomBar(
@@ -58,13 +62,27 @@ fun MainBottomBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = displayText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.semantics {
-                        contentDescription = displayText
-                    }
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .shadow(5.dp, CircleShape)
+                            .clip(CircleShape)
+                            .background(
+                                if (isRunning) colorPing
+                                else if (isDarkTheme) colorFabInactiveDark else colorFabInactiveLight
+                            )
+                    )
+                    Text(
+                        text = displayText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier
+                            .padding(start = 9.dp)
+                            .semantics {
+                                contentDescription = displayText
+                            }
+                    )
+                }
             }
         }
         FloatingActionButton(
