@@ -72,19 +72,25 @@ object CoreConfigManager {
             }
             if (selectedAetherProfile?.configType == EConfigType.AETHER &&
                 (!selectedAetherProfile.proxyChainProfiles.isNullOrBlank() ||
-                    !selectedAetherProfile.aetherExitNode.isNullOrBlank() ||
-                    !selectedAetherProfile.finalMask.isNullOrBlank() ||
-                    !selectedAetherProfile.dialMode.isNullOrBlank())
+                    !selectedAetherProfile.aetherExitNode.isNullOrBlank())
             ) {
                 return ConfigResult(
                     status = false,
                     guid = guid,
-                    errorMessage = "Aether proxy-chain and exit-node routing are not supported by this build yet"
+                    errorMessage = "Aether proxy-chain and named exit-node routing are not supported by this build yet"
                 )
             }
             val v2rayConfig = buildUnifiedConfig(configContext)
-            val selectedProfile = MmkvManager.decodeServerConfig(guid)
-            val aetherCore = selectedProfile?.takeIf { it.configType == EConfigType.AETHER }?.let { AetherCore.of(it) }
+            val aetherCore = selectedAetherProfile
+                ?.takeIf { it.configType == EConfigType.AETHER }
+                ?.let { profile ->
+                    routeAetherThroughXray(v2rayConfig, profile)
+                        ?: return ConfigResult(
+                            status = false,
+                            guid = guid,
+                            errorMessage = "Aether secondary SOCKS port is already in use"
+                        )
+                }
             return toConfigResult(configContext, v2rayConfig, aetherCore)
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to get V2ray config", e)
@@ -94,6 +100,45 @@ object CoreConfigManager {
                 errorMessage = "Failed to get V2ray config: ${e.message ?: e.javaClass.simpleName}"
             )
         }
+    }
+
+    /**
+     * Route a directly selected Aether core through this session's Xray instance.
+     *
+     * This stage intentionally supports only the direct Aether profile. Proxy chains and named
+     * exit-node profiles remain guarded above until their complete dependency routing is ported.
+     * The profile's finalMask and dialMode are applied to the Xray freedom exit outbound.
+     */
+    private fun routeAetherThroughXray(
+        v2rayConfig: V2rayConfig,
+        profile: ProfileItem,
+    ): AetherCore? {
+        val core = AetherCore.of(profile)
+        if (core.hasUpstream) return core
+
+        val secondaryPort = AetherCoreManager.secondarySocksPort
+        if (v2rayConfig.inbounds.any { it.port == secondaryPort }) return null
+
+        val exitOutbound = CoreOutboundBuilder.toOutboundAetherExit(AetherExit.of(profile))
+            ?: return null
+        v2rayConfig.inbounds.add(
+            V2rayConfig.InboundBean(
+                tag = AppConfig.TAG_SECONDARY_SOCKS,
+                port = secondaryPort,
+                protocol = "mixed",
+                listen = AppConfig.LOOPBACK,
+                settings = V2rayConfig.InboundBean.InSettingsBean(udp = true),
+            )
+        )
+        v2rayConfig.outbounds.add(exitOutbound)
+        v2rayConfig.routing.rules.add(
+            0,
+            V2rayConfig.RoutingBean.RulesBean(
+                inboundTag = listOf(AppConfig.TAG_SECONDARY_SOCKS),
+                outboundTag = AppConfig.TAG_EXIT_NODE,
+            )
+        )
+        return core.through(secondaryPort)
     }
 
     /**
