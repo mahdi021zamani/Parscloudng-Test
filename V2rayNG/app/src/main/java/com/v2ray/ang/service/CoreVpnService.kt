@@ -247,6 +247,7 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
         activeSessionId = request.sessionId
         userDisconnectRequested = false
+        NotificationManager.ensureForeground()
         if (!tryLockStart()) {
             if (isStoppingLock.get()) return
             LogUtil.w(AppConfig.TAG, "StartCore-VPN: start lock unavailable for session=${request.sessionId}")
