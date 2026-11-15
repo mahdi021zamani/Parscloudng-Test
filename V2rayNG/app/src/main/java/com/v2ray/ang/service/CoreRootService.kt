@@ -39,6 +39,7 @@ class CoreRootService : Service(), ServiceControl {
         super.onCreate()
         LogUtil.i(AppConfig.TAG, "StartCore-Root: Service created")
         CoreServiceManager.serviceControl = SoftReference(this)
+        CoreServiceManager.registerServiceReceiver(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -97,6 +98,7 @@ class CoreRootService : Service(), ServiceControl {
     }
 
     override fun onDestroy() {
+        CoreServiceManager.unregisterServiceReceiver(this)
         super.onDestroy()
         // Wait for any in-flight async setup to finish before tearing down. The rules are
         // installed off the main thread and can take seconds (the setup script waits for the
