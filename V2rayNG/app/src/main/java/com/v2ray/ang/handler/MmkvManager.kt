@@ -45,6 +45,7 @@ object MmkvManager {
     private const val ID_ASSET = "ASSET"
     private const val ID_SETTING = "SETTING"
     private const val KEY_SELECTED_SERVER = "SELECTED_SERVER"
+    private const val KEY_SELECTED_SERVER_SOURCE_PREFIX = "SELECTED_SERVER_SOURCE_"
     private const val KEY_ANG_CONFIGS = "ANG_CONFIGS"
     private const val KEY_SUB_SERVER_PREFIX = "SUB_SERVERS_"
     private const val KEY_SUB_IDS = "SUB_IDS"
@@ -54,7 +55,10 @@ object MmkvManager {
     // their downloaded profiles, but must not delete the source identity/metadata.
     private val CENTRAL_SUBSCRIPTION_IDS = setOf(
         "simple_free_vpn",
+        "simple_hamrah",
         "simple_aether",
+        "simple_combined",
+        "simple_services_iran",
         "simple_emergency",
         "PARSCLOUD_AETHER_FEED",
     )
@@ -192,6 +196,42 @@ object MmkvManager {
     fun setSelectServer(guid: String) {
         withProfileIndexLock {
             mainStorage.encode(KEY_SELECTED_SERVER, guid)
+        }
+    }
+
+    /**
+     * Gets the selected profile for one PARSCLOUD feed without changing the
+     * process-wide active profile used by LauncherManager.
+     *
+     * The old global selection is migrated only when it belongs to this feed.
+     * A V2Ray feed may also display the emergency profile while both V2Ray feeds
+     * are unavailable, so that legacy selection is accepted for those two feeds.
+     */
+    fun getSelectServer(subscriptionId: String): String? {
+        val key = KEY_SELECTED_SERVER_SOURCE_PREFIX + getSubscriptionId(subscriptionId)
+        mainStorage.decodeString(key)?.takeIf { it.isNotBlank() }?.let { return it }
+
+        val legacyGuid = getSelectServer() ?: return null
+        val legacySubscriptionId = decodeServerConfig(legacyGuid)?.subscriptionId
+        val belongsToSource = legacySubscriptionId == subscriptionId ||
+            (subscriptionId in setOf("simple_free_vpn", "simple_hamrah") &&
+                legacySubscriptionId == "simple_emergency")
+        if (!belongsToSource) return null
+
+        withProfileIndexLock {
+            mainStorage.encode(key, legacyGuid)
+        }
+        return legacyGuid
+    }
+
+    /**
+     * Persists a feed's UI selection independently from the active VPN profile.
+     * LauncherManager continues to own KEY_SELECTED_SERVER when a connection starts.
+     */
+    fun setSelectServer(guid: String, subscriptionId: String) {
+        val key = KEY_SELECTED_SERVER_SOURCE_PREFIX + getSubscriptionId(subscriptionId)
+        withProfileIndexLock {
+            mainStorage.encode(key, guid)
         }
     }
 
