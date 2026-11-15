@@ -540,6 +540,11 @@ object MmkvManager {
      * @return The number of server configurations removed.
      */
     fun removeAllServer(): Int = withProfileIndexLock {
+        // Rebuild SUB_IDS from subscription metadata first if an older installation
+        // has a missing/empty index; otherwise central or personal group indexes could
+        // be left pointing at deleted profile payloads.
+        initSubsList()
+
         // Clear every known group index before deleting profile payloads. Include the
         // default (ungrouped) bucket explicitly: it is not guaranteed to exist in SUB_IDS.
         val groupIds = (decodeSubsList() + DEFAULT_SUBSCRIPTION_ID).distinct()
