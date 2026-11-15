@@ -753,6 +753,9 @@ object MmkvManager {
      * @param subscriptionId The subscription ID.
      * @return The subscription item.
      */
+    fun isCentralSubscriptionId(subscriptionId: String?): Boolean =
+        subscriptionId?.let { it in CENTRAL_SUBSCRIPTION_IDS } == true
+
     fun decodeSubscription(subscriptionId: String): SubscriptionItem? {
         val json = subStorage.decodeString(subscriptionId) ?: return null
         return JsonUtil.fromJsonSafe(json, SubscriptionItem::class.java)
