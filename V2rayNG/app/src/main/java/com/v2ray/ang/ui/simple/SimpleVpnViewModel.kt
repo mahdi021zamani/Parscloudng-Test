@@ -303,7 +303,10 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         ?.takeIf { guid -> servers.any { it.guid == guid } }
                         ?: servers.firstOrNull()?.guid
                     val aetherFailure = outcome.aetherFailure.takeIf {
-                        sourceId == SimpleVpnRepository.AETHER_SUB_ID && servers.isEmpty()
+                        sourceId in setOf(
+                            SimpleVpnRepository.AETHER_SUB_ID,
+                            SimpleVpnRepository.COMBINED_SUB_ID,
+                        ) && servers.isEmpty()
                     }
                     val aetherMessageId = when (aetherFailure) {
                         SimpleVpnRepository.AetherFailure.LICENSE_MISSING -> R.string.simple_aether_license_required
