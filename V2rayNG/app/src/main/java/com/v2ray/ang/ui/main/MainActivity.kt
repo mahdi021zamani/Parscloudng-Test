@@ -196,6 +196,12 @@ class MainActivity : HelperBaseComponentActivity() {
     }
 
     private fun importManually(createConfigType: Int) {
+        // Aether profiles may still be imported from external sources, but manual
+        // construction inside the app is intentionally unavailable to regular users.
+        if (createConfigType == EConfigType.AETHER.value) {
+            toastError(R.string.toast_action_not_allowed)
+            return
+        }
         val intent = when (createConfigType) {
             EConfigType.POLICYGROUP.value -> Intent(this, ServerGroupActivity::class.java)
             EConfigType.PROXYCHAIN.value -> Intent(this, ServerProxyChainActivity::class.java)
