@@ -33,9 +33,9 @@ object AetherFeedRepository {
         .callTimeout(20, TimeUnit.SECONDS)
         .build()
 
-    suspend fun fetch(): Result = withContext(Dispatchers.IO) {
+    suspend fun fetch(url: String = RemoteConfig.AETHER_SERVER_LIST_URL): Result = withContext(Dispatchers.IO) {
         val request = Request.Builder()
-            .url(RemoteConfig.AETHER_SERVER_LIST_URL)
+            .url(url)
             .header("Accept", "text/plain")
             .header("Cache-Control", "no-cache")
             .get()
