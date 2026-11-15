@@ -55,7 +55,10 @@ internal class VpnServiceSessionGate {
 
     fun beginTeardown(cause: TeardownCause) {
         if (teardownSession == null) {
-            teardownSession = owner?.sessionId ?: owner?.recoversSession
+            teardownSession = owner?.let {
+                if (it.origin == Origin.SYSTEM && it.recoversSession != null) it.recoversSession
+                else it.sessionId
+            }
         }
         teardownCause = if (cause == TeardownCause.USER_STOP) {
             TeardownCause.USER_STOP
