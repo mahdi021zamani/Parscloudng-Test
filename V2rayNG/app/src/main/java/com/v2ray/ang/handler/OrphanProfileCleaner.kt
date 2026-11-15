@@ -22,6 +22,7 @@ internal object OrphanProfileCleaner {
         profiles: Collection<StoredProfileReference>,
         indexedServersBySubscription: Map<String, Set<String>?>,
         selectedServer: String?,
+        protectedProfileGuids: Set<String> = emptySet(),
     ): Set<String>? {
         if (profiles.isEmpty()) return emptySet()
 
@@ -37,7 +38,10 @@ internal object OrphanProfileCleaner {
             .toSet()
 
         return profiles.mapNotNullTo(linkedSetOf()) { profile ->
-            if (profile.guid == selectedServer || profile.guid in indexedServers) {
+            if (profile.guid == selectedServer ||
+                profile.guid in indexedServers ||
+                profile.guid in protectedProfileGuids
+            ) {
                 return@mapNotNullTo null
             }
 
