@@ -39,6 +39,17 @@ enum class SimpleConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED }
 
 enum class SimpleVpnProfileTab { WIREGUARD, V2RAY, COMBINED, SERVICES_FOR_IRAN }
 
+internal fun shouldAcceptSimpleVpnSessionEvent(
+    expectedSessionId: Long?,
+    activeSessionId: Long,
+    eventSessionId: Long,
+): Boolean {
+    if (eventSessionId <= 0L) return expectedSessionId == null && activeSessionId <= 0L
+    return expectedSessionId == null ||
+        eventSessionId == expectedSessionId ||
+        eventSessionId == activeSessionId
+}
+
 data class SimpleVpnUiState(
     val servers: List<SimpleServerUiModel> = emptyList(),
     val testingGuids: Set<String> = emptySet(),
@@ -112,22 +123,11 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             // Accept only the expected request or the session that is still the actual
             // owner. This lets a pending user start coexist with its old tearing-down
             // owner, while rejecting late status from a retired, unrelated session.
-            if (eventSessionId > 0L) {
-                if (expectedSessionId != null &&
-                    eventSessionId != expectedSessionId &&
-                    eventSessionId != activeSessionId
-                ) return
-                if (expectedSessionId == null &&
-                    activeSessionId > 0L &&
-                    eventSessionId != activeSessionId
-                ) return
-                if (expectedSessionId == null &&
-                    (eventSessionId == activeSessionId || activeSessionId == 0L)
-                ) {
-                    this@SimpleVpnViewModel.expectedServiceSessionId = eventSessionId
-                }
-            } else if (expectedSessionId != null && activeSessionId > 0L) {
-                return
+            if (!shouldAcceptSimpleVpnSessionEvent(expectedSessionId, activeSessionId, eventSessionId)) return
+            if (eventSessionId > 0L &&
+                (expectedSessionId == null || (eventSessionId == activeSessionId && eventSessionId > expectedSessionId))
+            ) {
+                this@SimpleVpnViewModel.expectedServiceSessionId = eventSessionId
             }
 
             when (key) {
