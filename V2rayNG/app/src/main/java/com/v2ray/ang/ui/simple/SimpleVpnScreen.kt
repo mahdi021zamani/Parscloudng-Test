@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -40,7 +41,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -329,6 +333,21 @@ private fun ConnectionBar(
         SimpleConnectionStatus.CONNECTING -> stringResource(R.string.simple_status_connecting)
         SimpleConnectionStatus.CONNECTED -> stringResource(R.string.simple_status_connected)
     }
+    val statusColor = when (status) {
+        SimpleConnectionStatus.DISCONNECTED -> MaterialTheme.colorScheme.outlineVariant
+        SimpleConnectionStatus.CONNECTING -> MaterialTheme.colorScheme.secondary
+        SimpleConnectionStatus.CONNECTED -> MaterialTheme.colorScheme.tertiary
+    }
+    val actionContainerColor = when (status) {
+        SimpleConnectionStatus.DISCONNECTED -> MaterialTheme.colorScheme.primary
+        SimpleConnectionStatus.CONNECTING -> MaterialTheme.colorScheme.secondary
+        SimpleConnectionStatus.CONNECTED -> MaterialTheme.colorScheme.tertiary
+    }
+    val actionContentColor = when (status) {
+        SimpleConnectionStatus.DISCONNECTED -> MaterialTheme.colorScheme.onPrimary
+        SimpleConnectionStatus.CONNECTING -> MaterialTheme.colorScheme.onSecondary
+        SimpleConnectionStatus.CONNECTED -> MaterialTheme.colorScheme.onTertiary
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -336,7 +355,18 @@ private fun ConnectionBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(statusText)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .width(9.dp)
+                    .height(9.dp)
+                    .shadow(4.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(statusColor)
+            )
+            Spacer(modifier = Modifier.width(9.dp))
+            Text(statusText, style = MaterialTheme.typography.bodyMedium)
+        }
         androidx.compose.material3.FloatingActionButton(
             onClick = {
                 // CONNECTING remains cancellable: a failed Aether start must not trap the UI.
@@ -344,7 +374,8 @@ private fun ConnectionBar(
                     status == SimpleConnectionStatus.CONNECTED || canConnect
                 ) onConnectClick()
             },
-            containerColor = MaterialTheme.colorScheme.primary,
+            containerColor = actionContainerColor,
+            contentColor = actionContentColor,
         ) {
             androidx.compose.material3.Icon(
                 painter = androidx.compose.ui.res.painterResource(
@@ -354,7 +385,7 @@ private fun ConnectionBar(
                 contentDescription = stringResource(
                     if (status != SimpleConnectionStatus.DISCONNECTED) R.string.acc_stop else R.string.acc_start
                 ),
-                tint = androidx.compose.ui.graphics.Color.White,
+                tint = actionContentColor,
                 modifier = Modifier.width(24.dp).height(24.dp),
             )
         }

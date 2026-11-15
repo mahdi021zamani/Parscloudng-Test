@@ -102,8 +102,16 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 AppConfig.MSG_STATE_CONNECTING ->
                     _uiState.update { it.copy(status = SimpleConnectionStatus.CONNECTING, message = null) }
 
-                AppConfig.MSG_STATE_RUNNING, AppConfig.MSG_STATE_START_SUCCESS ->
+                AppConfig.MSG_STATE_RUNNING ->
                     _uiState.update { it.copy(status = SimpleConnectionStatus.CONNECTED) }
+
+                AppConfig.MSG_STATE_START_SUCCESS ->
+                    _uiState.update {
+                        it.copy(
+                            status = SimpleConnectionStatus.CONNECTED,
+                            message = getApplication<Application>().getString(R.string.toast_services_success),
+                        )
+                    }
 
                 AppConfig.MSG_STATE_NOT_RUNNING, AppConfig.MSG_STATE_STOP_SUCCESS ->
                     _uiState.update { state ->
