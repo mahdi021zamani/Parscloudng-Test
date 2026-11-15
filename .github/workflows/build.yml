@@ -16,6 +16,7 @@ on:
   push:
     branches:
       - "work/parscloud-preservation-and-hardening"
+      - "work/parcloud-four-profiles-and-core-sync-2026-11-15"
 
 permissions:
   contents: read
