@@ -45,9 +45,11 @@ internal fun shouldAcceptSimpleVpnSessionEvent(
     eventSessionId: Long,
 ): Boolean {
     if (eventSessionId <= 0L) return expectedSessionId == null && activeSessionId <= 0L
-    return expectedSessionId == null ||
-        eventSessionId == expectedSessionId ||
+    return if (activeSessionId > 0L) {
         eventSessionId == activeSessionId
+    } else {
+        expectedSessionId == null || eventSessionId == expectedSessionId
+    }
 }
 
 data class SimpleVpnUiState(
