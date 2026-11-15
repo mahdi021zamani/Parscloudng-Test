@@ -47,6 +47,7 @@ class CoreProxyOnlyService : Service(), ServiceControl {
                 MmkvManager.setActiveServiceSession(activeSessionId)
             } else if (activeSessionId == 0L) {
                 activeSessionId = sessionId
+                MmkvManager.setActiveServiceSession(sessionId)
             }
             LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Core is already running")
             return START_STICKY
