@@ -27,6 +27,7 @@ object MessageHelper {
      * @param what The message identifier.
      * @param content The message content.
      */
+    @JvmOverloads
     fun sendMsg2Service(ctx: Context, what: Int, content: Serializable, sessionId: Long? = null) {
         val effectiveSessionId = sessionId ?: if (what == AppConfig.MSG_STATE_STOP) {
             MmkvManager.getActiveServiceSession().takeIf { it > 0L }
@@ -74,6 +75,7 @@ object MessageHelper {
      * @param what The message identifier.
      * @param content The message content.
      */
+    @JvmOverloads
     fun sendMsg2UI(ctx: Context, what: Int, content: Serializable, sessionId: Long? = null) {
         try {
             val intent = messageIntent(AppConfig.BROADCAST_ACTION_ACTIVITY, what, content)
