@@ -173,7 +173,14 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
 
         if (systemVpnStart) unlockStart()
+        val pendingBeforeStart = sessionGate.pending
         val decision = sessionGate.requestStart(request, alwaysOnEnabled)
+        if (decision == VpnServiceSessionGate.StartDecision.QUEUED &&
+            pendingBeforeStart != null &&
+            pendingBeforeStart.sessionId != request.sessionId
+        ) {
+            MmkvManager.retireServiceSession(pendingBeforeStart.sessionId)
+        }
         LogUtil.i(
             AppConfig.TAG,
             "StartCore-VPN: start session=${request.sessionId}, origin=${request.origin}, decision=$decision, alwaysOn=$alwaysOnEnabled"
