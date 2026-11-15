@@ -8,6 +8,9 @@ on:
         required: false
         default: V26.10.11-test
         type: string
+  push:
+    branches:
+      - "work/parscloud-preservation-and-hardening"
 
 permissions:
   contents: read
