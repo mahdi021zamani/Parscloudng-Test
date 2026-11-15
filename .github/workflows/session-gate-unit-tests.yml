@@ -1,0 +1,74 @@
+name: Session Gate Unit Tests
+
+on:
+  push:
+    branches:
+      - "work/parcloud-session-gate-always-on-2026-11-15"
+    paths:
+      - "V2rayNG/app/src/**"
+      - "V2rayNG/app/build.gradle.kts"
+      - "V2rayNG/gradle/**"
+      - "V2rayNG/gradlew"
+      - "V2rayNG/gradle.properties"
+      - ".github/workflows/session-gate-unit-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: session-gate-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+          fetch-depth: 1
+
+      - name: Set up Java
+        uses: actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+          cmdline-tools-version: '14742923'
+          packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
+
+      - name: Normalize Android SDK platform path
+        run: |
+          if [[ -d "$ANDROID_HOME/platforms/android-37.0" && ! -e "$ANDROID_HOME/platforms/android-37" ]]; then
+            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
+          fi
+          test -f "$ANDROID_HOME/platforms/android-37/android.jar"
+
+      - name: Download pinned libv2ray compile dependency
+        uses: robinraju/release-downloader@v1.13
+        with:
+          repository: patterniha/AndroidLibXrayLite
+          tag: v26.11.20
+          fileName: libv2ray.aar
+          out-file-path: V2rayNG/app/libs/
+
+      - name: Verify libv2ray checksum
+        run: |
+          echo "88bd1d1243877848146f53c03731ec84677db84e31183b9b351459026624e1ac  V2rayNG/app/libs/libv2ray.aar" | sha256sum --check
+
+      - name: Run F-Droid debug unit tests only
+        working-directory: V2rayNG
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          chmod 755 gradlew
+          ./gradlew --no-daemon --stacktrace :app:testFdroidDebugUnitTest
