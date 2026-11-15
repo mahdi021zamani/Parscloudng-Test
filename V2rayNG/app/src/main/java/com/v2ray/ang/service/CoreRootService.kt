@@ -124,7 +124,9 @@ class CoreRootService : Service(), ServiceControl {
     }
 
     override fun stopService(sessionId: Long?) {
-        if (sessionId == null || sessionId != activeSessionId) {
+        if (sessionId == null || sessionId <= 0L) return
+        MmkvManager.retireServiceSession(sessionId)
+        if (sessionId != activeSessionId) {
             LogUtil.i(AppConfig.TAG, "StartCore-Root: ignoring stale STOP session=$sessionId")
             return
         }
