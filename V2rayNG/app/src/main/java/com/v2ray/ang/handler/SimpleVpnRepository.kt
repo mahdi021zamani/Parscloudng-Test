@@ -332,7 +332,7 @@ object SimpleVpnRepository {
 
         primarySources.forEach { source ->
             val refresh = refreshSource(source)
-            if (source.id == AETHER_SUB_ID) {
+            if (source.kind == SourceKind.AETHER) {
                 aetherFailure = refresh.aetherFailure
                 if (refresh.result == AngConfigManager.SimpleRefreshResult.NetworkError && aetherFailure == null) {
                     aetherFailure = AetherFailure.NETWORK_ERROR
@@ -383,7 +383,7 @@ object SimpleVpnRepository {
         val cachedPrimaryGuids = primarySources
             .filter { source ->
                 sourceHasCachedProfiles(source) &&
-                    !(source.id == AETHER_SUB_ID && explicitAetherLicenseFailure)
+                    !(source.kind == SourceKind.AETHER && explicitAetherLicenseFailure)
             }
             .flatMap(::sourceGuids)
             .distinct()
