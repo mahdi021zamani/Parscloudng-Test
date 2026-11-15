@@ -12,6 +12,7 @@ import com.v2ray.ang.extension.toast
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.handler.SubscriptionLicenseRepository
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.helper.MessageHelper
 import com.v2ray.ang.root.RootManager
@@ -78,6 +79,12 @@ object LauncherManager {
 
     @Throws(Exception::class)
     private fun startContextService(context: Context) {
+        // Every entry point (launcher, tile, Tasker, boot, and restart) passes through
+        // this local entitlement gate. The daemon also checks independently.
+        if (!SubscriptionLicenseRepository.hasActiveLocalLicense()) {
+            error(context.getString(R.string.simple_license_required))
+        }
+
         // Note: isRunning check is removed here to avoid loading Native libraries in the UI process.
         // The check is performed in CoreServiceManager when the service starts in the daemon process.
 
