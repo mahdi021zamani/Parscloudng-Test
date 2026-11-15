@@ -122,8 +122,9 @@ class CoreVpnService : VpnService(), ServiceControl {
         NotificationManager.ensureForeground()
         latestStartId = maxOf(latestStartId, startId)
 
+        val hasInternalMarker = intent?.hasExtra(ServiceSessionContract.EXTRA_INTERNAL_START) == true
         val internalStart = intent?.getBooleanExtra(ServiceSessionContract.EXTRA_INTERNAL_START, false) == true
-        val systemVpnStart = !internalStart && intent?.action == SERVICE_INTERFACE
+        val systemVpnStart = !hasInternalMarker && intent?.action == SERVICE_INTERFACE
         val alwaysOnEnabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isAlwaysOn
 
         val request = when {
@@ -131,6 +132,7 @@ class CoreVpnService : VpnService(), ServiceControl {
                 val sessionId = intent?.getLongExtra(ServiceSessionContract.EXTRA_SESSION_ID, 0L) ?: 0L
                 if (sessionId <= 0L || MmkvManager.isServiceSessionRetired(sessionId)) {
                     LogUtil.w(AppConfig.TAG, "StartCore-VPN: rejecting invalid or retired app session=$sessionId")
+                    if (sessionGate.owner == null && sessionGate.pending == null) stopSelf(startId)
                     return START_NOT_STICKY
                 }
                 VpnServiceSessionGate.Start(sessionId, startId, VpnServiceSessionGate.Origin.USER)
@@ -139,6 +141,7 @@ class CoreVpnService : VpnService(), ServiceControl {
             systemVpnStart -> {
                 if (!alwaysOnEnabled) {
                     LogUtil.w(AppConfig.TAG, "StartCore-VPN: ignoring SERVICE_INTERFACE while Always-on is disabled")
+                    if (sessionGate.owner == null && sessionGate.pending == null) stopSelf(startId)
                     return START_NOT_STICKY
                 }
                 val sessionId = MmkvManager.beginServiceSession()
@@ -151,6 +154,7 @@ class CoreVpnService : VpnService(), ServiceControl {
                 val sessionId = MmkvManager.getActiveServiceSession()
                 if (sessionId <= 0L || MmkvManager.isServiceSessionRetired(sessionId)) {
                     LogUtil.i(AppConfig.TAG, "StartCore-VPN: no live session to recover from null sticky Intent")
+                    if (sessionGate.owner == null && sessionGate.pending == null) stopSelf(startId)
                     return START_NOT_STICKY
                 }
                 VpnServiceSessionGate.Start(
@@ -163,6 +167,7 @@ class CoreVpnService : VpnService(), ServiceControl {
 
             else -> {
                 LogUtil.w(AppConfig.TAG, "StartCore-VPN: rejecting unmarked non-system start")
+                if (sessionGate.owner == null && sessionGate.pending == null) stopSelf(startId)
                 return START_NOT_STICKY
             }
         }
