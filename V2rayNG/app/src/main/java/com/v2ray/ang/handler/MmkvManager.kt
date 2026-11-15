@@ -387,25 +387,33 @@ object MmkvManager {
      * @param guid The server GUID.
      */
     fun removeServer(guid: String) {
-        if (guid.isBlank()) {
-            return
+        if (guid.isBlank()) return
+
+        withProfileIndexLock {
+            val config = decodeServerConfig(guid)
+            val knownGroups = (decodeSubsList() + DEFAULT_SUBSCRIPTION_ID).distinct()
+            val indexedGroups = knownGroups.filter { guid in decodeServerList(it) }
+            val targetGroups = indexedGroups.ifEmpty {
+                listOf(getSubscriptionId(config?.subscriptionId))
+            }
+
+            // Publish every index update before removing the profile payload. If an
+            // index write fails, the profile data remains available for recovery.
+            targetGroups.forEach { subscriptionId ->
+                val serverList = decodeServerList(subscriptionId)
+                if (serverList.remove(guid)) {
+                    requireStorageWrite(
+                        persistServerList(serverList, subscriptionId),
+                        "Failed to update subscription profile index",
+                    )
+                }
+            }
+
+            if (getSelectServer() == guid) {
+                mainStorage.remove(KEY_SELECTED_SERVER)
+            }
+            removeProfilePayloads(listOf(guid))
         }
-
-        // Get config to determine which subscription to update
-        val config = decodeServerConfig(guid)
-        val subId = getSubscriptionId(config?.subscriptionId)
-
-        // Remove from appropriate server list
-        val serverList = decodeServerList(subId)
-        serverList.remove(guid)
-        encodeServerList(serverList, subId)
-
-        // Clean up storage
-        if (getSelectServer() == guid) {
-            mainStorage.remove(KEY_SELECTED_SERVER)
-        }
-        profileFullStorage.remove(guid)
-        serverAffStorage.remove(guid)
     }
 
     /**
