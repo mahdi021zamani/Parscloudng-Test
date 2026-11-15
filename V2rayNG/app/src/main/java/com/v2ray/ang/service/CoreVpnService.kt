@@ -28,6 +28,7 @@ import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.root.RootLanSharing
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -209,19 +210,22 @@ class CoreVpnService : VpnService(), ServiceControl {
     }
 
     private fun startSession(request: VpnServiceSessionGate.Start) {
-        if (MmkvManager.isServiceSessionRetired(request.sessionId)) {
-            sessionGate.clearOwner()
-            stopSelf(latestStartId)
+        if (MmkvManager.isServiceSessionRetired(request.sessionId) ||
+            sessionGate.owner?.sessionId != request.sessionId
+        ) {
+            if (sessionGate.owner?.sessionId == request.sessionId) sessionGate.clearOwner()
+            if (!isStoppingLock.get()) stopSelf(latestStartId)
             return
         }
         if (!MmkvManager.setActiveServiceSession(request.sessionId)) {
             LogUtil.w(AppConfig.TAG, "StartCore-VPN: session was retired before ownership could be acquired")
             sessionGate.clearOwner()
-            stopSelf(latestStartId)
+            if (!isStoppingLock.get()) stopSelf(latestStartId)
             return
         }
         activeSessionId = request.sessionId
         if (!tryLockStart()) {
+            if (isStoppingLock.get()) return
             LogUtil.w(AppConfig.TAG, "StartCore-VPN: start lock unavailable for session=${request.sessionId}")
             sessionGate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
             sessionGate.finishTeardown()
@@ -523,7 +527,9 @@ class CoreVpnService : VpnService(), ServiceControl {
                 isStoppingLock.set(false)
                 if (next != null && !MmkvManager.isServiceSessionRetired(next.sessionId)) {
                     LogUtil.i(AppConfig.TAG, "StartCore-VPN: promoting pending session=${next.sessionId}, origin=${next.origin}, recovers=${next.recoversSession}")
-                    startSession(next)
+                    ContextCompat.getMainExecutor(this@CoreVpnService).execute {
+                        startSession(next)
+                    }
                 } else {
                     next?.let { MmkvManager.retireServiceSession(it.sessionId) }
                     sessionGate.clearOwner()
