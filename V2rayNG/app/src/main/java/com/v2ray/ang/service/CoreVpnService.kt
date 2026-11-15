@@ -189,7 +189,10 @@ class CoreVpnService : VpnService(), ServiceControl {
                     if (currentOwner?.sessionId != request.sessionId) {
                         MmkvManager.retireServiceSession(request.sessionId)
                     }
-                    currentOwner?.sessionId?.let(MmkvManager::setActiveServiceSession)
+                    currentOwner?.sessionId?.let {
+                        MmkvManager.setActiveServiceSession(it)
+                        CoreServiceManager.reportCurrentStateToUi()
+                    }
                 }
             }
         }
