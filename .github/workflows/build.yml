@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUST_TOOLCHAIN: stable
-      GO_VERSION: '1.22'
+      GO_VERSION: '1.26'
 
     steps:
       - name: Checkout code
@@ -55,11 +55,11 @@ jobs:
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
             --channel=0 \
-            --install "ndk;29.0.14206865"
-          echo "NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
+            --install "ndk;30.0.16248370"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
           sed -i '10i\
           \
-              ndkVersion = "29.0.14206865"' V2rayNG/app/build.gradle.kts
+              ndkVersion = "30.0.16248370"' V2rayNG/app/build.gradle.kts
 
       - name: Restore cached libhevtun
         id: cache-libhevtun-restore
@@ -109,13 +109,29 @@ jobs:
       - name: Fetch Psiphon server list
         run: bash fetch-psiphon-servers.sh
 
-      - name: Verify pinned AndroidLibXrayLite release
+      - name: Verify pinned native core revisions
         run: |
+          verify_submodule() {
+            local path="$1"
+            local expected="$2"
+            local actual
+            actual=$(git -C "$path" rev-parse HEAD)
+            echo "$path: $actual"
+            test "$actual" = "$expected"
+          }
+
+          verify_submodule aether "d58f9d568083129ce2c767c85054021eb3ee6a38"
+          verify_submodule hev-socks5-tunnel "75dbc1e9ace6c70d3d1b94df7c283efe1de7effc"
+
           cd AndroidLibXrayLite
           git fetch --tags origin
-          ACTUAL_COMMIT=$(git rev-parse "v26.11.20^{commit}")
           EXPECTED_COMMIT="1546ca75217fc6e2ca6ec6c532871fd8555b9f2f"
-          test "$ACTUAL_COMMIT" = "$EXPECTED_COMMIT"
+          TAG_COMMIT=$(git rev-parse "v26.11.20^{commit}")
+          CHECKOUT_COMMIT=$(git rev-parse HEAD)
+          echo "AndroidLibXrayLite tag: $TAG_COMMIT"
+          echo "AndroidLibXrayLite checkout: $CHECKOUT_COMMIT"
+          test "$TAG_COMMIT" = "$EXPECTED_COMMIT"
+          test "$CHECKOUT_COMMIT" = "$EXPECTED_COMMIT"
 
       - name: Download pinned libv2ray
         uses: robinraju/release-downloader@v1.13
