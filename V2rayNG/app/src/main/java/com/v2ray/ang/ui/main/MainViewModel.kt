@@ -13,6 +13,7 @@ import com.v2ray.ang.dto.TestServiceMessage
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.dto.entities.ServersCache
 import com.v2ray.ang.dto.entities.SubscriptionCache
+import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.extension.delay
 import com.v2ray.ang.extension.isComplexType
 import com.v2ray.ang.extension.matchesPattern
@@ -442,8 +443,16 @@ class MainViewModel(
         launchLoading {
             withContext(ioDispatcher) {
                 try {
+                    val selectedGroupId = uiState.value.selectedGroupId
+                    // Personal imports must never be attached to a central feed group,
+                    // where the next refresh could replace them or classify them as central.
+                    val targetGroupId = if (MmkvManager.isCentralSubscriptionId(selectedGroupId)) {
+                        ""
+                    } else {
+                        selectedGroupId
+                    }
                     val (count, countSub) = dataSource.importBatchConfig(
-                        configText, uiState.value.selectedGroupId, true
+                        configText, targetGroupId, true
                     )
                     when {
                         count > 0 -> {
