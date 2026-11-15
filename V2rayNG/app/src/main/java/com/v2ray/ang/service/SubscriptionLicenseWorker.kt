@@ -31,7 +31,8 @@ class SubscriptionLicenseWorker(
         LogUtil.w(AppConfig.TAG, "Subscription monitor: worker started; runAttemptCount=$runAttemptCount")
         val license = SubscriptionLicenseRepository.getStoredLicense()
         if (license == null) {
-            LogUtil.w(AppConfig.TAG, "Subscription monitor: worker has no stored license; nothing to validate")
+            LogUtil.w(AppConfig.TAG, "Subscription monitor: no stored license; stopping any active core service")
+            stopActiveServices("stored license missing")
             return Result.success()
         }
         LogUtil.w(AppConfig.TAG, "Subscription monitor: stored license found; validating with server")
@@ -50,29 +51,7 @@ class SubscriptionLicenseWorker(
 
             is SubscriptionLicenseRepository.ValidationResult.Rejected -> {
                 LogUtil.w(AppConfig.TAG, "Subscription monitor: server rejected saved license; requesting stop through service message channel")
-                // Use the same MessageHelper/service-control path as the app's Disconnect
-                // button. A manifest receiver in the daemon process can be started in a
-                // fresh process where CoreServiceManager.serviceControl is still null.
-                // First ask the existing service-message channel to stop gracefully.
-                LauncherManager.stopService(applicationContext)
-                LogUtil.w(AppConfig.TAG, "Subscription monitor: normal service stop request sent")
-
-                // Do not depend on an in-process SoftReference or a broadcast receiver
-                // being alive. stopService(Intent) addresses the actual Android service
-                // instance and forces VpnService teardown (including closing its TUN).
-                val vpnStopped = applicationContext.stopService(Intent(applicationContext, CoreVpnService::class.java))
-                val proxyStopped = applicationContext.stopService(Intent(applicationContext, CoreProxyOnlyService::class.java))
-                val rootStopped = applicationContext.stopService(Intent(applicationContext, CoreRootService::class.java))
-                LogUtil.w(
-                    AppConfig.TAG,
-                    "Subscription monitor: direct stopService results vpn=$vpnStopped proxy=$proxyStopped root=$rootStopped"
-                )
-
-                // Keep the daemon-side receiver as an additional best-effort stop attempt.
-                val stopIntent = Intent(SubscriptionRevocationReceiver.ACTION_STOP_REVOKED_SUBSCRIPTION)
-                    .setPackage(AppConfig.ANG_PACKAGE)
-                applicationContext.sendBroadcast(stopIntent)
-                LogUtil.w(AppConfig.TAG, "Subscription monitor: fallback revocation broadcast sent")
+                stopActiveServices("server rejected saved license")
                 Result.success()
             }
 
@@ -80,11 +59,30 @@ class SubscriptionLicenseWorker(
                 LogUtil.w(AppConfig.TAG, "Subscription monitor: validation ended with NETWORK_ERROR")
                 if (SubscriptionLicenseRepository.isExpired(license)) {
                     LogUtil.w(AppConfig.TAG, "Subscription monitor: saved license is expired during network error; requesting service stop")
-                    LauncherManager.stopService(applicationContext)
+                    stopActiveServices("saved license expired while server is unreachable")
                 }
                 Result.retry()
             }
         }
+    }
+
+    private fun stopActiveServices(reason: String) {
+        LogUtil.w(AppConfig.TAG, "Subscription monitor: stopping core services because $reason")
+        LauncherManager.stopService(applicationContext)
+
+        // Do not depend only on the in-process service reference. Directly stop every
+        // supported Android service as a fallback, then notify the daemon-side receiver.
+        val vpnStopped = applicationContext.stopService(Intent(applicationContext, CoreVpnService::class.java))
+        val proxyStopped = applicationContext.stopService(Intent(applicationContext, CoreProxyOnlyService::class.java))
+        val rootStopped = applicationContext.stopService(Intent(applicationContext, CoreRootService::class.java))
+        LogUtil.w(
+            AppConfig.TAG,
+            "Subscription monitor: direct stopService results vpn=$vpnStopped proxy=$proxyStopped root=$rootStopped"
+        )
+
+        val stopIntent = Intent(SubscriptionRevocationReceiver.ACTION_STOP_REVOKED_SUBSCRIPTION)
+            .setPackage(AppConfig.ANG_PACKAGE)
+        applicationContext.sendBroadcast(stopIntent)
     }
 
     companion object {
