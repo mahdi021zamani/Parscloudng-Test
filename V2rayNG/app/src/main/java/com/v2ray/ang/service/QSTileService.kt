@@ -11,6 +11,8 @@ import androidx.core.content.ContextCompat
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.ServiceSessionContract
+import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.helper.MessageHelper
@@ -96,7 +98,12 @@ class QSTileService : TileService() {
         var mReference: SoftReference<QSTileService> = SoftReference(context)
         override fun onReceive(ctx: Context?, intent: Intent?) {
             val context = mReference.get()
-            when (intent?.getIntExtra("key", 0)) {
+            val safeIntent = intent ?: return
+            val eventSessionId = safeIntent.getLongExtra(ServiceSessionContract.EXTRA_SESSION_ID, 0L)
+            val activeSessionId = MmkvManager.getActiveServiceSession()
+            if (eventSessionId > 0L && activeSessionId > 0L && eventSessionId != activeSessionId) return
+            if (eventSessionId == 0L && activeSessionId > 0L) return
+            when (safeIntent.getIntExtra("key", 0)) {
                 AppConfig.MSG_STATE_RUNNING -> {
                     context?.setState(Tile.STATE_ACTIVE)
                 }
