@@ -117,6 +117,7 @@ class MainViewModel(
     private fun handleServiceEvent(event: MainServiceEvent) {
         when (event) {
             MainServiceEvent.StateRunning -> updateRunningState(true, clearTestingText = false)
+            MainServiceEvent.StateConnecting -> _uiState.update { it.copy(status = MainStatus.Connecting) }
             MainServiceEvent.StateNotRunning -> updateRunningState(false, clearTestingText = false)
             MainServiceEvent.StateStartSuccess -> {
                 toastSuccess(R.string.toast_services_success)
@@ -154,6 +155,7 @@ class MainViewModel(
     internal fun formatStatus(status: MainStatus): String = when (status) {
         MainStatus.Disconnected -> dataSource.getString(R.string.connection_not_connected)
         MainStatus.Connected -> dataSource.getString(R.string.connection_connected)
+        MainStatus.Connecting -> dataSource.getString(R.string.aether_core_connecting)
         MainStatus.Testing -> dataSource.getString(R.string.connection_test_testing)
         is MainStatus.TestProgress -> dataSource.getString(
             R.string.connection_running_task_left,

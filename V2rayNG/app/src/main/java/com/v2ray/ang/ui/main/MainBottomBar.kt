@@ -37,11 +37,13 @@ import com.v2ray.ang.ui.compose.colorFabActive
 import com.v2ray.ang.ui.compose.colorFabInactiveDark
 import com.v2ray.ang.ui.compose.colorFabInactiveLight
 import com.v2ray.ang.ui.compose.colorPing
+import com.v2ray.ang.ui.compose.colorConfigType
 
 @Composable
 fun MainBottomBar(
     displayText: String,
     isRunning: Boolean,
+    isConnecting: Boolean,
     isDarkTheme: Boolean,
     onAction: (MainAction) -> Unit
 ) {
@@ -69,7 +71,8 @@ fun MainBottomBar(
                             .shadow(5.dp, CircleShape)
                             .clip(CircleShape)
                             .background(
-                                if (isRunning) colorPing
+                                if (isConnecting) colorConfigType
+                                else if (isRunning) colorPing
                                 else if (isDarkTheme) colorFabInactiveDark else colorFabInactiveLight
                             )
                     )
