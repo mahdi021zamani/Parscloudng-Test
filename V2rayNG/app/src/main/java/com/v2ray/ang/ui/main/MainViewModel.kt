@@ -225,8 +225,12 @@ class MainViewModel(
             is MainAction.ImportBatchConfig -> importBatchConfig(action.configText)
             MainAction.LocateHandled -> consumeLocateTarget()
             is MainAction.ShareQRCode -> {
-                val bitmap = dataSource.share2QRCode(action.guid)
-                _uiState.update { it.copy(shareQRCodeBitmap = bitmap) }
+                if (MmkvManager.isCentralProfile(action.guid)) {
+                    toastError(R.string.toast_action_not_allowed)
+                } else {
+                    val bitmap = dataSource.share2QRCode(action.guid)
+                    _uiState.update { it.copy(shareQRCodeBitmap = bitmap) }
+                }
             }
 
             MainAction.DismissQRCodeDialog -> {
@@ -563,11 +567,18 @@ class MainViewModel(
         launchLoading {
             withContext(ioDispatcher) {
                 try {
+                    val selectedGroupId = uiState.value.selectedGroupId
+                    if (MmkvManager.isCentralSubscriptionId(selectedGroupId)) {
+                        toastError(R.string.toast_action_not_allowed)
+                        return@withContext
+                    }
                     val count =
-                        if (uiState.value.selectedGroupId.isEmpty() && keywordFilter.isEmpty()) {
+                        if (selectedGroupId.isEmpty() && keywordFilter.isEmpty()) {
                             dataSource.removeAllServer()
                         } else {
-                            val guids = currentServers().map { it.guid }
+                            val guids = currentServers()
+                                .filterNot { MmkvManager.isCentralProfile(it.guid) }
+                                .map { it.guid }
                             guids.forEach { dataSource.removeServer(it) }
                             guids.size
                         }
@@ -596,7 +607,9 @@ class MainViewModel(
                     val duplicates = ArrayList<String>()
                     currentServers().forEach { server ->
                         val profile = server.profile
-                        if (!profile.configType.isComplexType()) {
+                        if (!profile.configType.isComplexType() &&
+                            !MmkvManager.isCentralSubscriptionId(profile.subscriptionId)
+                        ) {
                             val identity = profile.subscriptionId to profile.duplicateIdentity()
                             if (!seen.add(identity)) duplicates += server.guid
                         }
@@ -635,12 +648,14 @@ class MainViewModel(
     }
 
     private fun removeInvalidServerInternal(): Int {
-        val visibleServersOnly =
-            uiState.value.selectedGroupId.isNotEmpty() || keywordFilter.isNotBlank()
+        val selectedGroupId = uiState.value.selectedGroupId
+        if (MmkvManager.isCentralSubscriptionId(selectedGroupId)) return 0
+
+        val visibleServersOnly = selectedGroupId.isNotEmpty() || keywordFilter.isNotBlank()
         return if (visibleServersOnly) {
-            currentServers().sumOf { server ->
-                dataSource.removeInvalidServerByGuid(server.guid)
-            }
+            currentServers()
+                .filterNot { MmkvManager.isCentralProfile(it.guid) }
+                .sumOf { server -> dataSource.removeInvalidServerByGuid(server.guid) }
         } else {
             dataSource.removeInvalidServersInGroup("")
         }
@@ -740,7 +755,7 @@ class MainViewModel(
     }
 
     fun removeServerAndRefresh(guid: String) {
-        if (guid == uiState.value.selectedGuid) {
+        if (MmkvManager.isCentralProfile(guid) || guid == uiState.value.selectedGuid) {
             toast(R.string.toast_action_not_allowed)
             return
         }
