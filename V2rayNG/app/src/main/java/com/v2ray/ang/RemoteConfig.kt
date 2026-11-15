@@ -8,11 +8,20 @@ package com.v2ray.ang
  */
 object RemoteConfig {
 
-    /** Primary V2Ray-compatible share-link feed. */
+    /** V2Ray / irancell share-link feed. Kept on the legacy ID for cache migration. */
     const val SERVER_LIST_URL = "https://raw.githubusercontent.com/patterniha/Free-Configs/main/configs.txt"
 
-    /** Public Aether feed; direct GitHub Raw access, bypassing the Worker. */
+    /** V2Ray / Hamrah share-link feed owned by PARSCLOUD. */
+    const val HAMRAH_SERVER_LIST_URL = "https://raw.githubusercontent.com/mahdi021zamani/parscloud-sub/main/HAMRAH"
+
+    /** WireGuard / Aether feed; direct GitHub Raw access, bypassing the Worker. */
     const val AETHER_SERVER_LIST_URL = "https://raw.githubusercontent.com/mahdi021zamani/parscloud-sub/main/Aether"
+
+    /** Combined Aether feed; independent cache and profile selection. */
+    const val COMBINED_AETHER_SERVER_LIST_URL = "https://raw.githubusercontent.com/mahdi021zamani/parscloud-sub/main/%D8%AA%D8%B1%DA%A9%DB%8C%D8%A8%DB%8C"
+
+    /** Full custom Xray JSON profiles for Services for Iran. */
+    const val SERVICES_FOR_IRAN_URL = "https://raw.githubusercontent.com/mahdi021zamani/parscloud-sub/main/Services%20for%20Iran"
 
     /**
      * Optional private proxy endpoint that returns the emergency paid-panel feed.
