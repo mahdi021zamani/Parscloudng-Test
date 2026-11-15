@@ -108,13 +108,13 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 AppConfig.MSG_STATE_NOT_RUNNING, AppConfig.MSG_STATE_STOP_SUCCESS ->
                     _uiState.update { state ->
                         // Keep launcher/Tasker pointed at the profile currently selected in the UI.
-                        state.selectedGuid?.let(MmkvManager::setSelectServer)
+                        state.selectedGuid?.takeIf { MmkvManager.decodeServerConfig(it) != null }?.let(MmkvManager::setSelectServer)
                         state.copy(status = SimpleConnectionStatus.DISCONNECTED)
                     }
 
                 AppConfig.MSG_STATE_START_FAILURE ->
                     _uiState.update { state ->
-                        state.selectedGuid?.let(MmkvManager::setSelectServer)
+                        state.selectedGuid?.takeIf { MmkvManager.decodeServerConfig(it) != null }?.let(MmkvManager::setSelectServer)
                         state.copy(
                             status = SimpleConnectionStatus.DISCONNECTED,
                             message = getApplication<Application>().getString(R.string.simple_connect_failed),
