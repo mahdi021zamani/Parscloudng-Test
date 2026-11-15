@@ -337,6 +337,12 @@ class CoreVpnService : VpnService(), ServiceControl {
             VpnServiceSessionGate.StopDecision.CANCEL_TEARDOWN_RECOVERY -> {
                 userDisconnectRequested = true
                 MmkvManager.retireServiceSession(sessionId)
+                ownerBeforeStop
+                    ?.takeIf { it.origin == VpnServiceSessionGate.Origin.SYSTEM && it.recoversSession == sessionId }
+                    ?.let {
+                        MmkvManager.retireServiceSession(it.sessionId)
+                        MmkvManager.retireServiceSession(activeSessionId)
+                    }
                 LogUtil.i(AppConfig.TAG, "StartCore-VPN: user STOP marked completed teardown session=$sessionId")
             }
 
