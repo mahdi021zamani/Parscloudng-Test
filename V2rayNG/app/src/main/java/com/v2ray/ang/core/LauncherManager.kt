@@ -55,8 +55,13 @@ object LauncherManager {
     }
 
     fun stopService(context: Context) {
-        //context.toast(R.string.toast_services_stop)
-        MessageHelper.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "")
+        val sessionId = MmkvManager.getActiveServiceSession()
+        if (sessionId <= 0L) {
+            LogUtil.w(AppConfig.TAG, "LauncherManager: no active service session to stop")
+            return
+        }
+        MmkvManager.retireServiceSession(sessionId)
+        MessageHelper.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "", sessionId)
     }
 
     /** Restarts the active daemon without starting a stopped service. */
@@ -134,6 +139,10 @@ object LauncherManager {
             LogUtil.i(AppConfig.TAG, "LauncherManager: Starting Proxy service")
             Intent(context.applicationContext, CoreProxyOnlyService::class.java)
         }
+
+        val sessionId = MmkvManager.beginServiceSession()
+        intent.putExtra(ServiceSessionContract.EXTRA_INTERNAL_START, true)
+        intent.putExtra(ServiceSessionContract.EXTRA_SESSION_ID, sessionId)
 
         try {
             ContextCompat.startForegroundService(context, intent)
