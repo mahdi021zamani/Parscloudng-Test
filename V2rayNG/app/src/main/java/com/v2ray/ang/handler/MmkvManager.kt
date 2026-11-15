@@ -605,10 +605,13 @@ object MmkvManager {
             serverRawStorage.removeValuesForKeys(keys)
         }
 
+        val remainingProfileKeys = profileFullStorage.allKeys()?.toSet().orEmpty()
+        val remainingAffiliationKeys = serverAffStorage.allKeys()?.toSet().orEmpty()
+        val remainingRawKeys = serverRawStorage.allKeys()?.toSet().orEmpty()
         if (removableGuids.any { guid ->
-                profileFullStorage.containsKey(guid) ||
-                    serverAffStorage.containsKey(guid) ||
-                    serverRawStorage.containsKey(guid)
+                guid in remainingProfileKeys ||
+                    guid in remainingAffiliationKeys ||
+                    guid in remainingRawKeys
             }
         ) {
             throw ProfileStorageException("Failed to remove all personal profile payloads")
@@ -797,8 +800,8 @@ object MmkvManager {
     private fun isCentralProfileGuid(guid: String): Boolean {
         if (guid.isBlank()) return false
         val profile = decodeServerConfig(guid)
-        if (profile != null) return isCentralSubscriptionId(profile.subscriptionId)
-        return CENTRAL_SUBSCRIPTION_IDS.any { guid in decodeServerList(it) }
+        return isCentralSubscriptionId(profile?.subscriptionId) ||
+            CENTRAL_SUBSCRIPTION_IDS.any { guid in decodeServerList(it) }
     }
 
     fun decodeSubscription(subscriptionId: String): SubscriptionItem? {
