@@ -174,8 +174,11 @@ class CoreVpnService : VpnService(), ServiceControl {
                 if (sessionGate.teardownCause == VpnServiceSessionGate.TeardownCause.USER_STOP) {
                     MmkvManager.retireServiceSession(request.sessionId)
                 } else {
-                    MmkvManager.retireServiceSession(request.sessionId)
-                    sessionGate.owner?.sessionId?.let(MmkvManager::setActiveServiceSession)
+                    val currentOwner = sessionGate.owner
+                    if (currentOwner?.sessionId != request.sessionId) {
+                        MmkvManager.retireServiceSession(request.sessionId)
+                    }
+                    currentOwner?.sessionId?.let(MmkvManager::setActiveServiceSession)
                 }
             }
         }
