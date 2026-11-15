@@ -49,6 +49,7 @@ class CoreRootService : Service(), ServiceControl {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        NotificationManager.ensureForeground()
         if (CoreServiceManager.isRunning()) {
             if (activeSessionId > 0L && activeSessionId != sessionId) {
                 MmkvManager.retireServiceSession(sessionId)
@@ -62,7 +63,6 @@ class CoreRootService : Service(), ServiceControl {
         }
         activeSessionId = sessionId
         MmkvManager.setActiveServiceSession(sessionId)
-        NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Root: command received")
 
         // Start the in-process core first (this also posts the foreground notification),
