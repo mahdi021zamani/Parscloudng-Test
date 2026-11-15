@@ -10,6 +10,8 @@ import android.widget.RemoteViews
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.ServiceSessionContract
+import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.core.LauncherManager
 
 class WidgetProvider : AppWidgetProvider() {
@@ -74,6 +76,10 @@ class WidgetProvider : AppWidgetProvider() {
                 LauncherManager.startServiceFromToggle(context)
             }
         } else if (AppConfig.BROADCAST_ACTION_ACTIVITY == intent.action) {
+            val eventSessionId = intent.getLongExtra(ServiceSessionContract.EXTRA_SESSION_ID, 0L)
+            val activeSessionId = MmkvManager.getActiveServiceSession()
+            if (eventSessionId > 0L && activeSessionId > 0L && eventSessionId != activeSessionId) return
+            if (eventSessionId == 0L && activeSessionId > 0L) return
             AppWidgetManager.getInstance(context)?.let { manager ->
                 when (intent.getIntExtra("key", 0)) {
                     AppConfig.MSG_STATE_RUNNING, AppConfig.MSG_STATE_START_SUCCESS -> {
