@@ -209,8 +209,17 @@ class CoreVpnService : VpnService(), ServiceControl {
         return if (decision == VpnServiceSessionGate.StartDecision.IGNORED) START_NOT_STICKY else START_STICKY
     }
 
+    private fun isStartStillValid(request: VpnServiceSessionGate.Start): Boolean {
+        if (MmkvManager.isServiceSessionRetired(request.sessionId)) return false
+        if (request.origin == VpnServiceSessionGate.Origin.SYSTEM) {
+            val recoveredSession = request.recoversSession ?: return true
+            if (MmkvManager.isServiceSessionRetired(recoveredSession)) return false
+        }
+        return true
+    }
+
     private fun startSession(request: VpnServiceSessionGate.Start) {
-        if (MmkvManager.isServiceSessionRetired(request.sessionId) ||
+        if (!isStartStillValid(request) ||
             sessionGate.owner?.sessionId != request.sessionId
         ) {
             if (sessionGate.owner?.sessionId == request.sessionId) sessionGate.clearOwner()
@@ -242,7 +251,16 @@ class CoreVpnService : VpnService(), ServiceControl {
             stopAllService(true, VpnServiceSessionGate.TeardownCause.INTERNAL)
             return
         }
+        if (!isStartStillValid(request)) {
+            LogUtil.i(AppConfig.TAG, "StartCore-VPN: cancelling session whose source was retired during setup")
+            stopAllService(true, VpnServiceSessionGate.TeardownCause.USER_STOP)
+            return
+        }
         startService()
+        if (!isStartStillValid(request)) {
+            LogUtil.i(AppConfig.TAG, "StartCore-VPN: stopping session retired while core startup was in progress")
+            stopAllService(true, VpnServiceSessionGate.TeardownCause.USER_STOP)
+        }
     }
 
     override val serviceSessionId: Long
@@ -531,7 +549,7 @@ class CoreVpnService : VpnService(), ServiceControl {
                 val pendingBeforeFinish = sessionGate.pending
                 val next = sessionGate.finishTeardown()
                 isStoppingLock.set(false)
-                if (next != null && !MmkvManager.isServiceSessionRetired(next.sessionId)) {
+                if (next != null && isStartStillValid(next)) {
                     LogUtil.i(AppConfig.TAG, "StartCore-VPN: promoting pending session=${next.sessionId}, origin=${next.origin}, recovers=${next.recoversSession}")
                     ContextCompat.getMainExecutor(this@CoreVpnService).execute {
                         startSession(next)
