@@ -166,6 +166,43 @@ object MmkvManager {
         return MMKVRecoverStrategic.OnErrorRecover
     }
 
+    // Session metadata is shared by the UI and daemon processes through MULTI_PROCESS_MODE.
+    private const val KEY_SERVICE_SESSION_COUNTER = "SERVICE_SESSION_COUNTER"
+    private const val KEY_ACTIVE_SERVICE_SESSION = "ACTIVE_SERVICE_SESSION"
+    private const val KEY_RETIRED_SERVICE_SESSION_PREFIX = "RETIRED_SERVICE_SESSION_"
+
+    /**
+     * Allocates a monotonically increasing session ID under MMKV's inter-process file lock.
+     * Every app-originated CoreVpnService start must carry this ID and the private marker.
+     */
+    fun beginServiceSession(): Long = withProfileIndexLock {
+        val next = mainStorage.decodeLong(KEY_SERVICE_SESSION_COUNTER, 0L) + 1L
+        requireStorageWrite(mainStorage.encode(KEY_SERVICE_SESSION_COUNTER, next), "Failed to persist service session counter")
+        requireStorageWrite(mainStorage.encode(KEY_ACTIVE_SERVICE_SESSION, next), "Failed to persist active service session")
+        next
+    }
+
+    fun getActiveServiceSession(): Long = mainStorage.decodeLong(KEY_ACTIVE_SERVICE_SESSION, 0L)
+
+    fun isServiceSessionRetired(sessionId: Long): Boolean {
+        if (sessionId <= 0L) return true
+        return mainStorage.decodeBool(KEY_RETIRED_SERVICE_SESSION_PREFIX + sessionId, false)
+    }
+
+    /**
+     * Retires only the supplied session. A late STOP must never retire a newer session.
+     */
+    fun retireServiceSession(sessionId: Long): Boolean {
+        if (sessionId <= 0L) return false
+        return withProfileIndexLock {
+            val saved = mainStorage.encode(KEY_RETIRED_SERVICE_SESSION_PREFIX + sessionId, true)
+            if (mainStorage.decodeLong(KEY_ACTIVE_SERVICE_SESSION, 0L) == sessionId) {
+                mainStorage.remove(KEY_ACTIVE_SERVICE_SESSION)
+            }
+            saved
+        }
+    }
+
     //region Server
 
     /**
