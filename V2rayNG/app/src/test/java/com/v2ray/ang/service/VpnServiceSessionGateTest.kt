@@ -90,6 +90,36 @@ class VpnServiceSessionGateTest {
     }
 
     @Test
+    fun systemRecoveryDoesNotReplacePendingUserStart() {
+        val gate = VpnServiceSessionGate()
+        gate.requestStart(user(5), alwaysOnEnabled = true)
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+        gate.requestStart(user(7), alwaysOnEnabled = true)
+
+        assertEquals(
+            VpnServiceSessionGate.StartDecision.IGNORED,
+            gate.requestStart(system(8), alwaysOnEnabled = true),
+        )
+        assertEquals(7L, gate.pending?.sessionId)
+        assertEquals(VpnServiceSessionGate.Origin.USER, gate.pending?.origin)
+    }
+
+    @Test
+    fun duplicateSystemRecoveryDoesNotReplaceFirstPendingSystemSession() {
+        val gate = VpnServiceSessionGate()
+        gate.requestStart(user(5), alwaysOnEnabled = true)
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+        gate.requestStart(system(6), alwaysOnEnabled = true)
+
+        assertEquals(
+            VpnServiceSessionGate.StartDecision.IGNORED,
+            gate.requestStart(system(7), alwaysOnEnabled = true),
+        )
+        assertEquals(6L, gate.pending?.sessionId)
+        assertEquals(5L, gate.pending?.recoversSession)
+    }
+
+    @Test
     fun nullStickyRecoveryDoesNotReplaceNewerPendingUserStart() {
         val gate = VpnServiceSessionGate()
         gate.requestStart(user(5), alwaysOnEnabled = true)
