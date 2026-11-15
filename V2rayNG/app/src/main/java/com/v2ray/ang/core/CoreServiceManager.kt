@@ -641,8 +641,13 @@ object CoreServiceManager {
                 }
 
                 AppConfig.MSG_STATE_STOP -> {
-                    LogUtil.i(AppConfig.TAG, "StartCore-Manager: Stop service")
-                    serviceControl.stopService()
+                    val stopSessionId = intent?.getLongExtra(ServiceSessionContract.EXTRA_STOP_SESSION_ID, 0L) ?: 0L
+                    if (stopSessionId > 0L) {
+                        LogUtil.i(AppConfig.TAG, "StartCore-Manager: Stop requested for session=$stopSessionId")
+                        serviceControl.stopService(stopSessionId)
+                    } else {
+                        LogUtil.w(AppConfig.TAG, "StartCore-Manager: Ignoring unscoped STOP request")
+                    }
                 }
 
                 AppConfig.MSG_STATE_RESTART -> {
