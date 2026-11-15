@@ -42,18 +42,18 @@ class CoreProxyOnlyService : Service(), ServiceControl {
             return START_NOT_STICKY
         }
         if (CoreServiceManager.isRunning()) {
-            if (activeSessionId != sessionId) MmkvManager.retireServiceSession(sessionId)
+            if (activeSessionId > 0L && activeSessionId != sessionId) {
+                MmkvManager.retireServiceSession(sessionId)
+                MmkvManager.setActiveServiceSession(activeSessionId)
+            } else if (activeSessionId == 0L) {
+                activeSessionId = sessionId
+            }
             LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Core is already running")
             return START_STICKY
         }
         activeSessionId = sessionId
         NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Service command received")
-
-        if (CoreServiceManager.isRunning()) {
-            LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Core is already running")
-            return START_STICKY
-        }
 
         if (!CoreServiceManager.startCoreLoop(null)) {
             LogUtil.e(AppConfig.TAG, "StartCore-Proxy: Failed to start core loop")
