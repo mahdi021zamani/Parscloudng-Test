@@ -41,6 +41,7 @@ class CoreProxyOnlyService : Service(), ServiceControl {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        NotificationManager.ensureForeground()
         if (CoreServiceManager.isRunning()) {
             if (activeSessionId > 0L && activeSessionId != sessionId) {
                 MmkvManager.retireServiceSession(sessionId)
@@ -54,7 +55,6 @@ class CoreProxyOnlyService : Service(), ServiceControl {
         }
         activeSessionId = sessionId
         MmkvManager.setActiveServiceSession(sessionId)
-        NotificationManager.ensureForeground()
         LogUtil.i(AppConfig.TAG, "StartCore-Proxy: Service command received")
 
         if (!CoreServiceManager.startCoreLoop(null)) {
