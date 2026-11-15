@@ -44,6 +44,7 @@ class CoreVpnService : VpnService(), ServiceControl {
     private val isInterfaceClosed = AtomicBoolean(false)
     private val sessionGate = VpnServiceSessionGate()
     @Volatile private var latestStartId = 0
+    @Volatile private var activeSessionId = 0L
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -113,7 +114,7 @@ class CoreVpnService : VpnService(), ServiceControl {
         closeVpnInterface()
 
         unlockStart()
-        MessageHelper.sendMsg2UI(this, AppConfig.MSG_STATE_STOP_SUCCESS, "")
+        MessageHelper.sendMsg2UI(this, AppConfig.MSG_STATE_STOP_SUCCESS, "", activeSessionId)
         NotificationManager.cancelNotification()
     }
 
@@ -191,6 +192,8 @@ class CoreVpnService : VpnService(), ServiceControl {
             stopSelf(latestStartId)
             return
         }
+        activeSessionId = request.sessionId
+        MmkvManager.setActiveServiceSession(request.sessionId)
         if (!tryLockStart()) {
             LogUtil.w(AppConfig.TAG, "StartCore-VPN: start lock unavailable for session=${request.sessionId}")
             sessionGate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
@@ -205,6 +208,9 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
         startService()
     }
+
+    override val serviceSessionId: Long
+        get() = activeSessionId
 
     override fun getService(): Service {
         return this
