@@ -106,28 +106,25 @@ jobs:
       - name: Fetch Psiphon server list
         run: bash fetch-psiphon-servers.sh
 
-      - name: Fetch AndroidLibXrayLite tag
+      - name: Verify pinned AndroidLibXrayLite release
         run: |
           cd AndroidLibXrayLite
           git fetch --tags origin
-          CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
-          if [ -z "$CURRENT_TAG" ]; then
-            CURRENT_TAG=$(git tag --sort=-version:refname | head -n 1)
-          fi
-          if [ -z "$CURRENT_TAG" ]; then
-            echo "::error::No tags found for AndroidLibXrayLite."
-            exit 1
-          fi
-          echo "Using AndroidLibXrayLite tag: $CURRENT_TAG"
-          echo "CURRENT_TAG=$CURRENT_TAG" >> "$GITHUB_ENV"
+          ACTUAL_COMMIT=$(git rev-parse "v26.11.20^{commit}")
+          EXPECTED_COMMIT="1546ca75217fc6e2ca6ec6c532871fd8555b9f2f"
+          test "$ACTUAL_COMMIT" = "$EXPECTED_COMMIT"
 
-      - name: Download libv2ray
+      - name: Download pinned libv2ray
         uses: robinraju/release-downloader@v1.13
         with:
           repository: patterniha/AndroidLibXrayLite
-          tag: ${{ env.CURRENT_TAG }}
+          tag: v26.11.20
           fileName: libv2ray.aar
           out-file-path: V2rayNG/app/libs/
+
+      - name: Verify libv2ray checksum
+        run: |
+          echo "88bd1d1243877848146f53c03731ec84677db84e31183b9b351459026624e1ac  V2rayNG/app/libs/libv2ray.aar" | sha256sum --check
 
       - name: Setup Java
         uses: actions/setup-java@v6.0.0
@@ -155,6 +152,7 @@ jobs:
           cd V2rayNG
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod 755 gradlew
+          ./gradlew testFdroidReleaseUnitTest
           ./gradlew licenseFdroidReleaseReport
           ./gradlew assembleRelease \
             -PpattngVersion="${{ inputs.release_tag || 'V26.10.11-test' }}" \
