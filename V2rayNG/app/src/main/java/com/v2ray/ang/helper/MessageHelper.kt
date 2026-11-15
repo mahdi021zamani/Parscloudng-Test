@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.core.ServiceSessionContract
+import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.dto.SubscriptionUpdateMessage
 import com.v2ray.ang.dto.TestServiceMessage
 import com.v2ray.ang.service.CoreTestService
@@ -27,7 +28,12 @@ object MessageHelper {
      * @param content The message content.
      */
     fun sendMsg2Service(ctx: Context, what: Int, content: Serializable, sessionId: Long? = null) {
-        sendMsg(ctx, AppConfig.BROADCAST_ACTION_SERVICE, what, content, sessionId)
+        val effectiveSessionId = sessionId ?: if (what == AppConfig.MSG_STATE_STOP) {
+            MmkvManager.getActiveServiceSession().takeIf { it > 0L }
+        } else {
+            null
+        }
+        sendMsg(ctx, AppConfig.BROADCAST_ACTION_SERVICE, what, content, effectiveSessionId)
     }
 
     /**
