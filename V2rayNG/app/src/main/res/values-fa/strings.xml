@@ -567,6 +567,7 @@
 
 
     <!-- PARSCLOUD subscription license -->
+    <string name="simple_license_required">برای اتصال، اشتراک PARSCLOUD خود را فعال کنید.</string>
     <string name="simple_license_title">اشتراک PARSCLOUD</string>
     <string name="simple_license_prompt">برای فعال‌کردن دسترسی VPN، کلید اشتراکی را که دریافت کرده‌اید وارد کنید.</string>
     <string name="simple_license_key_hint">کلید اشتراک</string>
