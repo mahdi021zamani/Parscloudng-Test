@@ -804,6 +804,8 @@ object MmkvManager {
             CENTRAL_SUBSCRIPTION_IDS.any { guid in decodeServerList(it) }
     }
 
+    fun isCentralProfile(guid: String): Boolean = isCentralProfileGuid(guid)
+
     fun decodeSubscription(subscriptionId: String): SubscriptionItem? {
         val json = subStorage.decodeString(subscriptionId) ?: return null
         return JsonUtil.fromJsonSafe(json, SubscriptionItem::class.java)
