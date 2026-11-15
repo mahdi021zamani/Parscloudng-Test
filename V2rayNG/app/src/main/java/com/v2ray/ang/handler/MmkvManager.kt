@@ -184,6 +184,17 @@ object MmkvManager {
 
     fun getActiveServiceSession(): Long = mainStorage.decodeLong(KEY_ACTIVE_SERVICE_SESSION, 0L)
 
+    fun setActiveServiceSession(sessionId: Long): Boolean {
+        if (sessionId <= 0L) return false
+        return withProfileIndexLock {
+            if (mainStorage.decodeBool(KEY_RETIRED_SERVICE_SESSION_PREFIX + sessionId, false)) {
+                false
+            } else {
+                mainStorage.encode(KEY_ACTIVE_SERVICE_SESSION, sessionId)
+            }
+        }
+    }
+
     fun isServiceSessionRetired(sessionId: Long): Boolean {
         if (sessionId <= 0L) return true
         return mainStorage.decodeBool(KEY_RETIRED_SERVICE_SESSION_PREFIX + sessionId, false)
