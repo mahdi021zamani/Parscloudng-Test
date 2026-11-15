@@ -214,13 +214,17 @@ class CoreVpnService : VpnService(), ServiceControl {
             sessionGate.owner?.sessionId != request.sessionId
         ) {
             if (sessionGate.owner?.sessionId == request.sessionId) sessionGate.clearOwner()
-            if (!isStoppingLock.get()) stopSelf(latestStartId)
+            if (sessionGate.owner == null && sessionGate.pending == null && !isStoppingLock.get()) {
+                stopSelf(latestStartId)
+            }
             return
         }
         if (!MmkvManager.setActiveServiceSession(request.sessionId)) {
             LogUtil.w(AppConfig.TAG, "StartCore-VPN: session was retired before ownership could be acquired")
             sessionGate.clearOwner()
-            if (!isStoppingLock.get()) stopSelf(latestStartId)
+            if (sessionGate.owner == null && sessionGate.pending == null && !isStoppingLock.get()) {
+                stopSelf(latestStartId)
+            }
             return
         }
         activeSessionId = request.sessionId
