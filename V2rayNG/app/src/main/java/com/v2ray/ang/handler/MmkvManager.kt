@@ -50,6 +50,15 @@ object MmkvManager {
     private const val KEY_SUB_IDS = "SUB_IDS"
     private const val KEY_WEBDAV_CONFIG = "WEBDAV_CONFIG"
 
+    // These IDs are backed by PARSCLOUD-owned RemoteConfig sources. Users may clear
+    // their downloaded profiles, but must not delete the source identity/metadata.
+    private val CENTRAL_SUBSCRIPTION_IDS = setOf(
+        "simple_free_vpn",
+        "simple_aether",
+        "simple_emergency",
+        "PARSCLOUD_AETHER_FEED",
+    )
+
     private val recoveryHandler = object : MMKVHandler {
         override fun onMMKVCRCCheckFail(mmapID: String) =
             recoverFromStorageError(mmapID, "CRC check")
@@ -695,6 +704,13 @@ object MmkvManager {
      * @param subid The subscription ID.
      */
     fun removeSubscription(subid: String) {
+        if (subid in CENTRAL_SUBSCRIPTION_IDS) {
+            // Keep the central source ID and its metadata; only the downloaded
+            // profiles are user-deletable. The next refresh can repopulate them.
+            removeServerViaSubid(subid)
+            return
+        }
+
         subStorage.remove(subid)
         val subsList = decodeSubsList()
         subsList.remove(subid)
