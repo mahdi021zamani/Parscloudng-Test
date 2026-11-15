@@ -34,6 +34,9 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Setup Gradle and restore dependency/build caches
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
@@ -152,12 +155,7 @@ jobs:
           cd V2rayNG
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod 755 gradlew
-          echo "=== Available app test-related Gradle tasks ==="
-          ./gradlew :app:tasks --all --console=plain | tee "$RUNNER_TEMP/app-gradle-tasks.txt"
-          grep -Ei '(^|[[:space:]])test[^[:space:]]*(unit|android)?test|(^|[[:space:]])test([[:space:]]|$)' "$RUNNER_TEMP/app-gradle-tasks.txt" || true
-          ./gradlew testFdroidDebugUnitTest
-          ./gradlew licenseFdroidReleaseReport
-          ./gradlew assembleFdroidRelease \
+          ./gradlew testFdroidDebugUnitTest licenseFdroidReleaseReport assembleFdroidRelease \
             -PpattngVersion="${{ inputs.release_tag || 'V26.10.11-test' }}" \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/android_keystore.jks" \
             -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
@@ -170,31 +168,4 @@ jobs:
         with:
           name: arm64-v8a
           path: V2rayNG/app/build/outputs/apk/*/release/*arm64-v8a*.apk
-
-      - name: Upload armeabi-v7a APK
-        if: success()
-        uses: actions/upload-artifact@v7
-        with:
-          name: armeabi-v7a
-          path: V2rayNG/app/build/outputs/apk/*/release/*armeabi-v7a*.apk
-
-      - name: Upload x86 APK
-        if: success()
-        uses: actions/upload-artifact@v7
-        with:
-          name: x86-apk
-          path: V2rayNG/app/build/outputs/apk/*/release/*x86.apk
-
-      - name: Upload x86_64 APK
-        if: success()
-        uses: actions/upload-artifact@v7
-        with:
-          name: x86_64-apk
-          path: V2rayNG/app/build/outputs/apk/*/release/*x86_64*.apk
-
-      - name: Upload universal APK
-        if: success()
-        uses: actions/upload-artifact@v7
-        with:
-          name: universal-apk
-          path: V2rayNG/app/build/outputs/apk/*/release/*universal*.apk
+          retention-days: 3
