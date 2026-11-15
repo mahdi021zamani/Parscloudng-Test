@@ -128,7 +128,7 @@ class CoreVpnService : VpnService(), ServiceControl {
         val hasInternalMarker = intent?.hasExtra(ServiceSessionContract.EXTRA_INTERNAL_START) == true
         val internalStart = intent?.getBooleanExtra(ServiceSessionContract.EXTRA_INTERNAL_START, false) == true
         val systemVpnStart = !hasInternalMarker && intent?.action == SERVICE_INTERFACE
-        val alwaysOnEnabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isAlwaysOn
+        val alwaysOnEnabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isAlwaysOn()
 
         val request = when {
             internalStart -> {
