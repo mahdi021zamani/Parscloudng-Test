@@ -173,8 +173,9 @@ object MmkvManager {
     private const val KEY_RETIRED_SERVICE_SESSION_PREFIX = "RETIRED_SERVICE_SESSION_"
 
     /**
-     * Allocates a monotonically increasing session ID under MMKV's inter-process file lock.
-     * Every app-originated CoreVpnService start must carry this ID and the private marker.
+     * Allocates a monotonically increasing request ID under MMKV's inter-process file lock.
+     * The daemon promotes it to the active owner only after accepting the start request.
+     * Every app-originated service start must carry this ID and the private marker.
      */
     fun beginServiceSession(): Long = withProfileIndexLock {
         val next = mainStorage.decodeLong(KEY_SERVICE_SESSION_COUNTER, 0L) + 1L
