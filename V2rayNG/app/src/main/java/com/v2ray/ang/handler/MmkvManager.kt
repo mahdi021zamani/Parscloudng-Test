@@ -434,20 +434,27 @@ object MmkvManager {
         val subId = getSubscriptionId(subscriptionId)
         withProfileIndexLock {
             val serverList = decodeServerList(subId)
+            val removedGuids = serverList.toList()
+            // A GUID can be referenced by more than one group. If any other group
+            // index is unreadable, preserve payloads rather than risk deleting a
+            // profile that is still in use elsewhere.
+            val referencedByOtherGroups = decodeServersReferencedByOtherGroups(subId)
 
             // Persist the empty index before deleting payloads. If the index write
             // fails, the old index and its payloads remain intact and readable.
-            val removedGuids = serverList.toList()
             serverList.clear()
             requireStorageWrite(
                 persistServerList(serverList, subId),
                 "Failed to clear subscription profile index",
             )
 
-            if (getSelectServer() in removedGuids) {
+            val removableGuids = referencedByOtherGroups
+                ?.let { referenced -> removedGuids.filterNot { it in referenced } }
+                .orEmpty()
+            if (getSelectServer()?.let { it in removableGuids } == true) {
                 mainStorage.remove(KEY_SELECTED_SERVER)
             }
-            removeProfilePayloads(removedGuids)
+            removeProfilePayloads(removableGuids)
         }
     }
 
@@ -462,6 +469,7 @@ object MmkvManager {
 
         withProfileIndexLock {
             val subId = getSubscriptionId(subscriptionId)
+            val referencedByOtherGroups = decodeServersReferencedByOtherGroups(subId)
             val serverList = decodeServerList(subId)
             if (serverList.removeAll(guids.toSet())) {
                 requireStorageWrite(
@@ -470,10 +478,13 @@ object MmkvManager {
                 )
             }
 
-            if (getSelectServer()?.let { it in guids } == true) {
+            val removableGuids = referencedByOtherGroups
+                ?.let { referenced -> guids.filterNot { it in referenced } }
+                .orEmpty()
+            if (getSelectServer()?.let { it in removableGuids } == true) {
                 mainStorage.remove(KEY_SELECTED_SERVER)
             }
-            removeProfilePayloads(guids)
+            removeProfilePayloads(removableGuids)
         }
     }
 
