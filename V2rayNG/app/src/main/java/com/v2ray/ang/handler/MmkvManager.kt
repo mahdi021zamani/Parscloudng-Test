@@ -594,7 +594,7 @@ object MmkvManager {
 
         // Preserve the active central profile; clear selection only when it belongs
         // to a profile that is actually being removed.
-        getSelectServer()?.takeIf { it in removableGuids }?.let {
+        getSelectServer()?.takeIf { it !in protectedGuids }?.let {
             mainStorage.remove(KEY_SELECTED_SERVER)
         }
 
