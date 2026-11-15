@@ -12,6 +12,7 @@ import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.core.LauncherManager
+import com.v2ray.ang.core.ServiceSessionContract
 import com.v2ray.ang.dto.RealPingEvent
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SimpleVpnRepository
@@ -94,11 +95,42 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     private var pingWorker: RealPingWorkerService? = null
     private var refreshJob: Job? = null
     private var connectValidationJob: Job? = null
+    private var expectedServiceSessionId: Long? = null
+
+    private fun stopCurrentService(context: Context) {
+        LauncherManager.stopService(context, expectedServiceSessionId)
+    }
 
     private val serviceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val safeIntent = intent ?: return
-            when (safeIntent.getIntExtra("key", 0)) {
+            val key = safeIntent.getIntExtra("key", 0)
+            val eventSessionId = safeIntent.getLongExtra(ServiceSessionContract.EXTRA_SESSION_ID, 0L)
+            val activeSessionId = MmkvManager.getActiveServiceSession()
+            val expectedSessionId = expectedServiceSessionId
+
+            // Accept only the expected request or the session that is still the actual
+            // owner. This lets a pending user start coexist with its old tearing-down
+            // owner, while rejecting late status from a retired, unrelated session.
+            if (eventSessionId > 0L) {
+                if (expectedSessionId != null &&
+                    eventSessionId != expectedSessionId &&
+                    eventSessionId != activeSessionId
+                ) return
+                if (expectedSessionId == null &&
+                    activeSessionId > 0L &&
+                    eventSessionId != activeSessionId
+                ) return
+                if (expectedSessionId == null &&
+                    (eventSessionId == activeSessionId || activeSessionId == 0L)
+                ) {
+                    this@SimpleVpnViewModel.expectedServiceSessionId = eventSessionId
+                }
+            } else if (expectedSessionId != null && activeSessionId > 0L) {
+                return
+            }
+
+            when (key) {
                 AppConfig.MSG_STATE_CONNECTING ->
                     _uiState.update { it.copy(status = SimpleConnectionStatus.CONNECTING, message = null) }
 
@@ -115,14 +147,19 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
                 AppConfig.MSG_STATE_NOT_RUNNING, AppConfig.MSG_STATE_STOP_SUCCESS ->
                     _uiState.update { state ->
-                        // Keep launcher/Tasker pointed at the profile currently selected in the UI.
                         state.selectedGuid?.takeIf { MmkvManager.decodeServerConfig(it) != null }?.let(MmkvManager::setSelectServer)
+                        if (eventSessionId == 0L || expectedServiceSessionId == eventSessionId) {
+                            this@SimpleVpnViewModel.expectedServiceSessionId = null
+                        }
                         state.copy(status = SimpleConnectionStatus.DISCONNECTED)
                     }
 
                 AppConfig.MSG_STATE_START_FAILURE ->
                     _uiState.update { state ->
                         state.selectedGuid?.takeIf { MmkvManager.decodeServerConfig(it) != null }?.let(MmkvManager::setSelectServer)
+                        if (eventSessionId == 0L || expectedServiceSessionId == eventSessionId) {
+                            this@SimpleVpnViewModel.expectedServiceSessionId = null
+                        }
                         state.copy(
                             status = SimpleConnectionStatus.DISCONNECTED,
                             message = getApplication<Application>().getString(R.string.simple_connect_failed),
@@ -175,7 +212,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         SubscriptionLicenseRepository.getStoredLicense()
                     }
                     if (stored == null) {
-                        LauncherManager.stopService(getApplication())
+                        stopCurrentService(getApplication())
                         _uiState.update {
                             it.copy(
                                 status = SimpleConnectionStatus.DISCONNECTED,
@@ -526,7 +563,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             connectValidationJob?.cancel()
             connectValidationJob = null
             state.selectedGuid?.let(MmkvManager::setSelectServer)
-            LauncherManager.stopService(app)
+            stopCurrentService(app)
             _uiState.update {
                 it.copy(
                     status = SimpleConnectionStatus.DISCONNECTED,
@@ -537,7 +574,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
         if (state.status == SimpleConnectionStatus.CONNECTED) {
-            LauncherManager.stopService(app)
+            stopCurrentService(app)
             return
         }
         if (!state.licenseValid) {
@@ -608,7 +645,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         return@launch
                     }
                     if (previous != null && previous.key != key) {
-                        LauncherManager.stopService(app)
+                        stopCurrentService(app)
                     }
                     SubscriptionLicenseWorker.schedule(app)
                     val canConnect = SimpleVpnRepository.canConnect(_uiState.value.selectedSourceId)
@@ -670,7 +707,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             is SubscriptionLicenseRepository.ValidationResult.Rejected -> {
-                LauncherManager.stopService(getApplication())
+                stopCurrentService(getApplication())
                 _uiState.update {
                     it.copy(
                         isValidatingLicense = false,
@@ -685,7 +722,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             SubscriptionLicenseRepository.ValidationResult.NetworkError -> {
                 val locallyActive = stored != null && !SubscriptionLicenseRepository.isExpired(stored)
                 if (!locallyActive) {
-                    LauncherManager.stopService(getApplication())
+                    stopCurrentService(getApplication())
                 }
                 _uiState.update {
                     it.copy(
@@ -778,7 +815,20 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         )
                     }
                     try {
-                        LauncherManager.startService(app, guid)
+                        val startedSessionId = LauncherManager.startService(app, guid)
+                        if (startedSessionId == null) {
+                            _uiState.update {
+                                it.copy(
+                                    status = SimpleConnectionStatus.DISCONNECTED,
+                                    isValidatingLicense = false,
+                                    licenseValid = true,
+                                    canConnect = true,
+                                    message = app.getString(R.string.simple_connect_failed),
+                                )
+                            }
+                        } else {
+                            expectedServiceSessionId = startedSessionId
+                        }
                     } catch (e: Exception) {
                         LogUtil.e(AppConfig.TAG, "SimpleVpnViewModel: failed to start service", e)
                         _uiState.update {
@@ -793,7 +843,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 }
 
                 is SubscriptionLicenseRepository.ValidationResult.Rejected -> {
-                    LauncherManager.stopService(app)
+                    stopCurrentService(app)
                     _uiState.update {
                         it.copy(
                             status = SimpleConnectionStatus.DISCONNECTED,
@@ -809,7 +859,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 SubscriptionLicenseRepository.ValidationResult.NetworkError -> {
                     val locallyActive = !SubscriptionLicenseRepository.isExpired(stored)
                     if (!locallyActive) {
-                        LauncherManager.stopService(app)
+                        stopCurrentService(app)
                     }
                     _uiState.update {
                         it.copy(
