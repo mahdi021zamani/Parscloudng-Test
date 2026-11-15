@@ -43,8 +43,13 @@ class CoreRootService : Service(), ServiceControl {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val internalStart = intent?.getBooleanExtra(ServiceSessionContract.EXTRA_INTERNAL_START, false) == true
-        val sessionId = intent?.getLongExtra(ServiceSessionContract.EXTRA_SESSION_ID, 0L) ?: 0L
-        if (!internalStart || sessionId <= 0L || MmkvManager.isServiceSessionRetired(sessionId)) {
+        val stickyRecovery = intent == null
+        val sessionId = when {
+            internalStart -> intent?.getLongExtra(ServiceSessionContract.EXTRA_SESSION_ID, 0L) ?: 0L
+            stickyRecovery -> MmkvManager.getActiveServiceSession()
+            else -> 0L
+        }
+        if ((!internalStart && !stickyRecovery) || sessionId <= 0L || MmkvManager.isServiceSessionRetired(sessionId)) {
             LogUtil.w(AppConfig.TAG, "StartCore-Root: rejecting unmarked or retired start")
             stopSelf(startId)
             return START_NOT_STICKY
