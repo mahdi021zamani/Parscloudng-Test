@@ -18,27 +18,40 @@ import com.v2ray.ang.util.LogUtil
 object SimpleVpnRepository {
 
     /** Kept stable so existing installations migrate their old cache in place. */
+    /** Legacy ID retained so existing irancell installations keep their cache. */
     const val SIMPLE_SUB_ID = "simple_free_vpn"
+    const val HAMRAH_SUB_ID = "simple_hamrah"
     const val AETHER_SUB_ID = "simple_aether"
+    const val COMBINED_SUB_ID = "simple_combined"
+    const val SERVICES_SUB_ID = "simple_services_iran"
     const val EMERGENCY_SUB_ID = "simple_emergency"
+
+    private enum class SourceKind { V2RAY, AETHER, CUSTOM_JSON }
 
     private data class Source(
         val id: String,
         val remarks: String,
         val url: String,
+        val kind: SourceKind,
     )
+
+    private val v2raySources: List<Source>
+        get() = primarySources.filter { it.kind == SourceKind.V2RAY }
 
     private val primarySources: List<Source>
         get() = listOf(
-            Source(SIMPLE_SUB_ID, "PARSCLOUD • V2Ray", RemoteConfig.SERVER_LIST_URL),
-            Source(AETHER_SUB_ID, "PARSCLOUD • Aether", RemoteConfig.AETHER_SERVER_LIST_URL),
+            Source(SIMPLE_SUB_ID, "PARSCLOUD • irancell", RemoteConfig.SERVER_LIST_URL, SourceKind.V2RAY),
+            Source(HAMRAH_SUB_ID, "PARSCLOUD • Hamrah", RemoteConfig.HAMRAH_SERVER_LIST_URL, SourceKind.V2RAY),
+            Source(AETHER_SUB_ID, "PARSCLOUD • WireGuard", RemoteConfig.AETHER_SERVER_LIST_URL, SourceKind.AETHER),
+            Source(COMBINED_SUB_ID, "PARSCLOUD • Combined", RemoteConfig.COMBINED_AETHER_SERVER_LIST_URL, SourceKind.AETHER),
+            Source(SERVICES_SUB_ID, "PARSCLOUD • Services for Iran", RemoteConfig.SERVICES_FOR_IRAN_URL, SourceKind.CUSTOM_JSON),
         )
 
     /** Empty until a private server-side proxy is configured for the secret panel URL. */
     private val emergencySource: Source?
         get() = RemoteConfig.EMERGENCY_FALLBACK_URL
             .takeIf { it.isNotBlank() }
-            ?.let { Source(EMERGENCY_SUB_ID, "PARSCLOUD • Backup", it) }
+            ?.let { Source(EMERGENCY_SUB_ID, "PARSCLOUD • Backup", it, SourceKind.V2RAY) }
 
     data class SimpleServerUiModel(
         val guid: String,
@@ -70,26 +83,32 @@ object SimpleVpnRepository {
         val subItem = existing ?: SubscriptionItem(
             remarks = source.remarks,
             url = source.url,
-            enabled = source.id != AETHER_SUB_ID,
+            enabled = source.kind != SourceKind.AETHER,
             autoUpdate = false,
         )
         if (existing == null || existing.url != source.url || existing.remarks != source.remarks ||
-            (source.id == AETHER_SUB_ID && subItem.enabled)
+            (source.kind == SourceKind.AETHER && subItem.enabled)
         ) {
             subItem.url = source.url
             subItem.remarks = source.remarks
-            // Aether is fetched only through the authenticated repository below.
-            // Keep its legacy MMKV subscription disabled so generic bulk updates cannot
-            // request the protected Worker without its Authorization header.
-            subItem.enabled = source.id != AETHER_SUB_ID
+            // Aether feeds are fetched through the dedicated direct-raw repository.
+            // Keep their generic MMKV subscriptions disabled so bulk updates cannot
+            // bypass the controlled refresh path.
+            subItem.enabled = source.kind != SourceKind.AETHER
             subItem.autoUpdate = false
             MmkvManager.encodeSubscription(source.id, subItem)
         }
         return SubscriptionCache(source.id, subItem)
     }
 
-    /** Backwards-compatible initializer used by the existing screen. */
+    /** Backwards-compatible initializer used by older call sites. */
     fun ensureSubscription(): SubscriptionCache = ensureSubscription(primarySources.first())
+
+    /** Initialize all central source identities without performing any network request. */
+    fun ensureSubscriptions() {
+        primarySources.forEach(::ensureSubscription)
+        emergencySource?.let(::ensureSubscription)
+    }
 
     private fun allConfiguredSources(): List<Source> =
         primarySources + listOfNotNull(emergencySource)
@@ -142,16 +161,15 @@ object SimpleVpnRepository {
         val source = primarySources.firstOrNull { it.id == sourceId } ?: return emptyList()
         if (sourceHasFreshConfigs(source)) return sourceGuids(source).distinct()
 
-        // Visibility and connectability are independent of freshness: cached profiles
-        // remain usable after transient outages while their source is refreshed manually.
+        // Freshness affects refresh scheduling, never the usability of a valid local cache.
         val cached = sourceGuids(source).filter { MmkvManager.decodeServerConfig(it) != null }
         if (cached.isNotEmpty()) return cached.distinct()
 
-        val anyFreshPrimary = primarySources.any(::sourceHasFreshConfigs)
-        if (anyFreshPrimary) return emptyList()
-
-        if (sourceId == SIMPLE_SUB_ID) {
-            return emergencySource?.let(::sourceGuids).orEmpty().distinct()
+        // The emergency feed is a V2Ray-only fallback, shared by the two V2Ray subtabs.
+        if (source.kind == SourceKind.V2RAY && v2raySources.none(::sourceHasFreshConfigs)) {
+            return emergencySource?.let(::sourceGuids).orEmpty()
+                .filter { MmkvManager.decodeServerConfig(it) != null }
+                .distinct()
         }
         return emptyList()
     }
@@ -193,14 +211,13 @@ object SimpleVpnRepository {
     fun canConnect(sourceId: String): Boolean {
         val source = primarySources.firstOrNull { it.id == sourceId } ?: return false
 
-        // Freshness controls when a refresh is due, not whether a previously
-        // downloaded profile can be used. Each tab owns its cache independently:
-        // a fresh V2Ray feed must never disable cached Aether profiles, or vice versa.
+        // Every profile tab owns its cache independently. Freshness only decides
+        // whether a manual refresh is due; it does not disable a cached profile.
         if (sourceHasCachedProfiles(source)) return true
 
-        // The emergency feed is a V2Ray-tab fallback only, and only when neither
-        // primary source currently has a fresh feed.
-        if (sourceId == SIMPLE_SUB_ID && primarySources.none(::sourceHasFreshConfigs)) {
+        // Emergency fallback is exposed only inside V2Ray, when neither V2Ray
+        // subfeed has a fresh usable cache.
+        if (source.kind == SourceKind.V2RAY && v2raySources.none(::sourceHasFreshConfigs)) {
             return emergencySource?.let(::sourceHasCachedProfiles) == true
         }
         return false
@@ -216,8 +233,8 @@ object SimpleVpnRepository {
 
     private suspend fun refreshSource(source: Source): SourceRefreshResult {
         val subscription = ensureSubscription(source)
-        if (source.id == AETHER_SUB_ID) {
-            return when (val result = AetherFeedRepository.fetch()) {
+        if (source.kind == SourceKind.AETHER) {
+            return when (val result = AetherFeedRepository.fetch(source.url)) {
                 is AetherFeedRepository.Result.Success -> {
                     val normalized = result.content
                         .removePrefix("\uFEFF")
@@ -278,7 +295,9 @@ object SimpleVpnRepository {
             }
             AngConfigManager.SimpleRefreshResult.EmptyResponse -> {
                 clearSourceCache(source)
-                if (!canConnect(SIMPLE_SUB_ID) && !canConnect(AETHER_SUB_ID)) {
+                if (primarySources.none(::sourceHasCachedProfiles) &&
+                    emergencySource?.let(::sourceHasCachedProfiles) != true
+                ) {
                     LauncherManager.stopService(context)
                 }
                 return RefreshOutcome.EmptiedByServer
