@@ -132,9 +132,6 @@ internal class VpnServiceSessionGate {
         val previousCause = teardownCause
         val queued = pending
         pending = null
-        teardownSession = null
-        teardownInProgress = false
-        teardownCause = null
 
         val next = when {
             queued == null -> null
@@ -145,7 +142,25 @@ internal class VpnServiceSessionGate {
             else -> null
         }
         owner = next
+
+        // If there is no promotable start, keep teardownSession and its cause until
+        // finishServiceIfIdle(). A late SERVICE_INTERFACE must not resurrect a
+        // user-stopped session in the gap before stopSelf().
+        if (next != null) {
+            teardownSession = null
+            teardownInProgress = false
+            teardownCause = null
+        }
         return next
+    }
+
+    @Synchronized
+    fun finishServiceIfIdle(): Boolean {
+        if (owner != null || pending != null) return false
+        teardownSession = null
+        teardownInProgress = false
+        teardownCause = null
+        return true
     }
 
     @Synchronized
