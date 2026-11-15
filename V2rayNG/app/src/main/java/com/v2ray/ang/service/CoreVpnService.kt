@@ -19,6 +19,7 @@ import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.contracts.ServiceControl
 import com.v2ray.ang.contracts.Tun2SocksControl
 import com.v2ray.ang.core.CoreServiceManager
+import com.v2ray.ang.core.ServiceSessionContract
 import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.NotificationManager
@@ -41,6 +42,8 @@ class CoreVpnService : VpnService(), ServiceControl {
     private val isStartingLock = AtomicBoolean(false)
     private val isStoppingLock = AtomicBoolean(false)
     private val isInterfaceClosed = AtomicBoolean(false)
+    private val sessionGate = VpnServiceSessionGate()
+    @Volatile private var latestStartId = 0
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
@@ -116,25 +119,81 @@ class CoreVpnService : VpnService(), ServiceControl {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         NotificationManager.ensureForeground()
-        // Always-on VPN restarts from OS deliver intent.action == SERVICE_INTERFACE or null intent.
-        // Reset any stuck start lock left by a killed process to allow setupVpnService() to run.
-        val isSystemVpnStart = intent == null || intent.action == SERVICE_INTERFACE
-        if (isSystemVpnStart) {
-            unlockStart()
+        latestStartId = maxOf(latestStartId, startId)
+
+        val internalStart = intent?.getBooleanExtra(ServiceSessionContract.EXTRA_INTERNAL_START, false) == true
+        val systemVpnStart = !internalStart && intent?.action == SERVICE_INTERFACE
+        val alwaysOnEnabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isAlwaysOn
+
+        val request = when {
+            internalStart -> {
+                val sessionId = intent?.getLongExtra(ServiceSessionContract.EXTRA_SESSION_ID, 0L) ?: 0L
+                if (sessionId <= 0L || MmkvManager.isServiceSessionRetired(sessionId)) {
+                    LogUtil.w(AppConfig.TAG, "StartCore-VPN: rejecting invalid or retired app session=$sessionId")
+                    return START_NOT_STICKY
+                }
+                VpnServiceSessionGate.Start(sessionId, startId, VpnServiceSessionGate.Origin.USER)
+            }
+
+            systemVpnStart -> {
+                if (!alwaysOnEnabled) {
+                    LogUtil.w(AppConfig.TAG, "StartCore-VPN: ignoring SERVICE_INTERFACE while Always-on is disabled")
+                    return START_NOT_STICKY
+                }
+                val sessionId = MmkvManager.beginServiceSession()
+                VpnServiceSessionGate.Start(sessionId, startId, VpnServiceSessionGate.Origin.SYSTEM)
+            }
+
+            intent == null -> {
+                // START_STICKY may redeliver a null Intent. It resumes only the persisted
+                // session; null is never interpreted as an Android Always-on start.
+                val sessionId = MmkvManager.getActiveServiceSession()
+                if (sessionId <= 0L || MmkvManager.isServiceSessionRetired(sessionId)) {
+                    LogUtil.i(AppConfig.TAG, "StartCore-VPN: no live session to recover from null sticky Intent")
+                    return START_NOT_STICKY
+                }
+                VpnServiceSessionGate.Start(sessionId, startId, VpnServiceSessionGate.Origin.USER)
+            }
+
+            else -> {
+                LogUtil.w(AppConfig.TAG, "StartCore-VPN: rejecting unmarked non-system start")
+                return START_NOT_STICKY
+            }
+        }
+
+        if (systemVpnStart) unlockStart()
+        val decision = sessionGate.requestStart(request, alwaysOnEnabled)
+        LogUtil.i(
+            AppConfig.TAG,
+            "StartCore-VPN: start session=${request.sessionId}, origin=${request.origin}, decision=$decision, alwaysOn=$alwaysOnEnabled"
+        )
+        when (decision) {
+            VpnServiceSessionGate.StartDecision.START_NOW -> startSession(request)
+            VpnServiceSessionGate.StartDecision.QUEUED -> Unit
+            VpnServiceSessionGate.StartDecision.IGNORED -> Unit
+        }
+        return if (decision == VpnServiceSessionGate.StartDecision.IGNORED) START_NOT_STICKY else START_STICKY
+    }
+
+    private fun startSession(request: VpnServiceSessionGate.Start) {
+        if (MmkvManager.isServiceSessionRetired(request.sessionId)) {
+            sessionGate.clearOwner()
+            stopSelf(latestStartId)
+            return
         }
         if (!tryLockStart()) {
-            LogUtil.w(AppConfig.TAG, "StartCore-VPN: Start already in progress")
-            return START_NOT_STICKY
+            LogUtil.w(AppConfig.TAG, "StartCore-VPN: start lock unavailable for session=${request.sessionId}")
+            sessionGate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+            sessionGate.finishTeardown()
+            stopSelf(latestStartId)
+            return
         }
-        LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service command received, systemVpnStart=$isSystemVpnStart")
         if (!setupVpnService()) {
-            unlockStart()
-            // Stop service if setup fails to avoid infinite restart loops (START_STICKY)
-            stopSelf()
-            return START_NOT_STICKY
+            LogUtil.e(AppConfig.TAG, "StartCore-VPN: VPN setup failed for session=${request.sessionId}")
+            stopAllService(true, VpnServiceSessionGate.TeardownCause.INTERNAL)
+            return
         }
         startService()
-        return START_STICKY
     }
 
     override fun getService(): Service {
@@ -144,11 +203,12 @@ class CoreVpnService : VpnService(), ServiceControl {
     override fun startService() {
         if (!::mInterface.isInitialized) {
             LogUtil.e(AppConfig.TAG, "StartCore-VPN: Interface not initialized")
+            stopAllService(true, VpnServiceSessionGate.TeardownCause.INTERNAL)
             return
         }
         if (!CoreServiceManager.startCoreLoop(mInterface)) {
             LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to start core loop")
-            stopAllService()
+            stopAllService(true, VpnServiceSessionGate.TeardownCause.INTERNAL)
             return
         }
 
@@ -157,7 +217,30 @@ class CoreVpnService : VpnService(), ServiceControl {
     }
 
     override fun stopService() {
-        stopAllService(true)
+        val owner = sessionGate.owner
+        owner?.let { MmkvManager.retireServiceSession(it.sessionId) }
+        stopAllService(true, VpnServiceSessionGate.TeardownCause.USER_STOP)
+    }
+
+    override fun stopService(sessionId: Long?) {
+        if (sessionId == null || sessionId <= 0L) return
+        val ownerBeforeStop = sessionGate.owner
+        val pendingBeforeStop = sessionGate.pending
+        when (sessionGate.requestStop(sessionId)) {
+            VpnServiceSessionGate.StopDecision.CANCEL_PENDING -> {
+                pendingBeforeStop?.let { MmkvManager.retireServiceSession(it.sessionId) }
+                LogUtil.i(AppConfig.TAG, "StartCore-VPN: cancelled pending recovery for teardown session=$sessionId")
+            }
+
+            VpnServiceSessionGate.StopDecision.STOP_OWNER -> {
+                ownerBeforeStop?.let { MmkvManager.retireServiceSession(it.sessionId) }
+                stopAllService(true, VpnServiceSessionGate.TeardownCause.USER_STOP)
+            }
+
+            VpnServiceSessionGate.StopDecision.IGNORED -> {
+                LogUtil.i(AppConfig.TAG, "StartCore-VPN: ignored stale STOP for session=$sessionId")
+            }
+        }
     }
 
     override fun vpnProtect(socket: Int): Boolean {
@@ -352,9 +435,18 @@ class CoreVpnService : VpnService(), ServiceControl {
         tun2SocksService?.startTun2Socks()
     }
 
-    private fun stopAllService(isForced: Boolean = true) {
-        if (!isStoppingLock.compareAndSet(false, true)) return
+    private fun stopAllService(
+        isForced: Boolean = true,
+        cause: VpnServiceSessionGate.TeardownCause = VpnServiceSessionGate.TeardownCause.INTERNAL,
+    ) {
+        if (!isStoppingLock.compareAndSet(false, true)) {
+            if (cause == VpnServiceSessionGate.TeardownCause.USER_STOP) {
+                sessionGate.beginTeardown(VpnServiceSessionGate.TeardownCause.USER_STOP)
+            }
+            return
+        }
 
+        sessionGate.beginTeardown(cause)
         unlockStart()
         isRunning = false
 
@@ -373,11 +465,18 @@ class CoreVpnService : VpnService(), ServiceControl {
                     if (!stopped) LogUtil.w(AppConfig.TAG, "StartCore-VPN: one or more native components did not confirm shutdown")
                 }
                 .onFailure { LogUtil.e(AppConfig.TAG, "StartCore-VPN: core shutdown failed", it) }
+
             if (isForced) {
-                // Preserve the required ordering: request service stop before closing
-                // the descriptor, but do not guess how long native shutdown needs.
-                stopSelf()
                 closeVpnInterface()
+                val next = sessionGate.finishTeardown()
+                isStoppingLock.set(false)
+                if (next != null && !MmkvManager.isServiceSessionRetired(next.sessionId)) {
+                    LogUtil.i(AppConfig.TAG, "StartCore-VPN: promoting pending session=${next.sessionId}, origin=${next.origin}, recovers=${next.recoversSession}")
+                    startSession(next)
+                } else {
+                    sessionGate.clearOwner()
+                    stopSelf(latestStartId)
+                }
             } else {
                 isStoppingLock.set(false)
             }
