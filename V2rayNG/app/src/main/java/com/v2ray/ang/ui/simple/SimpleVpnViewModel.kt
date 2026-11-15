@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
+import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.dto.RealPingEvent
 import com.v2ray.ang.handler.MmkvManager
@@ -223,9 +224,12 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val selected = MmkvManager.getSelectServer(sourceId)
             ?.takeIf { guid -> servers.any { it.guid == guid } }
             ?: servers.firstOrNull()?.guid
-        selected?.let {
-            MmkvManager.setSelectServer(it, sourceId)
-            MmkvManager.setSelectServer(it)
+        selected?.let { MmkvManager.setSelectServer(it, sourceId) }
+        val activeGuid = MmkvManager.getSelectServer()
+        if (!CoreServiceManager.isRunning() &&
+            (activeGuid.isNullOrBlank() || MmkvManager.decodeServerConfig(activeGuid) == null)
+        ) {
+            selected?.let(MmkvManager::setSelectServer)
         }
         _uiState.update {
             it.copy(
