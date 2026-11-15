@@ -331,7 +331,10 @@ class CoreVpnService : VpnService(), ServiceControl {
 
             VpnServiceSessionGate.StopDecision.STOP_OWNER -> {
                 userDisconnectRequested = true
-                ownerBeforeStop?.let { MmkvManager.retireServiceSession(it.sessionId) }
+                ownerBeforeStop?.let {
+                    MmkvManager.retireServiceSession(it.sessionId)
+                    it.recoversSession?.let(MmkvManager::retireServiceSession)
+                }
                 MmkvManager.retireServiceSession(activeSessionId)
                 stopAllService(true, VpnServiceSessionGate.TeardownCause.USER_STOP)
             }
