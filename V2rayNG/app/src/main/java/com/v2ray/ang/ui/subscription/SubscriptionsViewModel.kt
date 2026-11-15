@@ -25,42 +25,57 @@ class SubscriptionsViewModel(application: Application) : BaseViewModel(applicati
     private val subscriptions: MutableList<SubscriptionCache> =
         MmkvManager.decodeSubscriptions().toMutableList()
 
-    private val _subsFlow = MutableStateFlow(subscriptions.toList())
+    private fun visibleSubscriptions(): List<SubscriptionCache> =
+        subscriptions.filterNot { MmkvManager.isCentralSubscriptionId(it.guid) }
+
+    private val _subsFlow = MutableStateFlow(visibleSubscriptions())
     val subsFlow: StateFlow<List<SubscriptionCache>> = _subsFlow.asStateFlow()
 
-    fun getAll(): List<SubscriptionCache> = subscriptions.toList()
+    fun getAll(): List<SubscriptionCache> = visibleSubscriptions()
 
     fun reload() {
         subscriptions.clear()
         subscriptions.addAll(MmkvManager.decodeSubscriptions())
-        _subsFlow.value = subscriptions.toList()
+        _subsFlow.value = visibleSubscriptions()
     }
 
     fun remove(subId: String): Boolean {
+        if (MmkvManager.isCentralSubscriptionId(subId)) return false
         val changed = subscriptions.removeAll { it.guid == subId }
         if (changed) {
             SettingsManager.removeSubscriptionWithDefault(subId)
             SettingsChangeManager.makeSetupGroupTab()
         }
-        _subsFlow.value = subscriptions.toList()
+        _subsFlow.value = visibleSubscriptions()
         return changed
     }
 
     fun update(subId: String, item: SubscriptionItem) {
+        if (MmkvManager.isCentralSubscriptionId(subId)) return
         val idx = subscriptions.indexOfFirst { it.guid == subId }
         if (idx >= 0) {
             subscriptions[idx] = SubscriptionCache(subId, item)
             MmkvManager.encodeSubscription(subId, item)
         }
-        _subsFlow.value = subscriptions.toList()
+        _subsFlow.value = visibleSubscriptions()
     }
 
     fun move(fromPosition: Int, toPosition: Int) {
-        if (subscriptions.moveItem(fromPosition, toPosition)) {
-            MmkvManager.encodeSubsList(subscriptions.mapTo(mutableListOf()) { it.guid })
-            SettingsChangeManager.makeSetupGroupTab()
-            _subsFlow.value = subscriptions.toList()
+        val personalSubscriptions = visibleSubscriptions().toMutableList()
+        if (!personalSubscriptions.moveItem(fromPosition, toPosition)) return
+
+        // Keep central feed entries and their stored positions intact while reordering
+        // only the personal subscriptions shown in this screen.
+        val personalPositions = subscriptions.indices.filter { index ->
+            !MmkvManager.isCentralSubscriptionId(subscriptions[index].guid)
         }
+        personalPositions.forEachIndexed { visibleIndex, storedIndex ->
+            subscriptions[storedIndex] = personalSubscriptions[visibleIndex]
+        }
+
+        MmkvManager.encodeSubsList(subscriptions.mapTo(mutableListOf()) { it.guid })
+        SettingsChangeManager.makeSetupGroupTab()
+        _subsFlow.value = visibleSubscriptions()
     }
 
     fun updateSubscriptions() {

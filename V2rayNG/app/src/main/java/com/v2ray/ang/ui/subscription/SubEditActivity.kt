@@ -31,6 +31,7 @@ import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.extension.toLongEx
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastSuccess
+import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsChangeManager
 import com.v2ray.ang.handler.SettingsManager
@@ -79,6 +80,11 @@ class SubEditActivity : BaseComponentActivity() {
 
     private fun saveServer(subItem: SubscriptionItem): Boolean {
 
+        if (MmkvManager.isCentralSubscriptionId(editSubId)) {
+            toastError(R.string.toast_action_not_allowed)
+            return false
+        }
+
         if (TextUtils.isEmpty(subItem.remarks)) {
             toast(R.string.sub_setting_remarks)
             return false
@@ -110,6 +116,10 @@ class SubEditActivity : BaseComponentActivity() {
     }
 
     private fun deleteServer(): Boolean {
+        if (MmkvManager.isCentralSubscriptionId(editSubId)) {
+            toastError(R.string.toast_action_not_allowed)
+            return false
+        }
         if (editSubId.isNotEmpty()) {
             lifecycleScope.launch(Dispatchers.IO) {
                 SettingsManager.removeSubscriptionWithDefault(editSubId)
