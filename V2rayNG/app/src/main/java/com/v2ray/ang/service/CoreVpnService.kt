@@ -107,6 +107,14 @@ class CoreVpnService : VpnService(), ServiceControl {
 //    }
 
     override fun onDestroy() {
+        val stopMessage = if (userDisconnectRequested && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isAlwaysOn()) {
+            getString(
+                if (isLockdownEnabled()) R.string.simple_always_on_lockdown_notice
+                else R.string.simple_always_on_remains_enabled
+            )
+        } else {
+            ""
+        }
         unregisterSubscriptionNetworkCallback()
         CoreServiceManager.unregisterServiceReceiver(this)
         super.onDestroy()
@@ -118,14 +126,6 @@ class CoreVpnService : VpnService(), ServiceControl {
         closeVpnInterface()
 
         unlockStart()
-        val stopMessage = if (userDisconnectRequested && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && isAlwaysOn()) {
-            getString(
-                if (isLockdownEnabled()) R.string.simple_always_on_lockdown_notice
-                else R.string.simple_always_on_remains_enabled
-            )
-        } else {
-            ""
-        }
         MessageHelper.sendMsg2UI(this, AppConfig.MSG_STATE_STOP_SUCCESS, stopMessage, activeSessionId)
         NotificationManager.cancelNotification()
     }
