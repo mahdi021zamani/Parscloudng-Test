@@ -155,9 +155,9 @@ jobs:
           echo "=== Available app test-related Gradle tasks ==="
           ./gradlew :app:tasks --all --console=plain | tee "$RUNNER_TEMP/app-gradle-tasks.txt"
           grep -Ei '(^|[[:space:]])test[^[:space:]]*(unit|android)?test|(^|[[:space:]])test([[:space:]]|$)' "$RUNNER_TEMP/app-gradle-tasks.txt" || true
-          ./gradlew testFdroidReleaseUnitTest
+          ./gradlew testFdroidDebugUnitTest
           ./gradlew licenseFdroidReleaseReport
-          ./gradlew assembleRelease \
+          ./gradlew assembleFdroidRelease \
             -PpattngVersion="${{ inputs.release_tag || 'V26.10.11-test' }}" \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/android_keystore.jks" \
             -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
