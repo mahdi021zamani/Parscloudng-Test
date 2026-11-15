@@ -198,6 +198,7 @@ class CoreVpnService : VpnService(), ServiceControl {
             LogUtil.w(AppConfig.TAG, "StartCore-VPN: start lock unavailable for session=${request.sessionId}")
             sessionGate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
             sessionGate.finishTeardown()
+            MmkvManager.clearActiveServiceSession(request.sessionId)
             stopSelf(latestStartId)
             return
         }
@@ -493,7 +494,9 @@ class CoreVpnService : VpnService(), ServiceControl {
                     LogUtil.i(AppConfig.TAG, "StartCore-VPN: promoting pending session=${next.sessionId}, origin=${next.origin}, recovers=${next.recoversSession}")
                     startSession(next)
                 } else {
+                    next?.let { MmkvManager.retireServiceSession(it.sessionId) }
                     sessionGate.clearOwner()
+                    MmkvManager.clearActiveServiceSession(activeSessionId)
                     stopSelf(latestStartId)
                 }
             } else {
