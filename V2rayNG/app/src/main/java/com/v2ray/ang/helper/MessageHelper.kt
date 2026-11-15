@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.content.ContextCompat
 import com.v2ray.ang.AppConfig
+import com.v2ray.ang.core.ServiceSessionContract
 import com.v2ray.ang.dto.SubscriptionUpdateMessage
 import com.v2ray.ang.dto.TestServiceMessage
 import com.v2ray.ang.service.CoreTestService
@@ -25,8 +26,8 @@ object MessageHelper {
      * @param what The message identifier.
      * @param content The message content.
      */
-    fun sendMsg2Service(ctx: Context, what: Int, content: Serializable) {
-        sendMsg(ctx, AppConfig.BROADCAST_ACTION_SERVICE, what, content)
+    fun sendMsg2Service(ctx: Context, what: Int, content: Serializable, sessionId: Long? = null) {
+        sendMsg(ctx, AppConfig.BROADCAST_ACTION_SERVICE, what, content, sessionId)
     }
 
     /**
@@ -146,18 +147,21 @@ object MessageHelper {
      * @param what The message identifier.
      * @param content The message content.
      */
-    private fun sendMsg(ctx: Context, action: String, what: Int, content: Serializable) {
+    private fun sendMsg(ctx: Context, action: String, what: Int, content: Serializable, sessionId: Long? = null) {
         try {
-            ctx.sendBroadcast(messageIntent(action, what, content))
+            ctx.sendBroadcast(messageIntent(action, what, content, sessionId))
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to send message with action: $action", e)
         }
     }
 
-    private fun messageIntent(action: String, what: Int, content: Serializable): Intent =
+    private fun messageIntent(action: String, what: Int, content: Serializable, sessionId: Long? = null): Intent =
         Intent(action).apply {
             `package` = AppConfig.ANG_PACKAGE
             putExtra("key", what)
             putExtra("content", content)
+            if (sessionId != null && sessionId > 0L) {
+                putExtra(ServiceSessionContract.EXTRA_STOP_SESSION_ID, sessionId)
+            }
         }
 }
