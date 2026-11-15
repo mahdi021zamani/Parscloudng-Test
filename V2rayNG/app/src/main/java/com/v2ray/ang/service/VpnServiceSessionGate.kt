@@ -96,6 +96,7 @@ internal class VpnServiceSessionGate {
         }
         if (queued?.origin == Origin.USER && queued.sessionId == sessionId) {
             pending = null
+            teardownInProgress = true
             teardownCause = TeardownCause.USER_STOP
             return StopDecision.CANCEL_PENDING
         }
