@@ -64,7 +64,7 @@ class VpnServiceSessionGateTest {
         gate.requestStart(user(7), alwaysOnEnabled = true)
 
         assertEquals(7L, gate.pending?.sessionId)
-        assertEquals(VpnServiceSessionGate.StopDecision.IGNORED, gate.requestStop(5))
+        assertEquals(VpnServiceSessionGate.StopDecision.STOP_OWNER, gate.requestStop(5))
         assertEquals(7L, gate.pending?.sessionId)
         assertEquals(7L, gate.finishTeardown()?.sessionId)
     }
