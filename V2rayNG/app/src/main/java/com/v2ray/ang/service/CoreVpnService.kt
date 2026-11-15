@@ -582,11 +582,24 @@ class CoreVpnService : VpnService(), ServiceControl {
                     next?.let { MmkvManager.retireServiceSession(it.sessionId) }
                     sessionGate.clearOwner()
                     ContextCompat.getMainExecutor(this@CoreVpnService).execute {
-                        // A fresh start may arrive after finishTeardown but before this
-                        // callback. Never stop that newly accepted owner.
-                        if (sessionGate.owner != null || sessionGate.pending != null || sessionGate.teardownInProgress) {
+                        // Keep the original teardown identity alive until this final
+                        // idle check. A late system start can still be rejected after
+                        // a user STOP, while a new explicit user start can be promoted.
+                        val lateStart = sessionGate.finishTeardown()
+                        if (lateStart != null) {
+                            if (isStartStillValid(lateStart)) {
+                                startSession(lateStart)
+                            } else {
+                                MmkvManager.retireServiceSession(lateStart.sessionId)
+                                sessionGate.clearOwner()
+                                if (sessionGate.finishServiceIfIdle()) {
+                                    MmkvManager.clearActiveServiceSession(activeSessionId)
+                                    stopSelf(latestStartId)
+                                }
+                            }
                             return@execute
                         }
+                        if (!sessionGate.finishServiceIfIdle()) return@execute
                         MmkvManager.clearActiveServiceSession(activeSessionId)
                         stopSelf(latestStartId)
                     }
