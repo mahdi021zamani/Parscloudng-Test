@@ -93,6 +93,16 @@ object CoreServiceManager {
         MessageHelper.sendMsg2UI(service, what, content, sessionId)
     }
 
+    fun reportCurrentStateToUi() {
+        val service = getService() ?: return
+        val state = when {
+            !isRunning() -> AppConfig.MSG_STATE_NOT_RUNNING
+            aetherWarmUpJob?.isActive == true -> AppConfig.MSG_STATE_CONNECTING
+            else -> AppConfig.MSG_STATE_RUNNING
+        }
+        sendSessionStatus(service, state, "")
+    }
+
     /**
      * Stops the active daemon service directly when a subscription is definitively revoked.
      * Called by a manifest receiver running in this same daemon process.
