@@ -692,19 +692,23 @@ object MmkvManager {
                     subscriptionId = decodeServerConfig(guid)?.subscriptionId,
                 )
             }
+            val centralProfileGuids = profiles
+                .filter { isCentralSubscriptionId(it.subscriptionId) }
+                .mapTo(mutableSetOf()) { it.guid }
             val orphans = OrphanProfileCleaner.findOrphans(
                 profiles = profiles,
                 indexedServersBySubscription = indexedServersBySubscription,
                 selectedServer = getSelectServer(),
             ) ?: return@synchronized null
+            val removableOrphans = orphans - centralProfileGuids
 
-            if (orphans.isNotEmpty()) {
-                val keys = orphans.toTypedArray()
+            if (removableOrphans.isNotEmpty()) {
+                val keys = removableOrphans.toTypedArray()
                 profileFullStorage.removeValuesForKeys(keys)
                 serverAffStorage.removeValuesForKeys(keys)
                 serverRawStorage.removeValuesForKeys(keys)
             }
-            orphans.size
+            removableOrphans.size
         } finally {
             mainStorage.unlock()
         }
