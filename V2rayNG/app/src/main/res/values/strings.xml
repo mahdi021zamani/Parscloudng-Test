@@ -552,6 +552,10 @@
     <string name="simple_app_title">PARSCLOUD VPN</string>
     <string name="simple_tab_v2ray">V2Ray</string>
     <string name="simple_tab_aether">WireGuard</string>
+    <string name="simple_tab_combined">Combined</string>
+    <string name="simple_tab_services_iran">Services for Iran</string>
+    <string name="simple_subtab_hamrah">Hamrah</string>
+    <string name="simple_subtab_irancell">irancell</string>
     <string name="simple_refresh">Refresh</string>
     <string name="simple_status_disconnected">Status: Not connected</string>
     <string name="simple_status_connecting">Status: Connecting…</string>
