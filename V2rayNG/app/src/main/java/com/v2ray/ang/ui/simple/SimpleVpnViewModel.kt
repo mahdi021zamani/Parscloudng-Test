@@ -817,6 +817,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     try {
                         val startedSessionId = LauncherManager.startService(app, guid)
                         if (startedSessionId == null) {
+                            expectedServiceSessionId = null
                             _uiState.update {
                                 it.copy(
                                     status = SimpleConnectionStatus.DISCONNECTED,
@@ -830,6 +831,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             expectedServiceSessionId = startedSessionId
                         }
                     } catch (e: Exception) {
+                        expectedServiceSessionId = null
                         LogUtil.e(AppConfig.TAG, "SimpleVpnViewModel: failed to start service", e)
                         _uiState.update {
                             it.copy(
