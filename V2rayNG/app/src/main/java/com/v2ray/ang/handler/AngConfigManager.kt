@@ -34,8 +34,7 @@ object AngConfigManager {
 
     // Central ownership is defined once in MmkvManager and shared by all user-facing paths.
     private fun isCentralProfile(guid: String): Boolean =
-        MmkvManager.decodeServerConfig(guid)?.subscriptionId
-            ?.let(MmkvManager::isCentralSubscriptionId) == true
+        MmkvManager.isCentralProfile(guid)
 
     private data class ParsedProfile(
         val profile: ProfileItem,
@@ -162,7 +161,7 @@ object AngConfigManager {
     private fun shareConfig(guid: String): String {
         try {
             val config = MmkvManager.decodeServerConfig(guid) ?: return ""
-            if (MmkvManager.isCentralSubscriptionId(config.subscriptionId)) return ""
+            if (MmkvManager.isCentralProfile(guid)) return ""
 
             return config.configType.protocolScheme + when (config.configType) {
                 EConfigType.VMESS -> VmessFmt.toUri(config)
