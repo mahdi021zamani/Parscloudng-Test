@@ -167,6 +167,22 @@ class VpnServiceSessionGateTest {
     }
 
     @Test
+    fun systemStartWithoutRecoveryTargetIsIgnoredDuringTeardownButUserStartQueues() {
+        val gate = VpnServiceSessionGate()
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+
+        assertEquals(
+            VpnServiceSessionGate.StartDecision.IGNORED,
+            gate.requestStart(system(6), alwaysOnEnabled = true),
+        )
+        assertEquals(
+            VpnServiceSessionGate.StartDecision.QUEUED,
+            gate.requestStart(user(7), alwaysOnEnabled = true),
+        )
+        assertEquals(7L, gate.finishTeardown()?.sessionId)
+    }
+
+    @Test
     fun explicitStopOfPendingSystemSessionCancelsThatExactPendingRequest() {
         val gate = VpnServiceSessionGate()
         gate.requestStart(user(5), alwaysOnEnabled = true)
