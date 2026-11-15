@@ -125,12 +125,17 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 SubscriptionLicenseRepository.getStoredLicense()
             }
             if (storedLicense == null) {
+                // Do not start feed refresh before the first license is entered.
+                // Otherwise activation can race an in-flight refresh and its result
+                // may dismiss the license dialog or skip the post-activation refresh.
                 _uiState.update { it.copy(licenseDialogVisible = true) }
             } else {
                 SubscriptionLicenseWorker.schedule(application)
                 validateStoredLicense(storedLicense.key, showDialogOnFailure = false)
+                if (_uiState.value.licenseValid) {
+                    onRefresh()
+                }
             }
-            onRefresh()
         }
 
         // WorkManager's periodic interval is at least 15 minutes and may be deferred
@@ -290,7 +295,10 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                                     testingGuids = sourceGuids.toSet(),
                                     canConnect = SimpleVpnRepository.canConnect(sourceId) && state.licenseValid,
                                     message = aetherMessageId?.let(app::getString),
-                                    licenseDialogVisible = needsLicenseDialog,
+                                    // A normal feed refresh must not dismiss an already
+                                    // visible first-run/license prompt. Only explicit
+                                    // entitlement failures may force it open.
+                                    licenseDialogVisible = state.licenseDialogVisible || needsLicenseDialog,
                                 )
                             }
                         }
@@ -353,7 +361,8 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                                 canConnect = false,
                                 status = SimpleConnectionStatus.DISCONNECTED,
                                 message = app.getString(messageId),
-                                licenseDialogVisible = outcome.aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_MISSING ||
+                                licenseDialogVisible = state.licenseDialogVisible ||
+                                    outcome.aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_MISSING ||
                                     outcome.aetherFailure == SimpleVpnRepository.AetherFailure.LICENSE_EXPIRED ||
                                     outcome.aetherFailure == SimpleVpnRepository.AetherFailure.UNAUTHORIZED,
                             )
