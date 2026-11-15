@@ -18,6 +18,7 @@ internal class VpnServiceSessionGate {
         val startId: Int,
         val origin: Origin,
         val recoversSession: Long? = null,
+        val stickyRecovery: Boolean = false,
     )
 
     @Volatile var owner: Start? = null
@@ -42,6 +43,10 @@ internal class VpnServiceSessionGate {
                 pending = request.copy(recoversSession = recovering)
                 return StartDecision.QUEUED
             }
+
+            // A null START_STICKY redelivery must not displace a newer explicit
+            // user request or a system recovery already queued for this teardown.
+            if (request.stickyRecovery && pending != null) return StartDecision.IGNORED
 
             // A deliberate user start supersedes a system recovery, but not the
             // teardown itself. It is started only after teardown has completed.
