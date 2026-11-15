@@ -105,11 +105,16 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     _uiState.update { it.copy(status = SimpleConnectionStatus.CONNECTED) }
 
                 AppConfig.MSG_STATE_NOT_RUNNING, AppConfig.MSG_STATE_STOP_SUCCESS ->
-                    _uiState.update { it.copy(status = SimpleConnectionStatus.DISCONNECTED) }
+                    _uiState.update { state ->
+                        // Keep launcher/Tasker pointed at the profile currently selected in the UI.
+                        state.selectedGuid?.let(MmkvManager::setSelectServer)
+                        state.copy(status = SimpleConnectionStatus.DISCONNECTED)
+                    }
 
                 AppConfig.MSG_STATE_START_FAILURE ->
-                    _uiState.update {
-                        it.copy(
+                    _uiState.update { state ->
+                        state.selectedGuid?.let(MmkvManager::setSelectServer)
+                        state.copy(
                             status = SimpleConnectionStatus.DISCONNECTED,
                             message = getApplication<Application>().getString(R.string.simple_connect_failed),
                         )
@@ -218,7 +223,10 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val selected = MmkvManager.getSelectServer(sourceId)
             ?.takeIf { guid -> servers.any { it.guid == guid } }
             ?: servers.firstOrNull()?.guid
-        selected?.let { MmkvManager.setSelectServer(it, sourceId) }
+        selected?.let {
+            MmkvManager.setSelectServer(it, sourceId)
+            MmkvManager.setSelectServer(it)
+        }
         _uiState.update {
             it.copy(
                 servers = servers,
@@ -249,6 +257,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun onSelectSource(sourceId: String) {
+        if (_uiState.value.status == SimpleConnectionStatus.CONNECTING) return
         if (sourceId !in setOf(
                 SimpleVpnRepository.SIMPLE_SUB_ID,
                 SimpleVpnRepository.HAMRAH_SUB_ID,
@@ -264,7 +273,12 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val selected = MmkvManager.getSelectServer(sourceId)
             ?.takeIf { guid -> servers.any { it.guid == guid } }
             ?: servers.firstOrNull()?.guid
-        selected?.let { MmkvManager.setSelectServer(it, sourceId) }
+        selected?.let {
+            MmkvManager.setSelectServer(it, sourceId)
+            if (_uiState.value.status == SimpleConnectionStatus.DISCONNECTED) {
+                MmkvManager.setSelectServer(it)
+            }
+        }
         val current = _uiState.value
         val next = selectSimpleVpnSourceTab(
             current = current,
@@ -277,9 +291,13 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun onSelectServer(guid: String) {
-        val sourceId = _uiState.value.selectedSourceId
-        if (_uiState.value.servers.none { it.guid == guid }) return
+        val state = _uiState.value
+        val sourceId = state.selectedSourceId
+        if (state.servers.none { it.guid == guid }) return
         MmkvManager.setSelectServer(guid, sourceId)
+        if (state.status == SimpleConnectionStatus.DISCONNECTED) {
+            MmkvManager.setSelectServer(guid)
+        }
         _uiState.update { it.copy(selectedGuid = guid) }
     }
 
@@ -328,7 +346,12 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                                     canConnect = SimpleVpnRepository.canConnect(state.selectedSourceId) && state.licenseValid,
                                 )
                             } else {
-                                selected?.let { MmkvManager.setSelectServer(it, sourceId) }
+                                selected?.let {
+                                    MmkvManager.setSelectServer(it, sourceId)
+                                    if (state.status == SimpleConnectionStatus.DISCONNECTED) {
+                                        MmkvManager.setSelectServer(it)
+                                    }
+                                }
                                 state.copy(
                                     servers = servers,
                                     selectedGuid = selected,
@@ -489,6 +512,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             // (possibly unreachable) profile after the user has cancelled.
             connectValidationJob?.cancel()
             connectValidationJob = null
+            state.selectedGuid?.let(MmkvManager::setSelectServer)
             LauncherManager.stopService(app)
             _uiState.update {
                 it.copy(
@@ -668,6 +692,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     fun cancelConnectAttempt() {
         _uiState.update {
             if (it.status == SimpleConnectionStatus.CONNECTING) {
+                it.selectedGuid?.let(MmkvManager::setSelectServer)
                 it.copy(status = SimpleConnectionStatus.DISCONNECTED)
             } else {
                 it
