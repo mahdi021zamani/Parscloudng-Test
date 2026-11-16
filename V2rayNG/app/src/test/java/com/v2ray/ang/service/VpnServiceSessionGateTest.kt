@@ -61,7 +61,7 @@ class VpnServiceSessionGateTest {
         assertEquals(6L, promoted?.sessionId)
         assertEquals(5L, promoted?.recoversSession)
 
-        assertEquals(VpnServiceSessionGate.StopDecision.CANCEL_TEARDOWN_RECOVERY, gate.requestStop(5))
+        assertEquals(VpnServiceSessionGate.StopDecision.STOP_OWNER, gate.requestStop(5))
         gate.beginTeardown(VpnServiceSessionGate.TeardownCause.USER_STOP)
         assertNull(gate.finishTeardown())
         assertNull(gate.owner)
@@ -85,7 +85,7 @@ class VpnServiceSessionGateTest {
         gate.requestStart(user(7), alwaysOnEnabled = true)
 
         assertEquals(7L, gate.pending?.sessionId)
-        assertEquals(VpnServiceSessionGate.StopDecision.STOP_OWNER, gate.requestStop(5))
+        assertEquals(VpnServiceSessionGate.StopDecision.CANCEL_TEARDOWN_RECOVERY, gate.requestStop(5))
         assertEquals(7L, gate.pending?.sessionId)
         assertEquals(7L, gate.finishTeardown()?.sessionId)
     }
