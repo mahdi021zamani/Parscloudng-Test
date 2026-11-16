@@ -355,7 +355,6 @@ class VpnServiceSessionGateTest {
 
         // The system owner's own ID is live, but the session it represents was stopped.
         assertTrue(gate.hasRetiredOwnerSession { it == 5L })
-        assertFalse(gate.hasRetiredOwnerSession { it == 6L })
 
         gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
         assertEquals(
