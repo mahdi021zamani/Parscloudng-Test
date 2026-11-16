@@ -188,6 +188,29 @@ object MmkvManager {
 
     fun getLastIssuedServiceSession(): Long = mainStorage.decodeLong(KEY_LAST_ISSUED_SERVICE_SESSION, 0L)
 
+    /**
+     * Atomically selects and retires the current session for an unscoped user STOP.
+     * Keeping selection and retirement under MMKV's inter-process lock prevents a
+     * concurrent daemon promotion from being mistaken for a stale last-issued ID.
+     */
+    fun retireCurrentServiceSession(): Long? = withProfileIndexLock {
+        val activeSession = mainStorage.decodeLong(KEY_ACTIVE_SERVICE_SESSION, 0L)
+        val targetSession = when {
+            activeSession > 0L &&
+                !mainStorage.decodeBool(KEY_RETIRED_SERVICE_SESSION_PREFIX + activeSession, false) -> activeSession
+            else -> mainStorage.decodeLong(KEY_LAST_ISSUED_SERVICE_SESSION, 0L).takeIf { candidate ->
+                candidate > 0L &&
+                    !mainStorage.decodeBool(KEY_RETIRED_SERVICE_SESSION_PREFIX + candidate, false)
+            }
+        } ?: return@withProfileIndexLock null
+
+        if (!mainStorage.encode(KEY_RETIRED_SERVICE_SESSION_PREFIX + targetSession, true)) {
+            return@withProfileIndexLock null
+        }
+        if (activeSession == targetSession) mainStorage.remove(KEY_ACTIVE_SERVICE_SESSION)
+        targetSession
+    }
+
     fun clearActiveServiceSession(sessionId: Long): Boolean {
         if (sessionId <= 0L) return false
         return withProfileIndexLock {
