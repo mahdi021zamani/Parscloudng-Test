@@ -342,6 +342,40 @@ class VpnServiceSessionGateTest {
         assertTrue(gate.pending?.recoversSession == 5L)
     }
 
+    @Test
+    fun retiredRecoveryTargetMakesPromotedSystemOwnerEligibleForReplacement() {
+        val gate = VpnServiceSessionGate()
+        gate.requestStart(user(5), alwaysOnEnabled = true)
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+        gate.requestStart(system(6), alwaysOnEnabled = true)
+
+        val promoted = gate.finishTeardown()
+        assertEquals(6L, promoted?.sessionId)
+        assertEquals(5L, promoted?.recoversSession)
+
+        // The system owner's own ID is live, but the session it represents was stopped.
+        assertTrue(gate.hasRetiredOwnerSession { it == 5L })
+        assertFalse(gate.hasRetiredOwnerSession { it == 6L })
+
+        gate.beginTeardown(VpnServiceSessionGate.TeardownCause.INTERNAL)
+        assertEquals(
+            VpnServiceSessionGate.StartDecision.QUEUED,
+            gate.requestStart(user(7), alwaysOnEnabled = true),
+        )
+        assertEquals(7L, gate.pending?.sessionId)
+        assertEquals(7L, gate.finishTeardown()?.sessionId)
+    }
+
+    @Test
+    fun retiredOwnerSessionStillTriggersReplacement() {
+        val gate = VpnServiceSessionGate()
+        gate.requestStart(user(5), alwaysOnEnabled = true)
+
+        assertTrue(gate.hasRetiredOwnerSession { it == 5L })
+        assertFalse(gate.hasRetiredOwnerSession { it == 7L })
+        assertFalse(gate.hasRetiredOwnerSession { false })
+    }
+
     private fun user(id: Long) = VpnServiceSessionGate.Start(
         sessionId = id,
         startId = id.toInt(),
