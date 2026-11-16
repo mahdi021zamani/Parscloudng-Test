@@ -32,6 +32,17 @@ internal class VpnServiceSessionGate {
     @Volatile var teardownCause: TeardownCause? = null
         private set
 
+    /**
+     * A promoted Always-on owner may still represent the session it recovers.
+     * Treat either identity as retired before accepting a newer explicit start.
+     */
+    @Synchronized
+    fun hasRetiredOwnerSession(isRetired: (Long) -> Boolean): Boolean {
+        val current = owner ?: return false
+        return isRetired(current.sessionId) ||
+            current.recoversSession?.let(isRetired) == true
+    }
+
     @Synchronized
     fun requestStart(request: Start, alwaysOnEnabled: Boolean): StartDecision {
         if (request.sessionId <= 0L) return StartDecision.IGNORED
