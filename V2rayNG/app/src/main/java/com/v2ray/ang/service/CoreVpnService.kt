@@ -193,7 +193,7 @@ class CoreVpnService : VpnService(), ServiceControl {
             MmkvManager.isServiceSessionRetired(currentOwnerBeforeStart.sessionId) &&
             !isStoppingLock.get()
         ) {
-            LogUtil.i(AppConfig.TAG, "StartCore-VPN: replacing retired owner=\${currentOwnerBeforeStart.sessionId} with queued start=\${request.sessionId}")
+            LogUtil.i(AppConfig.TAG, "StartCore-VPN: replacing retired owner=${currentOwnerBeforeStart.sessionId} with queued start=${request.sessionId}")
             stopAllService(true, VpnServiceSessionGate.TeardownCause.INTERNAL)
         }
 
@@ -620,7 +620,7 @@ class CoreVpnService : VpnService(), ServiceControl {
                     isStoppingLock.set(false)
 
                     if (next != null && isStartStillValid(next)) {
-                        LogUtil.i(AppConfig.TAG, "StartCore-VPN: promoting pending session=\${next.sessionId}, origin=\${next.origin}, recovers=\${next.recoversSession}")
+                        LogUtil.i(AppConfig.TAG, "StartCore-VPN: promoting pending session=${next.sessionId}, origin=${next.origin}, recovers=${next.recoversSession}")
                         startSession(next)
                     } else {
                         pendingBeforeFinish?.takeIf { it.sessionId != next?.sessionId }?.let {
