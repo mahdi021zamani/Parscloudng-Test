@@ -1,7 +1,6 @@
 package com.v2ray.ang.service
 
 import android.content.Context
-import android.content.Intent
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -13,7 +12,6 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.core.LauncherManager
-import com.v2ray.ang.receiver.SubscriptionRevocationReceiver
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.handler.SubscriptionLicenseRepository
 import java.util.concurrent.TimeUnit
@@ -70,12 +68,9 @@ class SubscriptionLicenseWorker(
         LogUtil.w(AppConfig.TAG, "Subscription monitor: stopping core services because $reason")
         LauncherManager.stopService(applicationContext)
 
-        // Keep shutdown inside the daemon's session-aware controller. Calling
-        // Context.stopService() here would destroy the Android service immediately,
-        // racing its orderly native-core / tunnel teardown.
-        val stopIntent = Intent(SubscriptionRevocationReceiver.ACTION_STOP_REVOKED_SUBSCRIPTION)
-            .setPackage(AppConfig.ANG_PACKAGE)
-        applicationContext.sendBroadcast(stopIntent)
+        // LauncherManager sends a session-scoped STOP to the daemon's registered
+        // service receiver. Do not add an unscoped stop broadcast here: a delayed
+        // revocation signal could otherwise stop a newer session started meanwhile.
     }
 
     companion object {
