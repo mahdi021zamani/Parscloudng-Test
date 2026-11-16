@@ -189,11 +189,13 @@ class CoreVpnService : VpnService(), ServiceControl {
         // If a fresh user start wins that race, retire the old owner into teardown
         // first so the new request is queued instead of being discarded as a duplicate.
         val currentOwnerBeforeStart = sessionGate.owner
-        if (currentOwnerBeforeStart != null &&
-            MmkvManager.isServiceSessionRetired(currentOwnerBeforeStart.sessionId) &&
+        if (sessionGate.hasRetiredOwnerSession(MmkvManager::isServiceSessionRetired) &&
             !isStoppingLock.get()
         ) {
-            LogUtil.i(AppConfig.TAG, "StartCore-VPN: replacing retired owner=${currentOwnerBeforeStart.sessionId} with queued start=${request.sessionId}")
+            LogUtil.i(
+                AppConfig.TAG,
+                "StartCore-VPN: replacing owner with retired session identity=${currentOwnerBeforeStart?.sessionId}, recoveryTarget=${currentOwnerBeforeStart?.recoversSession}, queued start=${request.sessionId}"
+            )
             stopAllService(true, VpnServiceSessionGate.TeardownCause.INTERNAL)
         }
 
