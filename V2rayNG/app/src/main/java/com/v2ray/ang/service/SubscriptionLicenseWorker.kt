@@ -1,7 +1,6 @@
 package com.v2ray.ang.service
 
 import android.content.Context
-import android.content.Intent
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -70,16 +69,9 @@ class SubscriptionLicenseWorker(
         LogUtil.w(AppConfig.TAG, "Subscription monitor: stopping core services because $reason")
         LauncherManager.stopService(applicationContext)
 
-        // Do not depend only on the in-process service reference. Directly stop every
-        // supported Android service as a fallback, then notify the daemon-side receiver.
-        val vpnStopped = applicationContext.stopService(Intent(applicationContext, CoreVpnService::class.java))
-        val proxyStopped = applicationContext.stopService(Intent(applicationContext, CoreProxyOnlyService::class.java))
-        val rootStopped = applicationContext.stopService(Intent(applicationContext, CoreRootService::class.java))
-        LogUtil.w(
-            AppConfig.TAG,
-            "Subscription monitor: direct stopService results vpn=$vpnStopped proxy=$proxyStopped root=$rootStopped"
-        )
-
+        // Keep shutdown inside the daemon's session-aware controller. Calling
+        // Context.stopService() here would destroy the Android service immediately,
+        // racing its orderly native-core / tunnel teardown.
         val stopIntent = Intent(SubscriptionRevocationReceiver.ACTION_STOP_REVOKED_SUBSCRIPTION)
             .setPackage(AppConfig.ANG_PACKAGE)
         applicationContext.sendBroadcast(stopIntent)
