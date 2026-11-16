@@ -30,10 +30,7 @@ object MessageHelper {
     @JvmOverloads
     fun sendMsg2Service(ctx: Context, what: Int, content: Serializable, sessionId: Long? = null) {
         val effectiveSessionId = sessionId ?: if (what == AppConfig.MSG_STATE_STOP) {
-            MmkvManager.getActiveServiceSession().takeIf { it > 0L }
-                ?: MmkvManager.getLastIssuedServiceSession().takeIf {
-                    it > 0L && !MmkvManager.isServiceSessionRetired(it)
-                }
+            MmkvManager.retireCurrentServiceSession()
         } else {
             null
         }
