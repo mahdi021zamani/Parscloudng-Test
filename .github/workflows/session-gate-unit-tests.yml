@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "work/parcloud-session-gate-always-on-2026-11-15"
+      - "work/parcloud-session-gate-race-fixes-2026-11-16"
     paths:
       - "V2rayNG/app/src/**"
       - "V2rayNG/app/build.gradle.kts"
