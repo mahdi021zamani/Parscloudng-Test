@@ -146,7 +146,7 @@ class CoreVpnService : VpnService(), ServiceControl {
                 if (sessionId <= 0L || MmkvManager.isServiceSessionRetired(sessionId)) {
                     LogUtil.w(AppConfig.TAG, "StartCore-VPN: rejecting invalid or retired app session=$sessionId")
                     if (sessionGate.owner == null && sessionGate.pending == null) stopSelf(startId)
-                    return START_NOT_STICKY
+                    return restartModeForCurrentState()
                 }
                 VpnServiceSessionGate.Start(sessionId, startId, VpnServiceSessionGate.Origin.USER)
             }
@@ -155,7 +155,7 @@ class CoreVpnService : VpnService(), ServiceControl {
                 if (!alwaysOnEnabled) {
                     LogUtil.w(AppConfig.TAG, "StartCore-VPN: ignoring SERVICE_INTERFACE while Always-on is disabled")
                     if (sessionGate.owner == null && sessionGate.pending == null) stopSelf(startId)
-                    return START_NOT_STICKY
+                    return restartModeForCurrentState()
                 }
                 val sessionId = MmkvManager.beginServiceSession()
                 VpnServiceSessionGate.Start(sessionId, startId, VpnServiceSessionGate.Origin.SYSTEM)
@@ -168,7 +168,7 @@ class CoreVpnService : VpnService(), ServiceControl {
                 if (sessionId <= 0L || MmkvManager.isServiceSessionRetired(sessionId)) {
                     LogUtil.i(AppConfig.TAG, "StartCore-VPN: no live session to recover from null sticky Intent")
                     if (sessionGate.owner == null && sessionGate.pending == null) stopSelf(startId)
-                    return START_NOT_STICKY
+                    return restartModeForCurrentState()
                 }
                 VpnServiceSessionGate.Start(
                     sessionId,
@@ -181,8 +181,20 @@ class CoreVpnService : VpnService(), ServiceControl {
             else -> {
                 LogUtil.w(AppConfig.TAG, "StartCore-VPN: rejecting unmarked non-system start")
                 if (sessionGate.owner == null && sessionGate.pending == null) stopSelf(startId)
-                return START_NOT_STICKY
+                return restartModeForCurrentState()
             }
+        }
+
+        // A STOP is persisted in MMKV before its broadcast reaches this service.
+        // If a fresh user start wins that race, retire the old owner into teardown
+        // first so the new request is queued instead of being discarded as a duplicate.
+        val currentOwnerBeforeStart = sessionGate.owner
+        if (currentOwnerBeforeStart != null &&
+            MmkvManager.isServiceSessionRetired(currentOwnerBeforeStart.sessionId) &&
+            !isStoppingLock.get()
+        ) {
+            LogUtil.i(AppConfig.TAG, "StartCore-VPN: replacing retired owner=\${currentOwnerBeforeStart.sessionId} with queued start=\${request.sessionId}")
+            stopAllService(true, VpnServiceSessionGate.TeardownCause.INTERNAL)
         }
 
         if (systemVpnStart) unlockStart()
@@ -221,8 +233,17 @@ class CoreVpnService : VpnService(), ServiceControl {
                 }
             }
         }
-        return if (decision == VpnServiceSessionGate.StartDecision.IGNORED) START_NOT_STICKY else START_STICKY
+        return restartModeForCurrentState()
     }
+
+    // START_STICKY is a service-level policy: an ignored duplicate Intent must not
+    // downgrade a still-running owner or an in-flight teardown to NOT_STICKY.
+    private fun restartModeForCurrentState(): Int =
+        if (sessionGate.owner != null || sessionGate.pending != null || isStoppingLock.get()) {
+            START_STICKY
+        } else {
+            START_NOT_STICKY
+        }
 
     private fun isStartStillValid(request: VpnServiceSessionGate.Start): Boolean {
         if (MmkvManager.isServiceSessionRetired(request.sessionId)) return false
@@ -589,41 +610,24 @@ class CoreVpnService : VpnService(), ServiceControl {
 
             if (isForced) {
                 closeVpnInterface()
-                val pendingBeforeFinish = sessionGate.pending
-                val next = sessionGate.finishTeardown()
-                isStoppingLock.set(false)
-                if (next != null && isStartStillValid(next)) {
-                    LogUtil.i(AppConfig.TAG, "StartCore-VPN: promoting pending session=${next.sessionId}, origin=${next.origin}, recovers=${next.recoversSession}")
-                    ContextCompat.getMainExecutor(this@CoreVpnService).execute {
+                // Finalize the Gate and promote its pending owner on the main thread.
+                // This makes finishTeardown() + validation + startSession() one
+                // serialized operation with respect to onStartCommand().
+                ContextCompat.getMainExecutor(this@CoreVpnService).execute {
+                    if (!isStoppingLock.get()) return@execute
+                    val pendingBeforeFinish = sessionGate.pending
+                    val next = sessionGate.finishTeardown()
+                    isStoppingLock.set(false)
+
+                    if (next != null && isStartStillValid(next)) {
+                        LogUtil.i(AppConfig.TAG, "StartCore-VPN: promoting pending session=\${next.sessionId}, origin=\${next.origin}, recovers=\${next.recoversSession}")
                         startSession(next)
-                    }
-                } else {
-                    pendingBeforeFinish?.takeIf { it.sessionId != next?.sessionId }?.let {
-                        MmkvManager.retireServiceSession(it.sessionId)
-                    }
-                    next?.let { MmkvManager.retireServiceSession(it.sessionId) }
-                    sessionGate.clearOwner()
-                    ContextCompat.getMainExecutor(this@CoreVpnService).execute {
-                        // A second teardown may have started after the IO shutdown
-                        // finished but before this callback was dispatched.
-                        if (isStoppingLock.get()) return@execute
-                        // Keep the original teardown identity alive until this final
-                        // idle check. A late system start can still be rejected after
-                        // a user STOP, while a new explicit user start can be promoted.
-                        val lateStart = sessionGate.finishTeardown()
-                        if (lateStart != null) {
-                            if (isStartStillValid(lateStart)) {
-                                startSession(lateStart)
-                            } else {
-                                MmkvManager.retireServiceSession(lateStart.sessionId)
-                                sessionGate.clearOwner()
-                                if (sessionGate.finishServiceIfIdle()) {
-                                    MmkvManager.clearActiveServiceSession(activeSessionId)
-                                    stopSelf(latestStartId)
-                                }
-                            }
-                            return@execute
+                    } else {
+                        pendingBeforeFinish?.takeIf { it.sessionId != next?.sessionId }?.let {
+                            MmkvManager.retireServiceSession(it.sessionId)
                         }
+                        next?.let { MmkvManager.retireServiceSession(it.sessionId) }
+                        sessionGate.clearOwner()
                         if (!sessionGate.finishServiceIfIdle()) return@execute
                         MmkvManager.clearActiveServiceSession(activeSessionId)
                         stopSelf(latestStartId)
