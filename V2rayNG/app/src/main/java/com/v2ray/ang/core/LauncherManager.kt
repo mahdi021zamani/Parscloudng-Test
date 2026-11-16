@@ -57,7 +57,12 @@ object LauncherManager {
 
     fun stopService(context: Context, sessionId: Long? = null) {
         val targetSession = if (sessionId != null) {
-            if (sessionId <= 0L) null else sessionId.also(MmkvManager::retireServiceSession)
+            if (sessionId <= 0L) {
+                null
+            } else {
+                MmkvManager.retireServiceSession(sessionId)
+                sessionId
+            }
         } else {
             MmkvManager.retireCurrentServiceSession()
         }
