@@ -56,16 +56,15 @@ object LauncherManager {
     }
 
     fun stopService(context: Context, sessionId: Long? = null) {
-        val targetSession = sessionId
-            ?: MmkvManager.getActiveServiceSession().takeIf { it > 0L }
-            ?: MmkvManager.getLastIssuedServiceSession().takeIf {
-                it > 0L && !MmkvManager.isServiceSessionRetired(it)
-            }
+        val targetSession = if (sessionId != null) {
+            if (sessionId <= 0L) null else sessionId.also(MmkvManager::retireServiceSession)
+        } else {
+            MmkvManager.retireCurrentServiceSession()
+        }
         if (targetSession == null || targetSession <= 0L) {
             LogUtil.w(AppConfig.TAG, "LauncherManager: no live service session to stop")
             return
         }
-        MmkvManager.retireServiceSession(targetSession)
         MessageHelper.sendMsg2Service(context, AppConfig.MSG_STATE_STOP, "", targetSession)
     }
 
