@@ -418,8 +418,10 @@ private fun ServerList(
                                     Text(stringResource(R.string.simple_refresh))
                                 }
                             }
-                            TextButton(onClick = { onDeleteSubscription?.invoke(subscriptionId) }) {
-                                Text(stringResource(R.string.action_delete))
+                            if (subscriptionId.startsWith("personal_sub_")) {
+                                TextButton(onClick = { onDeleteSubscription?.invoke(subscriptionId) }) {
+                                    Text(stringResource(R.string.action_delete))
+                                }
                             }
                         }
                     }
