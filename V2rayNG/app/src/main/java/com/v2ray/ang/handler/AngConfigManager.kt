@@ -488,6 +488,9 @@ object AngConfigManager {
     fun updateConfigViaSubAll(): SubscriptionUpdateResult {
         return try {
             val subscriptions = MmkvManager.decodeSubscriptions()
+                // User-owned PARSCLOUD personal subscriptions are refreshed only from
+                // their dedicated screen, never as a side effect of a global import.
+                .filterNot { it.guid.startsWith("personal_sub_") }
             subscriptions.fold(SubscriptionUpdateResult()) { acc, subscription ->
                 acc + updateConfigViaSub(subscription)
             }
