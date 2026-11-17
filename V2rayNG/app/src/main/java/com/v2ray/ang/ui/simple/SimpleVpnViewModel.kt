@@ -393,7 +393,6 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     configLines, SimpleVpnRepository.PERSONAL_SUB_ID, true
                 )
             }
-            imported
             withContext(Dispatchers.Main) {
                 val servers = SimpleVpnRepository.getPersonalServers()
                 val selected = MmkvManager.getSelectServer(SimpleVpnRepository.PERSONAL_SUB_ID)
@@ -404,7 +403,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         servers = servers,
                         selectedGuid = selected,
                         canConnect = servers.isNotEmpty() && it.licenseValid,
-                        message = if (count > 0) "$count مورد شخصی اضافه شد" else "لینک یا کانفیگ قابل شناسایی نیست",
+                        message = if (imported > 0) "$imported مورد شخصی اضافه شد" else "لینک یا کانفیگ قابل شناسایی نیست",
                     )
                 }
                 selected?.let {
