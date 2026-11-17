@@ -458,7 +458,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         if (personalSubscriptionRefreshJobs[subscriptionId]?.isActive == true) return
         val subscription = MmkvManager.decodeSubscription(subscriptionId)
         if (subscription == null) {
-            _uiState.update { it.copy(message = "اشتراک پیدا نشد") }
+            _uiState.update { it.copy(message = getApplication<Application>().getString(R.string.import_subscription_failure)) }
             return
         }
 
@@ -491,11 +491,13 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         canConnect = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
                             servers.isNotEmpty() && state.licenseValid
                         } else state.canConnect,
-                        message = when {
-                            count < 0 -> "به‌روزرسانی اشتراک ناموفق بود"
-                            count > 0 -> "$count کانفیگ این اشتراک به‌روزرسانی شد"
-                            else -> "برای این اشتراک کانفیگ جدیدی دریافت نشد"
-                        },
+                        message = getApplication<Application>().getString(
+                            when {
+                                count < 0 -> R.string.toast_failure
+                                count > 0 -> R.string.toast_success
+                                else -> R.string.toast_none_data
+                            }
+                        ),
                     )
                 }
                 if (groupGuids.isNotEmpty()) runPingTest(groupGuids)
@@ -526,7 +528,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 canConnect = if (it.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
                     servers.isNotEmpty() && it.licenseValid
                 } else it.canConnect,
-                message = "اشتراک شخصی حذف شد",
+                message = getApplication<Application>().getString(R.string.toast_success),
             )
         }
         if (shouldRestartPing) {
