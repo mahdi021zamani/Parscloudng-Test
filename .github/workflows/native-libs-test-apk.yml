@@ -1,4 +1,5 @@
 name: PARSCLOUD Native Libraries Test APK
+# Build the native payload before packaging and verify ABI-split APK contents.
 
 on:
   push:
