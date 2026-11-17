@@ -40,6 +40,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -62,9 +65,13 @@ import com.v2ray.ang.handler.SimpleVpnRepository.SimpleServerUiModel
 fun SimpleVpnScreen(
     viewModel: SimpleVpnViewModel,
     onConnectClick: () -> Unit,
+    onScanClick: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showPersonalImport by remember { mutableStateOf(false) }
+    var personalText by remember { mutableStateOf("") }
+    val clipboardManager = LocalClipboardManager.current
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
@@ -73,6 +80,38 @@ fun SimpleVpnScreen(
         }
     }
 
+
+    if (showPersonalImport) {
+        AlertDialog(
+            onDismissRequest = { showPersonalImport = false },
+            title = { Text("افزودن کانفیگ شخصی") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = personalText,
+                        onValueChange = { personalText = it },
+                        label = { Text("لینک یا متن کانفیگ") },
+                        minLines = 4,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { personalText = clipboardManager.getText()?.text.orEmpty() }) {
+                            Text("چسباندن از کلیپ‌بورد")
+                        }
+                        TextButton(onClick = onScanClick) { Text("اسکن QR") }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.importPersonalConfig(personalText)
+                    personalText = ""
+                    showPersonalImport = false
+                }, enabled = personalText.isNotBlank()) { Text("افزودن") }
+            },
+            dismissButton = { TextButton(onClick = { showPersonalImport = false }) { Text("انصراف") } },
+        )
+    }
 
     if (uiState.licenseDialogVisible) {
         AlertDialog(
@@ -134,8 +173,12 @@ fun SimpleVpnScreen(
                     TextButton(onClick = { viewModel.showLicenseDialog() }) {
                         Text(stringResource(R.string.simple_license_manage))
                     }
-                    TextButton(onClick = { viewModel.onRefresh() }, enabled = !uiState.isRefreshing) {
-                        Text(stringResource(R.string.simple_refresh))
+                    if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+                        TextButton(onClick = { showPersonalImport = true }) { Text("افزودن") }
+                    } else {
+                        TextButton(onClick = { viewModel.onRefresh() }, enabled = !uiState.isRefreshing) {
+                            Text(stringResource(R.string.simple_refresh))
+                        }
                     }
                 }
             )
@@ -153,6 +196,7 @@ fun SimpleVpnScreen(
                 SimpleVpnRepository.SERVICES_SUB_ID -> 2
                 SimpleVpnRepository.SIMPLE_SUB_ID,
                 SimpleVpnRepository.HAMRAH_SUB_ID -> 3
+                SimpleVpnRepository.PERSONAL_SUB_ID -> 4
                 else -> 0
             }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -209,6 +253,11 @@ fun SimpleVpnScreen(
                             )
                         },
                     )
+                    Tab(
+                        selected = selectedProfileIndex == 4,
+                        onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.PERSONAL) },
+                        text = { Text("شخصی", textAlign = TextAlign.Center, fontSize = 12.sp) },
+                    )
                 }
             }
             if (isV2RaySelected) {
@@ -227,6 +276,15 @@ fun SimpleVpnScreen(
                     )
                 }
             }
+            if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = { showPersonalImport = true }) { Text("افزودن از متن") }
+                    TextButton(onClick = onScanClick) { Text("اسکن QR") }
+                }
+            }
             Box(modifier = Modifier.weight(1f)) {
                 if (uiState.isRefreshing && uiState.servers.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -243,6 +301,8 @@ fun SimpleVpnScreen(
                         testingGuids = uiState.testingGuids,
                         enabled = uiState.status == SimpleConnectionStatus.DISCONNECTED,
                         onSelect = viewModel::onSelectServer,
+                        onDelete = if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID)
+                            viewModel::deletePersonalConfig else null,
                     )
                 }
             }
@@ -265,6 +325,7 @@ private fun ServerList(
     testingGuids: Set<String>,
     enabled: Boolean,
     onSelect: (String) -> Unit,
+    onDelete: ((String) -> Unit)? = null,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 4.dp)) {
         items(servers, key = { it.guid }) { server ->
@@ -274,6 +335,7 @@ private fun ServerList(
                 testing = server.guid in testingGuids,
                 enabled = enabled,
                 onSelect = { onSelect(server.guid) },
+                onDelete = onDelete?.let { delete -> { delete(server.guid) } },
             )
             HorizontalDivider()
         }
@@ -287,6 +349,7 @@ private fun ServerRow(
     testing: Boolean,
     enabled: Boolean,
     onSelect: () -> Unit,
+    onDelete: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -307,6 +370,7 @@ private fun ServerRow(
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         )
         DelayLabel(delayMillis = server.delayMillis, testing = testing)
+        if (onDelete != null) TextButton(onClick = onDelete) { Text("حذف") }
     }
 }
 
