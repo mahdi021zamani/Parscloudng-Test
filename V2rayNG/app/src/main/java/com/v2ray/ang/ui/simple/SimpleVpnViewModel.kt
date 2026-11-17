@@ -111,7 +111,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     private val _uiState = MutableStateFlow(SimpleVpnUiState())
     val uiState: StateFlow<SimpleVpnUiState> = _uiState.asStateFlow()
 
-    private var pingWorker: RealPingWorkerService? = null
+    private val pingWorkers = mutableMapOf<String, RealPingWorkerService>()
     private var refreshJob: Job? = null
     private val personalSubscriptionRefreshJobs = mutableMapOf<String, Job>()
     private var connectValidationJob: Job? = null
@@ -427,7 +427,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     MmkvManager.setSelectServer(it, SimpleVpnRepository.PERSONAL_SUB_ID)
                     if (_uiState.value.status == SimpleConnectionStatus.DISCONNECTED) MmkvManager.setSelectServer(it)
                 }
-                runPingTest(servers.map { it.guid })
+                runPingTest(servers.map { it.guid }, "personal_import")
             }
         }
     }
@@ -500,7 +500,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         ),
                     )
                 }
-                if (groupGuids.isNotEmpty()) runPingTest(groupGuids)
+                if (groupGuids.isNotEmpty()) runPingTest(groupGuids, subscriptionId)
             }
         }
         personalSubscriptionRefreshJobs[subscriptionId] = job
@@ -518,12 +518,12 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val selected = state.selectedGuid?.takeIf { it !in removedGuids && servers.any { server -> server.guid == it } }
             ?: servers.firstOrNull()?.guid
         val shouldRestartPing = state.testingGuids.any { it in removedGuids }
-        if (shouldRestartPing) cancelPingWorker()
+        cancelPingWorker(subscriptionId)
         _uiState.update {
             it.copy(
                 servers = if (it.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) servers else it.servers,
                 selectedGuid = if (it.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) selected else it.selectedGuid,
-                testingGuids = if (shouldRestartPing) emptySet() else it.testingGuids - removedGuids,
+                testingGuids = it.testingGuids - removedGuids,
                 refreshingPersonalSubscriptionIds = it.refreshingPersonalSubscriptionIds - subscriptionId,
                 canConnect = if (it.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
                     servers.isNotEmpty() && it.licenseValid
@@ -531,10 +531,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 message = getApplication<Application>().getString(R.string.toast_success),
             )
         }
-        if (shouldRestartPing) {
-            val remainingGuids = servers.map { it.guid }
-            if (remainingGuids.isNotEmpty()) runPingTest(remainingGuids)
-        }
+        // Other personal groups keep their ping workers running.
     }
 
     fun onSelectServer(guid: String) {
@@ -570,7 +567,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             message = if (count > 0) "$count کانفیگ شخصی به‌روزرسانی شد" else "اشتراک شخصی به‌روزرسانی نشد",
                         )
                     }
-                    runPingTest(servers.map { it.guid })
+                    runPingTest(servers.map { it.guid }, "personal_all")
                 }
             }
             return
@@ -635,7 +632,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         }
                     }
                     // Ping is informational; test only the source that is still active.
-                    if (_uiState.value.selectedSourceId == sourceId) runPingTest(sourceGuids)
+                    if (_uiState.value.selectedSourceId == sourceId) runPingTest(sourceGuids, "source:$sourceId")
                 }
 
                 SimpleVpnRepository.RefreshOutcome.EmptiedByServer -> withContext(Dispatchers.Main) {
@@ -706,45 +703,82 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private fun cancelPingWorker() {
-        val previous = pingWorker
-        pingWorker = null
-        previous?.cancel()
+    private fun cancelPingWorker(batchId: String? = null) {
+        val targets = if (batchId == null) pingWorkers.toMap() else {
+            pingWorkers[batchId]?.let { mapOf(batchId to it) }.orEmpty()
+        }
+        targets.forEach { (id, worker) ->
+            if (pingWorkers[id] === worker) pingWorkers.remove(id)
+            worker.cancel()
+        }
+        if (batchId == null) _uiState.update { it.copy(testingGuids = emptySet()) }
     }
 
-    private fun runPingTest(guids: List<String>) {
-        cancelPingWorker()
-        if (guids.isEmpty()) {
+    private fun runPingTest(guids: List<String>, batchId: String = "default") {
+        cancelPingWorker(batchId)
+        val distinctGuids = guids.distinct()
+        if (distinctGuids.isEmpty()) {
             _uiState.update {
-                it.copy(
-                    testingGuids = emptySet(),
-                    isRefreshing = false,
-                    canConnect = canConnectForSource(it.selectedSourceId) && it.licenseValid,
-                )
+                it.copy(isRefreshing = false, canConnect = canConnectForSource(it.selectedSourceId) && it.licenseValid)
             }
             return
         }
 
         val app = getApplication<Application>()
         var worker: RealPingWorkerService? = null
-        _uiState.update {
-            it.copy(testingGuids = guids.toSet())
-        }
+        _uiState.update { it.copy(testingGuids = it.testingGuids + distinctGuids) }
         val newWorker = RealPingWorkerService(
             context = app,
-            guids = guids,
+            guids = distinctGuids,
             onEvent = { event ->
-                // A cancelled batch may finish after a newer batch has started.
-                // Ignore all late events from workers that no longer own the UI.
-                if (pingWorker === worker) handlePingEvent(event)
+                if (pingWorkers[batchId] === worker) handlePingEvent(event, batchId, distinctGuids)
             }
         )
         worker = newWorker
-        pingWorker = newWorker
+        pingWorkers[batchId] = newWorker
         newWorker.start()
     }
 
-    private fun handlePingEvent(event: RealPingEvent) {
+    fun testPersonalSubscriptionPing(subscriptionId: String) {
+        if (subscriptionId != SimpleVpnRepository.PERSONAL_SUB_ID &&
+            !subscriptionId.startsWith("personal_sub_")
+        ) return
+        val guids = MmkvManager.decodeServerList(subscriptionId)
+            .filter { MmkvManager.decodeServerConfig(it) != null }
+        runPingTest(guids, subscriptionId)
+    }
+
+    fun deleteAllPersonalConfigs() {
+        val personalIds = MmkvManager.decodeSubscriptions()
+            .map { it.guid }
+            .filter { it.startsWith("personal_sub_") }
+        val removedGuids = personalIds.flatMap { MmkvManager.decodeServerList(it) }.toSet() +
+            MmkvManager.decodeServerList(SimpleVpnRepository.PERSONAL_SUB_ID).toSet()
+        personalIds.forEach { id ->
+            personalSubscriptionRefreshJobs.remove(id)?.cancel()
+            cancelPingWorker(id)
+            MmkvManager.removeSubscription(id)
+        }
+        cancelPingWorker("personal_import")
+        cancelPingWorker("personal_all")
+        MmkvManager.removeServers(
+            MmkvManager.decodeServerList(SimpleVpnRepository.PERSONAL_SUB_ID),
+            SimpleVpnRepository.PERSONAL_SUB_ID,
+        )
+        val servers = SimpleVpnRepository.getPersonalServers()
+        _uiState.update { state ->
+            state.copy(
+                servers = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) servers else state.servers,
+                selectedGuid = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) null else state.selectedGuid,
+                testingGuids = state.testingGuids - removedGuids,
+                refreshingPersonalSubscriptionIds = emptySet(),
+                canConnect = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) false else state.canConnect,
+                message = "همه کانفیگ‌های شخصی حذف شدند",
+            )
+        }
+    }
+
+    private fun handlePingEvent(event: RealPingEvent, batchId: String, batchGuids: List<String>) {
         when (event) {
             is RealPingEvent.Result -> {
                 MmkvManager.encodeServerTestDelayMillis(event.guid, event.delayMillis)
@@ -759,20 +793,20 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             is RealPingEvent.Finish -> {
-                pingWorker = null
+                pingWorkers.remove(batchId)
                 val activeSourceId = _uiState.value.selectedSourceId
-                if (activeSourceId != SimpleVpnRepository.PERSONAL_SUB_ID) {
+                if (batchId.startsWith("source:") && activeSourceId != SimpleVpnRepository.PERSONAL_SUB_ID) {
                     SimpleVpnRepository.sortByPing()
                 }
                 val refreshedServers = if (activeSourceId == SimpleVpnRepository.PERSONAL_SUB_ID)
                     SimpleVpnRepository.getPersonalServers()
                 else SimpleVpnRepository.getServersForSource(activeSourceId)
-                _uiState.update {
-                    it.copy(
+                _uiState.update { state ->
+                    state.copy(
                         servers = refreshedServers,
-                        testingGuids = emptySet(),
+                        testingGuids = state.testingGuids - batchGuids.toSet(),
                         isRefreshing = false,
-                        canConnect = canConnectForSource(it.selectedSourceId) && it.licenseValid,
+                        canConnect = canConnectForSource(state.selectedSourceId) && state.licenseValid,
                     )
                 }
             }
