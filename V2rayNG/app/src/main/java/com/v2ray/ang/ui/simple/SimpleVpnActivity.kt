@@ -1,10 +1,12 @@
 package com.v2ray.ang.ui.simple
 
+import android.content.Intent
 import android.net.VpnService
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.ui.ScannerActivity
 import com.v2ray.ang.ui.base.BaseComponentActivity
 
 /**
@@ -19,6 +21,13 @@ import com.v2ray.ang.ui.base.BaseComponentActivity
 class SimpleVpnActivity : BaseComponentActivity() {
 
     private val viewModel: SimpleVpnViewModel by viewModels()
+
+    private val scanQr =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                result.data?.getStringExtra("SCAN_RESULT")?.let(viewModel::importPersonalConfig)
+            }
+        }
 
     private val requestVpnPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -52,6 +61,7 @@ class SimpleVpnActivity : BaseComponentActivity() {
         SimpleVpnScreen(
             viewModel = viewModel,
             onConnectClick = { viewModel.onToggleConnect { requestPermissionAndConnect() } },
+            onScanClick = { scanQr.launch(Intent(this, ScannerActivity::class.java)) },
         )
     }
 }
