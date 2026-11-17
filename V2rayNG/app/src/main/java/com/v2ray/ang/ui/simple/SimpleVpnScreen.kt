@@ -174,6 +174,9 @@ fun SimpleVpnScreen(
                         Text(stringResource(R.string.simple_license_manage))
                     }
                     if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+                        TextButton(onClick = { viewModel.onRefresh() }, enabled = !uiState.isRefreshing) {
+                            Text("به‌روزرسانی")
+                        }
                         TextButton(onClick = { showPersonalImport = true }) { Text("افزودن") }
                     } else {
                         TextButton(onClick = { viewModel.onRefresh() }, enabled = !uiState.isRefreshing) {
