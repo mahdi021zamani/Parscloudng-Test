@@ -61,8 +61,8 @@ object SimpleVpnRepository {
         val flagEmoji: String,
         /** null = not tested yet, -1 = failed/timeout, >=0 = ms */
         val delayMillis: Long?,
-        val subscriptionId: String,
-        val subscriptionName: String,
+        val subscriptionId: String = "",
+        val subscriptionName: String = "",
     )
 
     enum class AetherFailure { LICENSE_MISSING, LICENSE_EXPIRED, UNAUTHORIZED, HTTP_ERROR, NETWORK_ERROR, INVALID_CONTENT }
