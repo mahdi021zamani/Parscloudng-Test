@@ -63,6 +63,7 @@ data class SimpleVpnUiState(
     val selectedV2RaySourceId: String = SimpleVpnRepository.SIMPLE_SUB_ID,
     val status: SimpleConnectionStatus = SimpleConnectionStatus.DISCONNECTED,
     val isRefreshing: Boolean = false,
+    val refreshingPersonalSubscriptionIds: Set<String> = emptySet(),
     val canConnect: Boolean = false,
     val message: String? = null,
     val licenseDialogVisible: Boolean = false,
@@ -97,7 +98,9 @@ internal fun selectSimpleVpnSourceTab(
         servers = servers,
         selectedGuid = validSelection,
         canConnect = canConnect && validSelection != null,
-        testingGuids = current.testingGuids.intersect(servers.map { it.guid }.toSet()),
+        // Keep in-flight ping state for profiles on other tabs; their rows are hidden
+        // until the user returns to the owning source.
+        testingGuids = current.testingGuids,
         isRefreshing = false,
         message = null,
     )
@@ -110,6 +113,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     private var pingWorker: RealPingWorkerService? = null
     private var refreshJob: Job? = null
+    private val personalSubscriptionRefreshJobs = mutableMapOf<String, Job>()
     private var connectValidationJob: Job? = null
     private var expectedServiceSessionId: Long? = null
 
@@ -448,6 +452,89 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /** Refreshes exactly one user-owned subscription without touching sibling groups. */
+    fun refreshPersonalSubscription(subscriptionId: String) {
+        if (!subscriptionId.startsWith("personal_sub_")) return
+        if (personalSubscriptionRefreshJobs[subscriptionId]?.isActive == true) return
+        val subscription = MmkvManager.decodeSubscription(subscriptionId)
+        if (subscription == null) {
+            _uiState.update { it.copy(message = "اشتراک پیدا نشد") }
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                refreshingPersonalSubscriptionIds = it.refreshingPersonalSubscriptionIds + subscriptionId,
+                message = null,
+            )
+        }
+        val job = viewModelScope.launch(Dispatchers.IO) {
+            val count = try {
+                com.v2ray.ang.handler.AngConfigManager
+                    .updateConfigViaSub(SubscriptionCache(subscriptionId, subscription)).configCount
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "Personal subscription refresh failed for $subscriptionId", e)
+                -1
+            }
+            val servers = SimpleVpnRepository.getPersonalServers()
+            val groupGuids = MmkvManager.decodeServerList(subscriptionId)
+                .filter { MmkvManager.decodeServerConfig(it) != null }
+            withContext(Dispatchers.Main) {
+                _uiState.update { state ->
+                    state.copy(
+                        servers = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) servers else state.servers,
+                        selectedGuid = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+                            state.selectedGuid?.takeIf { guid -> servers.any { it.guid == guid } }
+                                ?: servers.firstOrNull()?.guid
+                        } else state.selectedGuid,
+                        refreshingPersonalSubscriptionIds = state.refreshingPersonalSubscriptionIds - subscriptionId,
+                        canConnect = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+                            servers.isNotEmpty() && state.licenseValid
+                        } else state.canConnect,
+                        message = when {
+                            count < 0 -> "به‌روزرسانی اشتراک ناموفق بود"
+                            count > 0 -> "$count کانفیگ این اشتراک به‌روزرسانی شد"
+                            else -> "برای این اشتراک کانفیگ جدیدی دریافت نشد"
+                        },
+                    )
+                }
+                if (groupGuids.isNotEmpty()) runPingTest(groupGuids)
+            }
+        }
+        personalSubscriptionRefreshJobs[subscriptionId] = job
+        job.invokeOnCompletion { personalSubscriptionRefreshJobs.remove(subscriptionId, job) }
+    }
+
+    /** Deletes only one personal subscription and all profiles indexed under its ID. */
+    fun deletePersonalSubscription(subscriptionId: String) {
+        if (!subscriptionId.startsWith("personal_sub_")) return
+        personalSubscriptionRefreshJobs.remove(subscriptionId)?.cancel()
+        val removedGuids = MmkvManager.decodeServerList(subscriptionId).toSet()
+        MmkvManager.removeSubscription(subscriptionId)
+        val servers = SimpleVpnRepository.getPersonalServers()
+        val state = _uiState.value
+        val selected = state.selectedGuid?.takeIf { it !in removedGuids && servers.any { server -> server.guid == it } }
+            ?: servers.firstOrNull()?.guid
+        val shouldRestartPing = state.testingGuids.any { it in removedGuids }
+        if (shouldRestartPing) cancelPingWorker()
+        _uiState.update {
+            it.copy(
+                servers = if (it.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) servers else it.servers,
+                selectedGuid = if (it.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) selected else it.selectedGuid,
+                testingGuids = if (shouldRestartPing) emptySet() else it.testingGuids - removedGuids,
+                refreshingPersonalSubscriptionIds = it.refreshingPersonalSubscriptionIds - subscriptionId,
+                canConnect = if (it.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+                    servers.isNotEmpty() && it.licenseValid
+                } else it.canConnect,
+                message = "اشتراک شخصی حذف شد",
+            )
+        }
+        if (shouldRestartPing) {
+            val remainingGuids = servers.map { it.guid }
+            if (remainingGuids.isNotEmpty()) runPingTest(remainingGuids)
+        }
+    }
+
     fun onSelectServer(guid: String) {
         val state = _uiState.value
         val sourceId = state.selectedSourceId
@@ -626,7 +713,13 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     private fun runPingTest(guids: List<String>) {
         cancelPingWorker()
         if (guids.isEmpty()) {
-            _uiState.update { it.copy(isRefreshing = false, canConnect = canConnectForSource(it.selectedSourceId) && it.licenseValid) }
+            _uiState.update {
+                it.copy(
+                    testingGuids = emptySet(),
+                    isRefreshing = false,
+                    canConnect = canConnectForSource(it.selectedSourceId) && it.licenseValid,
+                )
+            }
             return
         }
 
@@ -1020,6 +1113,8 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         super.onCleared()
         refreshJob?.cancel()
         refreshJob = null
+        personalSubscriptionRefreshJobs.values.forEach(Job::cancel)
+        personalSubscriptionRefreshJobs.clear()
         cancelPingWorker()
         val app = getApplication<Application>()
         runCatching { MessageHelper.sendMsg2Service(app, AppConfig.MSG_UNREGISTER_CLIENT, "") }
