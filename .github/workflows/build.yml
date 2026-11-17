@@ -18,6 +18,7 @@ on:
       - "work/parscloud-preservation-and-hardening"
       - "work/parcloud-four-profiles-and-core-sync-2026-11-15"
       - "work/parcloud-core-sync-2026-11-15"
+      - "work/parcloud-personal-ping-state-2026-11-18"
 
 permissions:
   contents: read
@@ -173,7 +174,7 @@ jobs:
           cd V2rayNG
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod 755 gradlew
-          ./gradlew testFdroidDebugUnitTest licenseFdroidReleaseReport assembleFdroidRelease \
+          ./gradlew testFdroidDebugUnitTest testPlaystoreDebugUnitTest :app:compilePlaystoreDebugKotlin licenseFdroidReleaseReport assembleFdroidRelease \
             -PpattngVersion="${{ inputs.release_tag || 'V26.10.11-test' }}" \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/android_keystore.jks" \
             -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
