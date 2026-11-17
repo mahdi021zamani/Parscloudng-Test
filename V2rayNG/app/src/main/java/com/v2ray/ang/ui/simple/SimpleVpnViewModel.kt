@@ -718,7 +718,10 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             pingBatchGuids.clear()
             _uiState.update { it.copy(testingGuids = emptySet()) }
         } else if (cancelledGuids.isNotEmpty()) {
-            _uiState.update { it.copy(testingGuids = it.testingGuids - cancelledGuids) }
+            val remainingActiveGuids = pingBatchGuids.values.flatten().toSet()
+            _uiState.update {
+                it.copy(testingGuids = (it.testingGuids - cancelledGuids) + remainingActiveGuids)
+            }
         }
     }
 
