@@ -120,7 +120,7 @@ fun SimpleVpnScreen(
     pendingDeleteSubscriptionId?.let { subscriptionId ->
         AlertDialog(
             onDismissRequest = { pendingDeleteSubscriptionId = null },
-            title = { Text(stringResource(R.string.confirm_delete_subscription_group)) },
+            title = { Text(stringResource(R.string.action_delete)) },
             text = { Text(stringResource(R.string.confirm_delete_subscription_group)) },
             confirmButton = {
                 TextButton(onClick = {
