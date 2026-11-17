@@ -112,6 +112,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     val uiState: StateFlow<SimpleVpnUiState> = _uiState.asStateFlow()
 
     private val pingWorkers = mutableMapOf<String, RealPingWorkerService>()
+    private val pingBatchGuids = mutableMapOf<String, Set<String>>()
     private var refreshJob: Job? = null
     private val personalSubscriptionRefreshJobs = mutableMapOf<String, Job>()
     private var connectValidationJob: Job? = null
@@ -707,11 +708,17 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val targets = if (batchId == null) pingWorkers.toMap() else {
             pingWorkers[batchId]?.let { mapOf(batchId to it) }.orEmpty()
         }
+        val cancelledGuids = targets.keys.flatMap { id -> pingBatchGuids.remove(id).orEmpty() }.toSet()
         targets.forEach { (id, worker) ->
             if (pingWorkers[id] === worker) pingWorkers.remove(id)
             worker.cancel()
         }
-        if (batchId == null) _uiState.update { it.copy(testingGuids = emptySet()) }
+        if (batchId == null) {
+            pingBatchGuids.clear()
+            _uiState.update { it.copy(testingGuids = emptySet()) }
+        } else if (cancelledGuids.isNotEmpty()) {
+            _uiState.update { it.copy(testingGuids = it.testingGuids - cancelledGuids) }
+        }
     }
 
     private fun runPingTest(guids: List<String>, batchId: String = "default") {
@@ -736,6 +743,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         )
         worker = newWorker
         pingWorkers[batchId] = newWorker
+        pingBatchGuids[batchId] = distinctGuids.toSet()
         newWorker.start()
     }
 
@@ -794,6 +802,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
             is RealPingEvent.Finish -> {
                 pingWorkers.remove(batchId)
+                pingBatchGuids.remove(batchId)
                 val activeSourceId = _uiState.value.selectedSourceId
                 if (batchId.startsWith("source:") && activeSourceId != SimpleVpnRepository.PERSONAL_SUB_ID) {
                     SimpleVpnRepository.sortByPing()
