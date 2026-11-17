@@ -371,21 +371,29 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            val count = if (Utils.isValidSubUrl(normalized)) {
+            val subscriptionUrls = normalized.lineSequence().map { it.trim() }
+                .filter { Utils.isValidSubUrl(it) }.distinct().toList()
+            val configLines = normalized.lineSequence().map { it.trim() }
+                .filter { it.isNotEmpty() && !Utils.isValidSubUrl(it) }.joinToString("\n")
+            var imported = 0
+            subscriptionUrls.forEachIndexed { index, url ->
                 val id = "personal_sub_" + Utils.getUuid()
                 val item = SubscriptionItem(
-                    remarks = "اشتراک شخصی",
-                    url = normalized,
+                    remarks = "اشتراک شخصی ${index + 1}",
+                    url = url,
                     enabled = true,
                     autoUpdate = false,
                 )
                 MmkvManager.encodeSubscription(id, item)
-                com.v2ray.ang.handler.AngConfigManager.updateConfigViaSub(SubscriptionCache(id, item)).configCount
-            } else {
-                com.v2ray.ang.handler.AngConfigManager.importBatchConfigWithoutSubscriptions(
-                    normalized, SimpleVpnRepository.PERSONAL_SUB_ID, true
+                imported += com.v2ray.ang.handler.AngConfigManager
+                    .updateConfigViaSub(SubscriptionCache(id, item)).configCount
+            }
+            if (configLines.isNotBlank()) {
+                imported += com.v2ray.ang.handler.AngConfigManager.importBatchConfigWithoutSubscriptions(
+                    configLines, SimpleVpnRepository.PERSONAL_SUB_ID, true
                 )
             }
+            imported
             withContext(Dispatchers.Main) {
                 val servers = SimpleVpnRepository.getPersonalServers()
                 val selected = MmkvManager.getSelectServer(SimpleVpnRepository.PERSONAL_SUB_ID)
