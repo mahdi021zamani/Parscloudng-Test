@@ -1113,7 +1113,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         super.onCleared()
         refreshJob?.cancel()
         refreshJob = null
-        personalSubscriptionRefreshJobs.values.forEach(Job::cancel)
+        personalSubscriptionRefreshJobs.values.forEach { it.cancel() }
         personalSubscriptionRefreshJobs.clear()
         cancelPingWorker()
         val app = getApplication<Application>()
