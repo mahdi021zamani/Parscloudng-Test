@@ -1,0 +1,180 @@
+name: PARSCLOUD Native Libraries Test APK
+
+on:
+  push:
+    branches:
+      - "work/parcloud-native-libs-build-fix-2026-11-17"
+    paths:
+      - "V2rayNG/app/src/**"
+      - "V2rayNG/app/build.gradle.kts"
+      - "V2rayNG/gradle/**"
+      - "V2rayNG/gradlew"
+      - "V2rayNG/gradle.properties"
+      - "compile-hevtun.sh"
+      - "compile-aether.sh"
+      - "compile-psiphon.sh"
+      - "compile-pt.sh"
+      - "fetch-psiphon-servers.sh"
+      - ".gitmodules"
+      - ".github/workflows/native-libs-test-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: parscloud-native-libs-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-native-test-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      RUST_TOOLCHAIN: stable
+      GO_VERSION: '1.26'
+    steps:
+      - name: Checkout exact working branch with native submodules
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+          cmdline-tools-version: '14742923'
+          packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
+
+      - name: Normalize Android SDK platform path
+        run: |
+          if [[ -d "$ANDROID_HOME/platforms/android-37.0" && ! -e "$ANDROID_HOME/platforms/android-37" ]]; then
+            ln -s android-37.0 "$ANDROID_HOME/platforms/android-37"
+          fi
+          test -f "$ANDROID_HOME/platforms/android-37/android.jar"
+
+      - name: Install pinned Android NDK
+        run: |
+          echo "y" | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --channel=0 --install "ndk;30.0.16248370"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
+          sed -i '10i\
+              ndkVersion = "30.0.16248370"' V2rayNG/app/build.gradle.kts
+          sed -i 's/versionCode = 746/versionCode = 747/' V2rayNG/app/build.gradle.kts
+          grep -q 'ndkVersion = "30.0.16248370"' V2rayNG/app/build.gradle.kts
+          grep -q 'versionCode = 747' V2rayNG/app/build.gradle.kts
+
+      - name: Install Rust targets
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Verify native submodules are checked out
+        run: |
+          test -f hev-socks5-tunnel/Android.mk
+          test -f aether/aether/Cargo.toml
+          test -f aether/psiphon-build.sh
+          test -f aether/pt-build.sh
+          git -C hev-socks5-tunnel rev-parse HEAD
+          git -C aether rev-parse HEAD
+
+      - name: Build HEV JNI library and root executable
+        run: bash compile-hevtun.sh
+
+      - name: Build Aether core
+        run: bash compile-aether.sh
+
+      - name: Build Psiphon client
+        run: bash compile-psiphon.sh
+
+      - name: Build Tor pluggable transports
+        run: bash compile-pt.sh
+
+      - name: Stage native libraries into Android app
+        run: |
+          mkdir -p V2rayNG/app/libs
+          cp -r libs/. V2rayNG/app/libs/
+          cp -r libs-aether/. V2rayNG/app/libs/
+          cp -r libs-psiphon/. V2rayNG/app/libs/
+          cp -r libs-pt/. V2rayNG/app/libs/
+
+      - name: Fetch and verify bundled Psiphon server list
+        run: bash fetch-psiphon-servers.sh
+
+      - name: Download pinned libv2ray dependency
+        uses: robinraju/release-downloader@v1.13
+        with:
+          repository: patterniha/AndroidLibXrayLite
+          tag: v26.11.20
+          fileName: libv2ray.aar
+          out-file-path: V2rayNG/app/libs/
+
+      - name: Verify libv2ray checksum
+        run: |
+          echo "88bd1d1243877848146f53c03731ec84677db84e31183b9b351459026624e1ac  V2rayNG/app/libs/libv2ray.aar" | sha256sum --check
+
+      - name: Verify native staging before Gradle packaging
+        run: |
+          for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+            test -s "V2rayNG/app/libs/$abi/libhev-socks5-tunnel.so"
+            test -s "V2rayNG/app/libs/$abi/libhevsockstun.so"
+          done
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            test -s "V2rayNG/app/libs/$abi/libaether.so"
+            test -s "V2rayNG/app/libs/$abi/libpsiphon-tunnel-core.so"
+            test -s "V2rayNG/app/libs/$abi/liblyrebird.so"
+          done
+          test -s V2rayNG/app/src/main/assets/psiphon_servers.dat
+
+      - name: Build F-Droid debug APKs and run unit tests
+        working-directory: V2rayNG
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          chmod 755 gradlew
+          ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest :app:assembleFdroidDebug -PpattngVersion="2.3.6-nativefix-test"
+
+      - name: Verify packaged native libraries inside every APK
+        working-directory: V2rayNG
+        run: |
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/fdroid/debug/*.apk)
+          test "${#apks[@]}" -gt 0
+          for apk in "${apks[@]}"; do
+            echo "Checking $apk"
+            listing="$(unzip -Z1 "$apk")"
+            grep -q '^assets/psiphon_servers.dat$' <<< "$listing"
+            for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+              grep -q "^lib/$abi/libhev-socks5-tunnel.so$" <<< "$listing"
+              grep -q "^lib/$abi/libhevsockstun.so$" <<< "$listing"
+            done
+            for abi in armeabi-v7a arm64-v8a x86_64; do
+              grep -q "^lib/$abi/libaether.so$" <<< "$listing"
+              grep -q "^lib/$abi/libpsiphon-tunnel-core.so$" <<< "$listing"
+              grep -q "^lib/$abi/liblyrebird.so$" <<< "$listing"
+            done
+          done
+
+      - name: Upload verified test APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: PARSCLOUD-Native-Libraries-FDroid-Debug-APKs
+          path: V2rayNG/app/build/outputs/apk/fdroid/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
