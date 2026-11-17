@@ -309,6 +309,7 @@ fun SimpleVpnScreen(
                         onSelect = viewModel::onSelectServer,
                         onDelete = if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID)
                             viewModel::deletePersonalConfig else null,
+                        groupBySubscription = uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID,
                     )
                 }
             }
@@ -332,18 +333,46 @@ private fun ServerList(
     enabled: Boolean,
     onSelect: (String) -> Unit,
     onDelete: ((String) -> Unit)? = null,
+    groupBySubscription: Boolean = false,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 4.dp)) {
-        items(servers, key = { it.guid }) { server ->
-            ServerRow(
-                server = server,
-                selected = server.guid == selectedGuid,
-                testing = server.guid in testingGuids,
-                enabled = enabled,
-                onSelect = { onSelect(server.guid) },
-                onDelete = onDelete?.let { delete -> { delete(server.guid) } },
-            )
-            HorizontalDivider()
+        if (groupBySubscription) {
+            servers.groupBy { it.subscriptionId }.forEach { (subscriptionId, groupServers) ->
+                item(key = "subscription-header:$subscriptionId") {
+                    Text(
+                        text = groupServers.first().subscriptionName,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                items(groupServers, key = { it.guid }) { server ->
+                    ServerRow(
+                        server = server,
+                        selected = server.guid == selectedGuid,
+                        testing = server.guid in testingGuids,
+                        enabled = enabled,
+                        onSelect = { onSelect(server.guid) },
+                        onDelete = onDelete?.let { delete -> { delete(server.guid) } },
+                    )
+                    HorizontalDivider()
+                }
+            }
+        } else {
+            items(servers, key = { it.guid }) { server ->
+                ServerRow(
+                    server = server,
+                    selected = server.guid == selectedGuid,
+                    testing = server.guid in testingGuids,
+                    enabled = enabled,
+                    onSelect = { onSelect(server.guid) },
+                    onDelete = onDelete?.let { delete -> { delete(server.guid) } },
+                )
+                HorizontalDivider()
+            }
         }
     }
 }
