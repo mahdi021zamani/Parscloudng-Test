@@ -150,25 +150,37 @@ jobs:
           chmod 755 gradlew
           ./gradlew --no-daemon --stacktrace testFdroidDebugUnitTest :app:assembleFdroidDebug -PpattngVersion="2.3.6-nativefix-test"
 
-      - name: Verify packaged native libraries inside every APK
+      - name: Verify packaged native libraries across all APK splits
         working-directory: V2rayNG
         run: |
           shopt -s nullglob
           apks=(app/build/outputs/apk/fdroid/debug/*.apk)
           test "${#apks[@]}" -gt 0
+          declare -A found_hev=()
+          declare -A found_aether=()
           for apk in "${apks[@]}"; do
             echo "Checking $apk"
             listing="$(unzip -Z1 "$apk")"
             grep -q '^assets/psiphon_servers.dat$' <<< "$listing"
             for abi in armeabi-v7a arm64-v8a x86 x86_64; do
-              grep -q "^lib/$abi/libhev-socks5-tunnel.so$" <<< "$listing"
-              grep -q "^lib/$abi/libhevsockstun.so$" <<< "$listing"
+              if grep -q "^lib/$abi/libhev-socks5-tunnel.so$" <<< "$listing"; then
+                grep -q "^lib/$abi/libhevsockstun.so$" <<< "$listing"
+                found_hev[$abi]=1
+              fi
             done
             for abi in armeabi-v7a arm64-v8a x86_64; do
-              grep -q "^lib/$abi/libaether.so$" <<< "$listing"
-              grep -q "^lib/$abi/libpsiphon-tunnel-core.so$" <<< "$listing"
-              grep -q "^lib/$abi/liblyrebird.so$" <<< "$listing"
+              if grep -q "^lib/$abi/libaether.so$" <<< "$listing"; then
+                grep -q "^lib/$abi/libpsiphon-tunnel-core.so$" <<< "$listing"
+                grep -q "^lib/$abi/liblyrebird.so$" <<< "$listing"
+                found_aether[$abi]=1
+              fi
             done
+          done
+          for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+            test "${found_hev[$abi]:-}" = "1"
+          done
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            test "${found_aether[$abi]:-}" = "1"
           done
 
       - name: Upload verified test APKs
