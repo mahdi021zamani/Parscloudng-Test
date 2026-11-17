@@ -340,7 +340,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         refreshJob?.cancel()
         refreshJob = null
         cancelPingWorker()
-        val servers = SimpleVpnRepository.getServersForSource(sourceId)
+        val servers = if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID) SimpleVpnRepository.getPersonalServers() else SimpleVpnRepository.getServersForSource(sourceId)
         val selected = MmkvManager.getSelectServer(sourceId)
             ?.takeIf { guid -> servers.any { it.guid == guid } }
             ?: servers.firstOrNull()?.guid
