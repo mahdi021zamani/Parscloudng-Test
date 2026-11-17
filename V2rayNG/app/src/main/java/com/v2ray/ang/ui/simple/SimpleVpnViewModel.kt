@@ -632,8 +632,8 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
         val app = getApplication<Application>()
         var worker: RealPingWorkerService? = null
-        _uiState.update { state ->
-            state.copy(testingGuids = state.testingGuids + guids)
+        _uiState.update {
+            it.copy(testingGuids = guids.toSet())
         }
         val newWorker = RealPingWorkerService(
             context = app,
