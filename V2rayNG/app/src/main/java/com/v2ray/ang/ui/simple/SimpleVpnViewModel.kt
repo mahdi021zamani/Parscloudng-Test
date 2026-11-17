@@ -117,6 +117,13 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         LauncherManager.stopService(context, expectedServiceSessionId)
     }
 
+    private fun canConnectForSource(sourceId: String): Boolean =
+        if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+            SimpleVpnRepository.getPersonalServers().isNotEmpty()
+        } else {
+            SimpleVpnRepository.canConnect(sourceId)
+        }
+
     private val serviceReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val safeIntent = intent ?: return
@@ -301,7 +308,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             it.copy(
                 servers = servers,
                 selectedGuid = selected,
-                canConnect = SimpleVpnRepository.canConnect(sourceId) && _uiState.value.licenseValid,
+                canConnect = canConnectForSource(sourceId) && _uiState.value.licenseValid,
             )
         }
     }
@@ -358,7 +365,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             sourceId = sourceId,
             servers = servers,
             selectedGuid = selected,
-            canConnect = (if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID) servers.isNotEmpty() else SimpleVpnRepository.canConnect(sourceId)) && current.licenseValid,
+            canConnect = (if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID) servers.isNotEmpty() else canConnectForSource(sourceId)) && current.licenseValid,
         ) ?: return
         _uiState.value = next
     }
@@ -507,7 +514,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             if (state.selectedSourceId != sourceId) {
                                 state.copy(
                                     isRefreshing = false,
-                                    canConnect = SimpleVpnRepository.canConnect(state.selectedSourceId) && state.licenseValid,
+                                    canConnect = canConnectForSource(state.selectedSourceId) && state.licenseValid,
                                 )
                             } else {
                                 selected?.let {
@@ -520,7 +527,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                                     servers = servers,
                                     selectedGuid = selected,
                                     testingGuids = sourceGuids.toSet(),
-                                    canConnect = SimpleVpnRepository.canConnect(sourceId) && state.licenseValid,
+                                    canConnect = canConnectForSource(sourceId) && state.licenseValid,
                                     message = aetherMessageId?.let(app::getString),
                                     // A normal feed refresh must not dismiss an already
                                     // visible first-run/license prompt. Only explicit
@@ -539,7 +546,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         if (state.selectedSourceId != requestedSourceId) {
                             state.copy(
                                 isRefreshing = false,
-                                canConnect = SimpleVpnRepository.canConnect(state.selectedSourceId) && state.licenseValid,
+                                canConnect = canConnectForSource(state.selectedSourceId) && state.licenseValid,
                             )
                         } else {
                             state.copy(
@@ -560,7 +567,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     _uiState.update { state ->
                         state.copy(
                             isRefreshing = false,
-                            canConnect = SimpleVpnRepository.canConnect(state.selectedSourceId) && state.licenseValid,
+                            canConnect = canConnectForSource(state.selectedSourceId) && state.licenseValid,
                             message = if (state.selectedSourceId == requestedSourceId)
                                 app.getString(R.string.simple_network_error_using_cache) else null,
                         )
@@ -581,7 +588,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         if (state.selectedSourceId != requestedSourceId) {
                             state.copy(
                                 isRefreshing = false,
-                                canConnect = SimpleVpnRepository.canConnect(state.selectedSourceId) && state.licenseValid,
+                                canConnect = canConnectForSource(state.selectedSourceId) && state.licenseValid,
                             )
                         } else {
                             state.copy(
@@ -611,7 +618,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     private fun runPingTest(guids: List<String>) {
         cancelPingWorker()
         if (guids.isEmpty()) {
-            _uiState.update { it.copy(isRefreshing = false, canConnect = SimpleVpnRepository.canConnect(it.selectedSourceId) && it.licenseValid) }
+            _uiState.update { it.copy(isRefreshing = false, canConnect = canConnectForSource(it.selectedSourceId) && it.licenseValid) }
             return
         }
 
@@ -653,7 +660,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         servers = SimpleVpnRepository.getServersForSource(it.selectedSourceId),
                         testingGuids = emptySet(),
                         isRefreshing = false,
-                        canConnect = SimpleVpnRepository.canConnect(it.selectedSourceId) && it.licenseValid,
+                        canConnect = canConnectForSource(it.selectedSourceId) && it.licenseValid,
                     )
                 }
             }
@@ -682,7 +689,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 it.copy(
                     status = SimpleConnectionStatus.DISCONNECTED,
                     isValidatingLicense = false,
-                    canConnect = it.licenseValid && SimpleVpnRepository.canConnect(it.selectedSourceId),
+                    canConnect = it.licenseValid && canConnectForSource(it.selectedSourceId),
                 )
             }
             return
@@ -762,7 +769,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         stopCurrentService(app)
                     }
                     SubscriptionLicenseWorker.schedule(app)
-                    val canConnect = SimpleVpnRepository.canConnect(_uiState.value.selectedSourceId)
+                    val canConnect = canConnectForSource(_uiState.value.selectedSourceId)
                     _uiState.update {
                         it.copy(
                             licenseDialogVisible = false,
@@ -809,7 +816,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 val saved = withContext(Dispatchers.IO) {
                     SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis)
                 }
-                val canConnect = saved && SimpleVpnRepository.canConnect(_uiState.value.selectedSourceId)
+                val canConnect = saved && canConnectForSource(_uiState.value.selectedSourceId)
                 _uiState.update {
                     it.copy(
                         isValidatingLicense = false,
@@ -842,7 +849,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     it.copy(
                         isValidatingLicense = false,
                         licenseValid = locallyActive,
-                        canConnect = locallyActive && SimpleVpnRepository.canConnect(it.selectedSourceId),
+                        canConnect = locallyActive && canConnectForSource(it.selectedSourceId),
                         // A temporary validation network failure is not a rejected subscription.
                         licenseDialogVisible = showDialogOnFailure && !locallyActive,
                         message = if (locallyActive) null else getApplication<Application>().getString(R.string.simple_license_network_error),
@@ -903,7 +910,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     val saved = withContext(Dispatchers.IO) {
                         SubscriptionLicenseRepository.saveActiveLicense(stored.key, result.expiresAtMillis)
                     }
-                    val canConnect = saved && SimpleVpnRepository.canConnect(_uiState.value.selectedSourceId)
+                    val canConnect = saved && canConnectForSource(_uiState.value.selectedSourceId)
                     if (!canConnect) {
                         _uiState.update {
                             it.copy(
@@ -982,7 +989,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             status = SimpleConnectionStatus.DISCONNECTED,
                             isValidatingLicense = false,
                             licenseValid = locallyActive,
-                            canConnect = locallyActive && SimpleVpnRepository.canConnect(it.selectedSourceId),
+                            canConnect = locallyActive && canConnectForSource(it.selectedSourceId),
                             // A transient validation outage must not disable either protocol tab.
                             message = if (locallyActive) null else app.getString(R.string.simple_license_network_error),
                         )
