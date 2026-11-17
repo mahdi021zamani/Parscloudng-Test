@@ -24,6 +24,7 @@ object SimpleVpnRepository {
     const val AETHER_SUB_ID = "simple_aether"
     const val COMBINED_SUB_ID = "simple_combined"
     const val SERVICES_SUB_ID = "simple_services_iran"
+    const val PERSONAL_SUB_ID = "simple_personal"
     const val EMERGENCY_SUB_ID = "simple_emergency"
 
     private enum class SourceKind { V2RAY, AETHER, CUSTOM_JSON }
@@ -189,6 +190,12 @@ object SimpleVpnRepository {
     }
 
     fun getServers(): List<SimpleServerUiModel> = getServerGuids().mapNotNull(::getServerUiModel)
+
+    /** User-owned profiles live in a dedicated bucket, never in an official feed. */
+    fun getPersonalServers(): List<SimpleServerUiModel> =
+        MmkvManager.decodeServerList(PERSONAL_SUB_ID)
+            .filter { MmkvManager.decodeServerConfig(it)?.subscriptionId == PERSONAL_SUB_ID }
+            .mapNotNull(::getServerUiModel)
 
     fun getServersForSource(sourceId: String): List<SimpleServerUiModel> =
         getServerGuidsForSource(sourceId).mapNotNull(::getServerUiModel)
