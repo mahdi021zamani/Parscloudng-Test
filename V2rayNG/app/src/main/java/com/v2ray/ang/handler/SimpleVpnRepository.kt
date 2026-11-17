@@ -61,6 +61,8 @@ object SimpleVpnRepository {
         val flagEmoji: String,
         /** null = not tested yet, -1 = failed/timeout, >=0 = ms */
         val delayMillis: Long?,
+        val subscriptionId: String,
+        val subscriptionName: String,
     )
 
     enum class AetherFailure { LICENSE_MISSING, LICENSE_EXPIRED, UNAUTHORIZED, HTTP_ERROR, NETWORK_ERROR, INVALID_CONTENT }
@@ -186,6 +188,9 @@ object SimpleVpnRepository {
             countryName = info.countryName,
             flagEmoji = info.flagEmoji,
             delayMillis = delay,
+            subscriptionId = profile.subscriptionId,
+            subscriptionName = MmkvManager.decodeSubscription(profile.subscriptionId)?.remarks
+                ?: if (profile.subscriptionId == PERSONAL_SUB_ID) "کانفیگ‌های دستی" else "اشتراک شخصی",
         )
     }
 
