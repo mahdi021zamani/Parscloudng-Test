@@ -654,10 +654,16 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
             is RealPingEvent.Finish -> {
                 pingWorker = null
-                SimpleVpnRepository.sortByPing()
+                val activeSourceId = _uiState.value.selectedSourceId
+                if (activeSourceId != SimpleVpnRepository.PERSONAL_SUB_ID) {
+                    SimpleVpnRepository.sortByPing()
+                }
+                val refreshedServers = if (activeSourceId == SimpleVpnRepository.PERSONAL_SUB_ID)
+                    SimpleVpnRepository.getPersonalServers()
+                else SimpleVpnRepository.getServersForSource(activeSourceId)
                 _uiState.update {
                     it.copy(
-                        servers = SimpleVpnRepository.getServersForSource(it.selectedSourceId),
+                        servers = refreshedServers,
                         testingGuids = emptySet(),
                         isRefreshing = false,
                         canConnect = canConnectForSource(it.selectedSourceId) && it.licenseValid,
