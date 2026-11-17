@@ -71,6 +71,7 @@ fun SimpleVpnScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showPersonalImport by remember { mutableStateOf(false) }
     var personalText by remember { mutableStateOf("") }
+    var pendingDeleteSubscriptionId by remember { mutableStateOf<String?>(null) }
     val clipboardManager = LocalClipboardManager.current
 
     LaunchedEffect(uiState.message) {
@@ -113,6 +114,25 @@ fun SimpleVpnScreen(
                 }, enabled = personalText.isNotBlank()) { Text("افزودن") }
             },
             dismissButton = { TextButton(onClick = { showPersonalImport = false }) { Text("انصراف") } },
+        )
+    }
+
+    pendingDeleteSubscriptionId?.let { subscriptionId ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteSubscriptionId = null },
+            title = { Text(stringResource(R.string.confirm_delete_subscription_group)) },
+            text = { Text(stringResource(R.string.confirm_delete_subscription_group)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deletePersonalSubscription(subscriptionId)
+                    pendingDeleteSubscriptionId = null
+                }) { Text(stringResource(R.string.action_delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteSubscriptionId = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
         )
     }
 
@@ -310,6 +330,9 @@ fun SimpleVpnScreen(
                         onDelete = if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID)
                             viewModel::deletePersonalConfig else null,
                         groupBySubscription = uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID,
+                        refreshingSubscriptionIds = uiState.refreshingPersonalSubscriptionIds,
+                        onRefreshSubscription = viewModel::refreshPersonalSubscription,
+                        onDeleteSubscription = { pendingDeleteSubscriptionId = it },
                     )
                 }
             }
@@ -334,20 +357,46 @@ private fun ServerList(
     onSelect: (String) -> Unit,
     onDelete: ((String) -> Unit)? = null,
     groupBySubscription: Boolean = false,
+    refreshingSubscriptionIds: Set<String> = emptySet(),
+    onRefreshSubscription: ((String) -> Unit)? = null,
+    onDeleteSubscription: ((String) -> Unit)? = null,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 4.dp)) {
         if (groupBySubscription) {
             servers.groupBy { it.subscriptionId }.forEach { (subscriptionId, groupServers) ->
                 item(key = "subscription-header:$subscriptionId") {
-                    Text(
-                        text = groupServers.first().subscriptionName,
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                            .padding(start = 16.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = groupServers.first().subscriptionName,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (subscriptionId.startsWith("personal_sub_")) {
+                            TextButton(
+                                onClick = { onRefreshSubscription?.invoke(subscriptionId) },
+                                enabled = subscriptionId !in refreshingSubscriptionIds,
+                            ) {
+                                if (subscriptionId in refreshingSubscriptionIds) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.width(16.dp).height(16.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Text(stringResource(R.string.simple_refresh))
+                                }
+                            }
+                            TextButton(onClick = { onDeleteSubscription?.invoke(subscriptionId) }) {
+                                Text(stringResource(R.string.action_delete))
+                            }
+                        }
+                    }
                 }
                 items(groupServers, key = { it.guid }) { server ->
                     ServerRow(
