@@ -328,7 +328,12 @@ object CoreServiceManager {
     }
 
     private fun announceAetherWarmUp(service: Service, guid: String, isReload: Boolean) {
-        sendSessionStatus(service, AppConfig.MSG_STATE_CONNECTING, "")
+        // A network handover reload keeps the VPN service and TUN interface alive.
+        // Do not downgrade an already-connected UI to CONNECTING during this internal
+        // recovery; report RUNNING again once Aether is listening on the new network.
+        if (!isReload) {
+            sendSessionStatus(service, AppConfig.MSG_STATE_CONNECTING, "")
+        }
         aetherWarmUpJob = aetherScope.launch {
             var listening = false
             while (isActive && !listening && AetherCoreManager.isRunning) {
@@ -338,9 +343,11 @@ object CoreServiceManager {
                 AetherCoreManager.WarmUpOutcome.ABANDONED -> Unit
                 AetherCoreManager.WarmUpOutcome.CORE_EXITED -> onAetherExit(guid)
                 AetherCoreManager.WarmUpOutcome.LISTENING -> {
-                    if (!isReload) {
-                        sendSessionStatus(service, AppConfig.MSG_STATE_START_SUCCESS, "")
-                    }
+                    sendSessionStatus(
+                        service,
+                        if (isReload) AppConfig.MSG_STATE_RUNNING else AppConfig.MSG_STATE_START_SUCCESS,
+                        "",
+                    )
                 }
             }
         }
