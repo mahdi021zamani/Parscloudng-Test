@@ -794,7 +794,11 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 MmkvManager.encodeServerTestDelayMillis(event.guid, event.delayMillis)
                 _uiState.update { state ->
                     state.copy(
-                        testingGuids = state.testingGuids - event.guid,
+                        testingGuids = if (pingBatchGuids.any { (id, ids) -> id != batchId && event.guid in ids }) {
+                            state.testingGuids
+                        } else {
+                            state.testingGuids - event.guid
+                        },
                         servers = state.servers.map { s ->
                             if (s.guid == event.guid) s.copy(delayMillis = event.delayMillis) else s
                         }
@@ -805,6 +809,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             is RealPingEvent.Finish -> {
                 pingWorkers.remove(batchId)
                 pingBatchGuids.remove(batchId)
+                val otherActiveGuids = pingBatchGuids.values.flatten().toSet()
                 val activeSourceId = _uiState.value.selectedSourceId
                 if (batchId.startsWith("source:") && activeSourceId != SimpleVpnRepository.PERSONAL_SUB_ID) {
                     SimpleVpnRepository.sortByPing()
@@ -815,7 +820,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiState.update { state ->
                     state.copy(
                         servers = refreshedServers,
-                        testingGuids = state.testingGuids - batchGuids.toSet(),
+                        testingGuids = (state.testingGuids - batchGuids.toSet()) + otherActiveGuids,
                         isRefreshing = false,
                         canConnect = canConnectForSource(state.selectedSourceId) && state.licenseValid,
                     )
