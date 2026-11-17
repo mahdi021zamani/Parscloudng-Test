@@ -72,6 +72,7 @@ fun SimpleVpnScreen(
     var showPersonalImport by remember { mutableStateOf(false) }
     var personalText by remember { mutableStateOf("") }
     var pendingDeleteSubscriptionId by remember { mutableStateOf<String?>(null) }
+    var pendingDeleteAllPersonal by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
 
     LaunchedEffect(uiState.message) {
@@ -114,6 +115,23 @@ fun SimpleVpnScreen(
                 }, enabled = personalText.isNotBlank()) { Text("افزودن") }
             },
             dismissButton = { TextButton(onClick = { showPersonalImport = false }) { Text("انصراف") } },
+        )
+    }
+
+    if (pendingDeleteAllPersonal) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteAllPersonal = false },
+            title = { Text("حذف همه کانفیگ‌های شخصی") },
+            text = { Text("تمام اشتراک‌ها و کانفیگ‌های دستی این بخش حذف می‌شوند. منابع اصلی برنامه دست‌نخورده می‌مانند.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteAllPersonalConfigs()
+                    pendingDeleteAllPersonal = false
+                }) { Text(stringResource(R.string.action_delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteAllPersonal = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
         )
     }
 
@@ -309,6 +327,9 @@ fun SimpleVpnScreen(
                 ) {
                     TextButton(onClick = { showPersonalImport = true }) { Text("افزودن از متن") }
                     TextButton(onClick = onScanClick) { Text("اسکن QR") }
+                    TextButton(onClick = { pendingDeleteAllPersonal = true }, enabled = uiState.servers.isNotEmpty()) {
+                        Text("حذف همه")
+                    }
                 }
             }
             Box(modifier = Modifier.weight(1f)) {
@@ -332,6 +353,7 @@ fun SimpleVpnScreen(
                         groupBySubscription = uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID,
                         refreshingSubscriptionIds = uiState.refreshingPersonalSubscriptionIds,
                         onRefreshSubscription = viewModel::refreshPersonalSubscription,
+                        onTestPingSubscription = viewModel::testPersonalSubscriptionPing,
                         onDeleteSubscription = { pendingDeleteSubscriptionId = it },
                     )
                 }
@@ -359,6 +381,7 @@ private fun ServerList(
     groupBySubscription: Boolean = false,
     refreshingSubscriptionIds: Set<String> = emptySet(),
     onRefreshSubscription: ((String) -> Unit)? = null,
+    onTestPingSubscription: ((String) -> Unit)? = null,
     onDeleteSubscription: ((String) -> Unit)? = null,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 4.dp)) {
@@ -378,8 +401,11 @@ private fun ServerList(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        if (subscriptionId.startsWith("personal_sub_")) {
+                        if (subscriptionId == SimpleVpnRepository.PERSONAL_SUB_ID || subscriptionId.startsWith("personal_sub_")) {
                             TextButton(
+                                onClick = { onTestPingSubscription?.invoke(subscriptionId) },
+                            ) { Text("تست پینگ") }
+                            if (subscriptionId.startsWith("personal_sub_")) TextButton(
                                 onClick = { onRefreshSubscription?.invoke(subscriptionId) },
                                 enabled = subscriptionId !in refreshingSubscriptionIds,
                             ) {
