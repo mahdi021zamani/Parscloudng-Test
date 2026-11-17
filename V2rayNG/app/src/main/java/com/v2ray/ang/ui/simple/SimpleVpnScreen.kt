@@ -140,7 +140,20 @@ fun SimpleVpnScreen(
                 }
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) { Snackbar(it) } }
+        snackbarHost = {
+            SnackbarHost(snackbarHostState) { data ->
+                val isSuccess = data.visuals.message == stringResource(R.string.toast_services_success)
+                if (isSuccess) {
+                    Text(
+                        text = data.visuals.message,
+                        color = androidx.compose.ui.graphics.Color(0xFF4CAF50),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                } else {
+                    Snackbar(data)
+                }
+            }
+        }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             val isV2RaySelected = uiState.selectedSourceId == SimpleVpnRepository.SIMPLE_SUB_ID ||
