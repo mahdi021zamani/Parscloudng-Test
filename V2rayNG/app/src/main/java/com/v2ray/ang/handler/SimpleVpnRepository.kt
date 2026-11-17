@@ -198,12 +198,18 @@ object SimpleVpnRepository {
 
     /** User-owned profiles live in a dedicated bucket, never in an official feed. */
     fun getPersonalServers(): List<SimpleServerUiModel> {
-        val manual = MmkvManager.decodeServerList(PERSONAL_SUB_ID)
+        val manualServers = MmkvManager.decodeServerList(PERSONAL_SUB_ID)
+            .mapNotNull(::getServerUiModel)
+            .map { it.copy(subscriptionName = "کانفیگ‌های دستی") }
         val subscriptionIds = MmkvManager.decodeSubscriptions()
             .map { it.guid }
             .filter { it.startsWith("personal_sub_") }
-        val allGuids = (manual + subscriptionIds.flatMap(MmkvManager::decodeServerList)).distinct()
-        return allGuids.mapNotNull(::getServerUiModel)
+        val subscriptionServers = subscriptionIds.flatMapIndexed { index, subscriptionId ->
+            MmkvManager.decodeServerList(subscriptionId)
+                .mapNotNull(::getServerUiModel)
+                .map { it.copy(subscriptionName = "اشتراک شخصی ${index + 1}") }
+        }
+        return (manualServers + subscriptionServers).distinctBy { it.guid }
     }
 
     /** Refreshes only user-created subscriptions; official PARSCLOUD feeds are never touched. */
