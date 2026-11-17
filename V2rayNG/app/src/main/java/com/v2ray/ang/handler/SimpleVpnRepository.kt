@@ -204,10 +204,8 @@ object SimpleVpnRepository {
         val subscriptionIds = MmkvManager.decodeSubscriptions()
             .map { it.guid }
             .filter { it.startsWith("personal_sub_") }
-        val subscriptionServers = subscriptionIds.flatMapIndexed { index, subscriptionId ->
-            MmkvManager.decodeServerList(subscriptionId)
-                .mapNotNull(::getServerUiModel)
-                .map { it.copy(subscriptionName = "اشتراک شخصی ${index + 1}") }
+        val subscriptionServers = subscriptionIds.flatMap { subscriptionId ->
+            MmkvManager.decodeServerList(subscriptionId).mapNotNull(::getServerUiModel)
         }
         return (manualServers + subscriptionServers).distinctBy { it.guid }
     }
