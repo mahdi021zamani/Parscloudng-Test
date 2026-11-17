@@ -14,6 +14,8 @@ import com.v2ray.ang.core.CoreServiceManager
 import com.v2ray.ang.core.LauncherManager
 import com.v2ray.ang.core.ServiceSessionContract
 import com.v2ray.ang.dto.RealPingEvent
+import com.v2ray.ang.dto.entities.SubscriptionItem
+import com.v2ray.ang.dto.entities.SubscriptionCache
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SimpleVpnRepository
 import com.v2ray.ang.handler.SimpleVpnRepository.SimpleServerUiModel
@@ -369,15 +371,37 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            val count = com.v2ray.ang.handler.AngConfigManager.importBatchConfigWithoutSubscriptions(
-                normalized, SimpleVpnRepository.PERSONAL_SUB_ID, true
-            )
+            val count = if (Utils.isValidSubUrl(normalized)) {
+                val id = "personal_sub_" + Utils.getUuid()
+                val item = SubscriptionItem(
+                    remarks = "اشتراک شخصی",
+                    url = normalized,
+                    enabled = true,
+                    autoUpdate = false,
+                )
+                MmkvManager.encodeSubscription(id, item)
+                com.v2ray.ang.handler.AngConfigManager.updateConfigViaSub(SubscriptionCache(id, item)).configCount
+            } else {
+                com.v2ray.ang.handler.AngConfigManager.importBatchConfigWithoutSubscriptions(
+                    normalized, SimpleVpnRepository.PERSONAL_SUB_ID, true
+                )
+            }
             withContext(Dispatchers.Main) {
-                if (count > 0) {
-                    onSelectSource(SimpleVpnRepository.PERSONAL_SUB_ID)
-                    _uiState.update { it.copy(message = "$count کانفیگ شخصی اضافه شد") }
-                } else {
-                    _uiState.update { it.copy(message = "کانفیگ قابل شناسایی نیست") }
+                val servers = SimpleVpnRepository.getPersonalServers()
+                val selected = MmkvManager.getSelectServer(SimpleVpnRepository.PERSONAL_SUB_ID)
+                    ?.takeIf { guid -> servers.any { it.guid == guid } } ?: servers.firstOrNull()?.guid
+                _uiState.update {
+                    it.copy(
+                        selectedSourceId = SimpleVpnRepository.PERSONAL_SUB_ID,
+                        servers = servers,
+                        selectedGuid = selected,
+                        canConnect = servers.isNotEmpty() && it.licenseValid,
+                        message = if (count > 0) "$count مورد شخصی اضافه شد" else "لینک یا کانفیگ قابل شناسایی نیست",
+                    )
+                }
+                selected?.let {
+                    MmkvManager.setSelectServer(it, SimpleVpnRepository.PERSONAL_SUB_ID)
+                    if (_uiState.value.status == SimpleConnectionStatus.DISCONNECTED) MmkvManager.setSelectServer(it)
                 }
             }
         }
@@ -385,7 +409,11 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun deletePersonalConfig(guid: String) {
         if (MmkvManager.isCentralProfile(guid)) return
-        MmkvManager.removeServers(listOf(guid), SimpleVpnRepository.PERSONAL_SUB_ID)
+        val profileSubId = MmkvManager.decodeServerConfig(guid)?.subscriptionId ?: return
+        MmkvManager.removeServers(listOf(guid), profileSubId)
+        if (MmkvManager.decodeServerList(profileSubId).isEmpty() && profileSubId.startsWith("personal_sub_")) {
+            MmkvManager.removeSubscription(profileSubId)
+        }
         val servers = SimpleVpnRepository.getPersonalServers()
         val selected = MmkvManager.getSelectServer(SimpleVpnRepository.PERSONAL_SUB_ID)
             ?.takeIf { id -> servers.any { it.guid == id } } ?: servers.firstOrNull()?.guid
@@ -416,6 +444,26 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun onRefresh() {
         if (_uiState.value.isRefreshing) return
+        if (_uiState.value.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+            _uiState.update { it.copy(isRefreshing = true, message = null) }
+            refreshJob = viewModelScope.launch(Dispatchers.IO) {
+                val count = SimpleVpnRepository.refreshPersonalSubscriptions()
+                val servers = SimpleVpnRepository.getPersonalServers()
+                withContext(Dispatchers.Main) {
+                    _uiState.update {
+                        it.copy(
+                            servers = servers,
+                            selectedGuid = it.selectedGuid?.takeIf { guid -> servers.any { s -> s.guid == guid } }
+                                ?: servers.firstOrNull()?.guid,
+                            isRefreshing = false,
+                            canConnect = servers.isNotEmpty() && it.licenseValid,
+                            message = if (count > 0) "$count کانفیگ شخصی به‌روزرسانی شد" else "اشتراک شخصی به‌روزرسانی نشد",
+                        )
+                    }
+                }
+            }
+            return
+        }
         val requestedSourceId = _uiState.value.selectedSourceId
         _uiState.update { it.copy(isRefreshing = true, message = null) }
 
