@@ -37,7 +37,7 @@ import kotlinx.coroutines.withContext
 
 enum class SimpleConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED }
 
-enum class SimpleVpnProfileTab { WIREGUARD, V2RAY, COMBINED, SERVICES_FOR_IRAN }
+enum class SimpleVpnProfileTab { WIREGUARD, V2RAY, COMBINED, SERVICES_FOR_IRAN, PERSONAL }
 
 internal fun shouldAcceptSimpleVpnSessionEvent(
     expectedSessionId: Long?,
@@ -82,6 +82,7 @@ internal fun selectSimpleVpnSourceTab(
             SimpleVpnRepository.AETHER_SUB_ID,
             SimpleVpnRepository.COMBINED_SUB_ID,
             SimpleVpnRepository.SERVICES_SUB_ID,
+            SimpleVpnRepository.PERSONAL_SUB_ID,
         )
     ) return null
 
@@ -309,6 +310,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             SimpleVpnProfileTab.V2RAY -> _uiState.value.selectedV2RaySourceId
             SimpleVpnProfileTab.COMBINED -> SimpleVpnRepository.COMBINED_SUB_ID
             SimpleVpnProfileTab.SERVICES_FOR_IRAN -> SimpleVpnRepository.SERVICES_SUB_ID
+            SimpleVpnProfileTab.PERSONAL -> SimpleVpnRepository.PERSONAL_SUB_ID
         }
         onSelectSource(sourceId)
     }
@@ -332,6 +334,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 SimpleVpnRepository.AETHER_SUB_ID,
                 SimpleVpnRepository.COMBINED_SUB_ID,
                 SimpleVpnRepository.SERVICES_SUB_ID,
+                SimpleVpnRepository.PERSONAL_SUB_ID,
             )
         ) return
         refreshJob?.cancel()
@@ -356,6 +359,44 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             canConnect = SimpleVpnRepository.canConnect(sourceId) && current.licenseValid,
         ) ?: return
         _uiState.value = next
+    }
+
+
+    fun importPersonalConfig(content: String) {
+        val normalized = content.trim()
+        if (normalized.isBlank()) {
+            _uiState.update { it.copy(message = "متن کانفیگ خالی است") }
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val count = com.v2ray.ang.handler.AngConfigManager.importBatchConfigWithoutSubscriptions(
+                normalized, SimpleVpnRepository.PERSONAL_SUB_ID, true
+            )
+            withContext(Dispatchers.Main) {
+                if (count > 0) {
+                    onSelectSource(SimpleVpnRepository.PERSONAL_SUB_ID)
+                    _uiState.update { it.copy(message = "$count کانفیگ شخصی اضافه شد") }
+                } else {
+                    _uiState.update { it.copy(message = "کانفیگ قابل شناسایی نیست") }
+                }
+            }
+        }
+    }
+
+    fun deletePersonalConfig(guid: String) {
+        if (MmkvManager.isCentralProfile(guid)) return
+        MmkvManager.removeServers(listOf(guid), SimpleVpnRepository.PERSONAL_SUB_ID)
+        val servers = SimpleVpnRepository.getPersonalServers()
+        val selected = MmkvManager.getSelectServer(SimpleVpnRepository.PERSONAL_SUB_ID)
+            ?.takeIf { id -> servers.any { it.guid == id } } ?: servers.firstOrNull()?.guid
+        _uiState.update {
+            it.copy(
+                servers = servers,
+                selectedGuid = selected,
+                canConnect = servers.isNotEmpty() && it.licenseValid,
+                message = "کانفیگ حذف شد",
+            )
+        }
     }
 
     fun onSelectServer(guid: String) {
