@@ -98,7 +98,10 @@ fun SimpleVpnScreen(
                         TextButton(onClick = { personalText = clipboardManager.getText()?.text.orEmpty() }) {
                             Text("چسباندن از کلیپ‌بورد")
                         }
-                        TextButton(onClick = onScanClick) { Text("اسکن QR") }
+                        TextButton(onClick = {
+                            showPersonalImport = false
+                            onScanClick()
+                        }) { Text("اسکن QR") }
                     }
                 }
             },
