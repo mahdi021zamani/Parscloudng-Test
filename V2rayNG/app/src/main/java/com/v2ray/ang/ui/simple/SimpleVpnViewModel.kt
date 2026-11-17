@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 
 enum class SimpleConnectionStatus { DISCONNECTED, CONNECTING, CONNECTED }
 
@@ -111,8 +112,8 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     private val _uiState = MutableStateFlow(SimpleVpnUiState())
     val uiState: StateFlow<SimpleVpnUiState> = _uiState.asStateFlow()
 
-    private val pingWorkers = mutableMapOf<String, RealPingWorkerService>()
-    private val pingBatchGuids = mutableMapOf<String, Set<String>>()
+    private val pingWorkers = ConcurrentHashMap<String, RealPingWorkerService>()
+    private val pingBatchGuids = ConcurrentHashMap<String, Set<String>>()
     private var refreshJob: Job? = null
     private val personalSubscriptionRefreshJobs = mutableMapOf<String, Job>()
     private var connectValidationJob: Job? = null
@@ -769,6 +770,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         }
         cancelPingWorker("personal_import")
         cancelPingWorker("personal_all")
+        cancelPingWorker(SimpleVpnRepository.PERSONAL_SUB_ID)
         MmkvManager.removeServers(
             MmkvManager.decodeServerList(SimpleVpnRepository.PERSONAL_SUB_ID),
             SimpleVpnRepository.PERSONAL_SUB_ID,
