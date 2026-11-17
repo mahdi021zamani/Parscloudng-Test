@@ -23,6 +23,34 @@ class SimpleVpnSourceTabStateTest {
     }
 
     @Test
+    fun keepsInFlightPingGuidsWhenSwitchingTabsAndReturning() {
+        val pingGuids = setOf("personal-1", "personal-2")
+        val current = SimpleVpnUiState(
+            licenseValid = true,
+            selectedSourceId = SimpleVpnRepository.PERSONAL_SUB_ID,
+            testingGuids = pingGuids,
+        )
+
+        val otherTab = selectSimpleVpnSourceTab(
+            current = current,
+            sourceId = SimpleVpnRepository.SIMPLE_SUB_ID,
+            servers = listOf(server("v2ray-1")),
+            selectedGuid = "v2ray-1",
+            canConnect = true,
+        )
+        val personalTab = selectSimpleVpnSourceTab(
+            current = requireNotNull(otherTab),
+            sourceId = SimpleVpnRepository.PERSONAL_SUB_ID,
+            servers = listOf(server("personal-1"), server("personal-2")),
+            selectedGuid = "personal-1",
+            canConnect = true,
+        )
+
+        assertEquals(pingGuids, otherTab?.testingGuids)
+        assertEquals(pingGuids, personalTab?.testingGuids)
+    }
+
+    @Test
     fun selectsV2RayTabAndKeepsOnlyItsSelectedGuid() {
         val servers = listOf(server("v2ray-1"), server("v2ray-2"))
 
