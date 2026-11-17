@@ -383,14 +383,20 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             val configLines = normalized.lineSequence().map { it.trim() }
                 .filter { it.isNotEmpty() && !Utils.isValidSubUrl(it) }.joinToString("\n")
             var imported = 0
-            subscriptionUrls.forEachIndexed { index, url ->
+            val existingPersonalSubscriptions = MmkvManager.decodeSubscriptions()
+                .filter { it.guid.startsWith("personal_sub_") }
+            var nextSubscriptionNumber = existingPersonalSubscriptions.size + 1
+            subscriptionUrls.forEach { url ->
+                // Do not create a second entry for a URL that is already registered.
+                if (existingPersonalSubscriptions.any { it.subscription.url == url }) return@forEach
                 val id = "personal_sub_" + Utils.getUuid()
                 val item = SubscriptionItem(
-                    remarks = "اشتراک شخصی ${index + 1}",
+                    remarks = "اشتراک شخصی $nextSubscriptionNumber",
                     url = url,
                     enabled = true,
                     autoUpdate = false,
                 )
+                nextSubscriptionNumber++
                 MmkvManager.encodeSubscription(id, item)
                 imported += com.v2ray.ang.handler.AngConfigManager
                     .updateConfigViaSub(SubscriptionCache(id, item)).configCount
