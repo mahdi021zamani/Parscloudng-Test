@@ -192,10 +192,23 @@ object SimpleVpnRepository {
     fun getServers(): List<SimpleServerUiModel> = getServerGuids().mapNotNull(::getServerUiModel)
 
     /** User-owned profiles live in a dedicated bucket, never in an official feed. */
-    fun getPersonalServers(): List<SimpleServerUiModel> =
-        MmkvManager.decodeServerList(PERSONAL_SUB_ID)
-            .filter { MmkvManager.decodeServerConfig(it)?.subscriptionId == PERSONAL_SUB_ID }
-            .mapNotNull(::getServerUiModel)
+    fun getPersonalServers(): List<SimpleServerUiModel> {
+        val manual = MmkvManager.decodeServerList(PERSONAL_SUB_ID)
+        val subscriptionIds = MmkvManager.decodeSubscriptions()
+            .map { it.guid }
+            .filter { it.startsWith("personal_sub_") }
+        val allGuids = (manual + subscriptionIds.flatMap(MmkvManager::decodeServerList)).distinct()
+        return allGuids.mapNotNull(::getServerUiModel)
+    }
+
+    /** Refreshes only user-created subscriptions; official PARSCLOUD feeds are never touched. */
+    fun refreshPersonalSubscriptions(): Int {
+        var imported = 0
+        MmkvManager.decodeSubscriptions()
+            .filter { it.guid.startsWith("personal_sub_") }
+            .forEach { imported += AngConfigManager.updateConfigViaSub(it).configCount }
+        return imported
+    }
 
     fun getServersForSource(sourceId: String): List<SimpleServerUiModel> =
         getServerGuidsForSource(sourceId).mapNotNull(::getServerUiModel)
