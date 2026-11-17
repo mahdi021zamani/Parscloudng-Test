@@ -97,7 +97,7 @@ internal fun selectSimpleVpnSourceTab(
         servers = servers,
         selectedGuid = validSelection,
         canConnect = canConnect && validSelection != null,
-        testingGuids = emptySet(),
+        testingGuids = current.testingGuids.intersect(servers.map { it.guid }.toSet()),
         isRefreshing = false,
         message = null,
     )
@@ -348,7 +348,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         ) return
         refreshJob?.cancel()
         refreshJob = null
-        cancelPingWorker()
+        // Keep the current ping batch alive while the user browses another source.
         val servers = if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID) SimpleVpnRepository.getPersonalServers() else SimpleVpnRepository.getServersForSource(sourceId)
         val selected = MmkvManager.getSelectServer(sourceId)
             ?.takeIf { guid -> servers.any { it.guid == guid } }
@@ -417,6 +417,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     MmkvManager.setSelectServer(it, SimpleVpnRepository.PERSONAL_SUB_ID)
                     if (_uiState.value.status == SimpleConnectionStatus.DISCONNECTED) MmkvManager.setSelectServer(it)
                 }
+                runPingTest(servers.map { it.guid })
             }
         }
     }
@@ -474,6 +475,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             message = if (count > 0) "$count کانفیگ شخصی به‌روزرسانی شد" else "اشتراک شخصی به‌روزرسانی نشد",
                         )
                     }
+                    runPingTest(servers.map { it.guid })
                 }
             }
             return
@@ -624,6 +626,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
         val app = getApplication<Application>()
         var worker: RealPingWorkerService? = null
+        _uiState.update { state ->
+            state.copy(testingGuids = state.testingGuids + guids)
+        }
         val newWorker = RealPingWorkerService(
             context = app,
             guids = guids,
