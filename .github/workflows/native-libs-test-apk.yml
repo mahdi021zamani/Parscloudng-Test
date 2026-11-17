@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - "work/parcloud-native-libs-build-fix-2026-11-17"
+      - "work/parcloud-personal-profiles-2026-11-17"
     paths:
       - "V2rayNG/app/src/**"
       - "V2rayNG/app/build.gradle.kts"
