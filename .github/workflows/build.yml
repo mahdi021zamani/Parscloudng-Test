@@ -129,8 +129,8 @@ jobs:
 
           cd AndroidLibXrayLite
           git fetch --tags origin
-          EXPECTED_COMMIT="1546ca75217fc6e2ca6ec6c532871fd8555b9f2f"
-          TAG_COMMIT=$(git rev-parse "v26.11.20^{commit}")
+          EXPECTED_COMMIT="dc808073d3faf65819a1925b18f92df9af91cddd"
+          TAG_COMMIT=$(git rev-parse "v26.11.21^{commit}")
           CHECKOUT_COMMIT=$(git rev-parse HEAD)
           echo "AndroidLibXrayLite tag: $TAG_COMMIT"
           echo "AndroidLibXrayLite checkout: $CHECKOUT_COMMIT"
@@ -141,13 +141,13 @@ jobs:
         uses: robinraju/release-downloader@v1.13
         with:
           repository: patterniha/AndroidLibXrayLite
-          tag: v26.11.20
+          tag: v26.11.21
           fileName: libv2ray.aar
           out-file-path: V2rayNG/app/libs/
 
       - name: Verify libv2ray checksum
         run: |
-          echo "88bd1d1243877848146f53c03731ec84677db84e31183b9b351459026624e1ac  V2rayNG/app/libs/libv2ray.aar" | sha256sum --check
+          echo "b92bb266cfddfea2f3d084ceeeaea9c62bc55cf1edb3e67817d6104419374b6d  V2rayNG/app/libs/libv2ray.aar" | sha256sum --check
 
       - name: Setup Java
         uses: actions/setup-java@v6.0.0
