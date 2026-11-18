@@ -462,11 +462,16 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val selected = MmkvManager.getSelectServer(personalSourceId)
             ?.takeIf { id -> servers.any { it.guid == id } } ?: servers.firstOrNull()?.guid
         val shouldFallback = _uiState.value.selectedSourceId == profileSubId &&
-            profileSubId.startsWith("personal_sub_") &&
-            MmkvManager.decodeSubscription(profileSubId) == null
+            ((profileSubId.startsWith("personal_sub_") &&
+                MmkvManager.decodeSubscription(profileSubId) == null) ||
+                (profileSubId == SimpleVpnRepository.PERSONAL_SUB_ID && servers.isEmpty()))
         if (shouldFallback) {
-            val nextSourceId = SimpleVpnRepository.getPersonalSubscriptionTabs().firstOrNull()?.id
-                ?: SimpleVpnRepository.PERSONAL_SUB_ID
+            val nextSourceId = if (profileSubId.startsWith("personal_sub_")) {
+                SimpleVpnRepository.getPersonalSubscriptionTabs().firstOrNull()?.id
+                    ?: if (SimpleVpnRepository.getPersonalServers().isNotEmpty()) {
+                        SimpleVpnRepository.PERSONAL_SUB_ID
+                    } else SimpleVpnRepository.AETHER_SUB_ID
+            } else SimpleVpnRepository.AETHER_SUB_ID
             onSelectSource(nextSourceId)
         }
         _uiState.update {
@@ -844,9 +849,11 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             val wasOnPersonalSource = state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
                 state.selectedSourceId.startsWith("personal_sub_")
             state.copy(
-                selectedSourceId = if (wasOnPersonalSource) SimpleVpnRepository.PERSONAL_SUB_ID else state.selectedSourceId,
-                servers = if (wasOnPersonalSource) servers else state.servers,
-                selectedGuid = if (wasOnPersonalSource) null else state.selectedGuid,
+                selectedSourceId = if (wasOnPersonalSource) SimpleVpnRepository.AETHER_SUB_ID else state.selectedSourceId,
+                servers = if (wasOnPersonalSource) SimpleVpnRepository.getServersForSource(SimpleVpnRepository.AETHER_SUB_ID) else state.servers,
+                selectedGuid = if (wasOnPersonalSource) {
+                    SimpleVpnRepository.getServersForSource(SimpleVpnRepository.AETHER_SUB_ID).firstOrNull()?.guid
+                } else state.selectedGuid,
                 testingGuids = state.testingGuids - removedGuids,
                 refreshingPersonalSubscriptionIds = emptySet(),
                 canConnect = if (wasOnPersonalSource) false else state.canConnect,
