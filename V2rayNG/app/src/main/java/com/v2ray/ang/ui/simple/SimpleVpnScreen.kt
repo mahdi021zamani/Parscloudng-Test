@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -214,8 +215,10 @@ fun SimpleVpnScreen(
                     TextButton(onClick = { viewModel.showLicenseDialog() }) {
                         Text(stringResource(R.string.simple_license_manage))
                     }
-                    if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
-                        TextButton(onClick = { viewModel.onRefresh() }, enabled = !uiState.isRefreshing) {
+                    if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+                        uiState.selectedSourceId.startsWith("personal_sub_")) {
+                        TextButton(onClick = { viewModel.onRefresh() }, enabled = !uiState.isRefreshing &&
+                            uiState.selectedSourceId !in uiState.refreshingPersonalSubscriptionIds) {
                             Text("به‌روزرسانی")
                         }
                         TextButton(onClick = { showPersonalImport = true }) { Text("افزودن") }
@@ -232,8 +235,12 @@ fun SimpleVpnScreen(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             val isV2RaySelected = uiState.selectedSourceId == SimpleVpnRepository.SIMPLE_SUB_ID ||
                 uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID
-            // Keep the central tabs in the user's requested left-to-right order,
-            // regardless of the app's Persian RTL layout direction.
+            val personalSubscriptionTabs = SimpleVpnRepository.getPersonalSubscriptionTabs()
+            val isManualPersonal = uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID
+            val selectedPersonalIndex = personalSubscriptionTabs.indexOfFirst { it.id == uiState.selectedSourceId }
+            val isPersonalSelected = isManualPersonal || selectedPersonalIndex >= 0
+            // Keep the central tabs left-to-right while allowing each saved personal
+            // subscription to have its own horizontally scrollable tab.
             val selectedProfileIndex = when (uiState.selectedSourceId) {
                 SimpleVpnRepository.AETHER_SUB_ID -> 0
                 SimpleVpnRepository.COMBINED_SUB_ID -> 1
@@ -241,10 +248,10 @@ fun SimpleVpnScreen(
                 SimpleVpnRepository.SIMPLE_SUB_ID,
                 SimpleVpnRepository.HAMRAH_SUB_ID -> 3
                 SimpleVpnRepository.PERSONAL_SUB_ID -> 4
-                else -> 0
+                else -> if (selectedPersonalIndex >= 0) 5 + selectedPersonalIndex else 0
             }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                TabRow(selectedTabIndex = selectedProfileIndex) {
+                ScrollableTabRow(selectedTabIndex = selectedProfileIndex, edgePadding = 0.dp) {
                     Tab(
                         selected = selectedProfileIndex == 0,
                         onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.WIREGUARD) },
@@ -300,8 +307,23 @@ fun SimpleVpnScreen(
                     Tab(
                         selected = selectedProfileIndex == 4,
                         onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.PERSONAL) },
-                        text = { Text("شخصی", textAlign = TextAlign.Center, fontSize = 12.sp) },
+                        text = { Text("کانفیگ‌های دستی", textAlign = TextAlign.Center, fontSize = 12.sp) },
                     )
+                    personalSubscriptionTabs.forEachIndexed { index, tab ->
+                        Tab(
+                            selected = selectedProfileIndex == 5 + index,
+                            onClick = { viewModel.onSelectSource(tab.id) },
+                            text = {
+                                Text(
+                                    tab.name,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontSize = 12.sp,
+                                )
+                            },
+                        )
+                    }
                 }
             }
             if (isV2RaySelected) {
@@ -320,14 +342,14 @@ fun SimpleVpnScreen(
                     )
                 }
             }
-            if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+            if (isPersonalSelected) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.End,
                 ) {
                     TextButton(onClick = { showPersonalImport = true }) { Text("افزودن از متن") }
                     TextButton(onClick = onScanClick) { Text("اسکن QR") }
-                    TextButton(onClick = { pendingDeleteAllPersonal = true }, enabled = uiState.servers.isNotEmpty()) {
+                    if (isManualPersonal) TextButton(onClick = { pendingDeleteAllPersonal = true }, enabled = uiState.servers.isNotEmpty()) {
                         Text("حذف همه")
                     }
                 }
@@ -348,9 +370,8 @@ fun SimpleVpnScreen(
                         testingGuids = uiState.testingGuids,
                         enabled = uiState.status == SimpleConnectionStatus.DISCONNECTED,
                         onSelect = viewModel::onSelectServer,
-                        onDelete = if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID)
-                            viewModel::deletePersonalConfig else null,
-                        groupBySubscription = uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID,
+                        onDelete = if (isPersonalSelected) viewModel::deletePersonalConfig else null,
+                        groupBySubscription = isPersonalSelected,
                         refreshingSubscriptionIds = uiState.refreshingPersonalSubscriptionIds,
                         onRefreshSubscription = viewModel::refreshPersonalSubscription,
                         onTestPingSubscription = viewModel::testPersonalSubscriptionPing,
