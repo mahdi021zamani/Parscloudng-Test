@@ -451,36 +451,70 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     fun deletePersonalConfig(guid: String) {
         if (MmkvManager.isCentralProfile(guid)) return
         val profileSubId = MmkvManager.decodeServerConfig(guid)?.subscriptionId ?: return
+        val stateBeforeDelete = _uiState.value
         MmkvManager.removeServers(listOf(guid), profileSubId)
-        if (MmkvManager.decodeServerList(profileSubId).isEmpty() && profileSubId.startsWith("personal_sub_")) {
+
+        val remainingInSubscription = MmkvManager.decodeServerList(profileSubId)
+            .mapNotNull(MmkvManager::decodeServerConfig)
+        if (remainingInSubscription.isEmpty() && profileSubId.startsWith("personal_sub_")) {
+            personalSubscriptionRefreshJobs.remove(profileSubId)?.cancel()
+            cancelPingWorker(profileSubId)
             MmkvManager.removeSubscription(profileSubId)
         }
-        val activeSourceId = _uiState.value.selectedSourceId
-        val personalSourceId = if (activeSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
-            activeSourceId.startsWith("personal_sub_")) activeSourceId else SimpleVpnRepository.PERSONAL_SUB_ID
-        val servers = SimpleVpnRepository.getPersonalServers(personalSourceId)
-        val selected = MmkvManager.getSelectServer(personalSourceId)
-            ?.takeIf { id -> servers.any { it.guid == id } } ?: servers.firstOrNull()?.guid
-        val shouldFallback = _uiState.value.selectedSourceId == profileSubId &&
-            ((profileSubId.startsWith("personal_sub_") &&
-                MmkvManager.decodeSubscription(profileSubId) == null) ||
-                (profileSubId == SimpleVpnRepository.PERSONAL_SUB_ID && servers.isEmpty()))
-        if (shouldFallback) {
-            val nextSourceId = if (profileSubId.startsWith("personal_sub_")) {
-                SimpleVpnRepository.getPersonalSubscriptionTabs().firstOrNull()?.id
-                    ?: if (SimpleVpnRepository.getPersonalServers().isNotEmpty()) {
-                        SimpleVpnRepository.PERSONAL_SUB_ID
-                    } else SimpleVpnRepository.AETHER_SUB_ID
-            } else SimpleVpnRepository.AETHER_SUB_ID
-            onSelectSource(nextSourceId)
+
+        val isDeletingActivePersonalSource =
+            stateBeforeDelete.selectedSourceId == profileSubId &&
+                (profileSubId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+                    profileSubId.startsWith("personal_sub_"))
+        val nextSourceId = if (isDeletingActivePersonalSource &&
+            MmkvManager.decodeServerList(profileSubId).isEmpty()
+        ) {
+            SimpleVpnRepository.getPersonalSubscriptionTabs().firstOrNull()?.id
+                ?: if (SimpleVpnRepository.getPersonalServers().isNotEmpty()) {
+                    SimpleVpnRepository.PERSONAL_SUB_ID
+                } else {
+                    SimpleVpnRepository.AETHER_SUB_ID
+                }
+        } else {
+            stateBeforeDelete.selectedSourceId
         }
-        _uiState.update {
-            it.copy(
-                servers = if (it.selectedSourceId == personalSourceId) servers else it.servers,
-                selectedGuid = if (it.selectedSourceId == personalSourceId) selected else it.selectedGuid,
-                canConnect = if (it.selectedSourceId == personalSourceId) servers.isNotEmpty() && it.licenseValid else it.canConnect,
-                message = "کانفیگ حذف شد",
-            )
+
+        // Resolve the destination list before publishing a single coherent UI state.
+        // This avoids briefly switching to WireGuard with an empty list while the
+        // tab's normal selection callback reloads its cached profiles.
+        val destinationServers = when {
+            nextSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+                nextSourceId.startsWith("personal_sub_") ->
+                SimpleVpnRepository.getPersonalServers(nextSourceId)
+            nextSourceId == stateBeforeDelete.selectedSourceId ->
+                SimpleVpnRepository.getServersForSource(nextSourceId)
+            else -> SimpleVpnRepository.getServersForSource(nextSourceId)
+        }
+        val destinationSelected = MmkvManager.getSelectServer(nextSourceId)
+            ?.takeIf { selectedGuid -> destinationServers.any { it.guid == selectedGuid } }
+            ?: destinationServers.firstOrNull()?.guid
+
+        destinationSelected?.let { selectedGuid ->
+            MmkvManager.setSelectServer(selectedGuid, nextSourceId)
+            if (stateBeforeDelete.status == SimpleConnectionStatus.DISCONNECTED) {
+                MmkvManager.setSelectServer(selectedGuid)
+            }
+        }
+
+        _uiState.update { current ->
+            if (current.selectedSourceId != stateBeforeDelete.selectedSourceId) {
+                // A user navigation happened while this operation was being prepared.
+                current.copy(message = "کانفیگ حذف شد")
+            } else {
+                current.copy(
+                    selectedSourceId = nextSourceId,
+                    servers = destinationServers,
+                    selectedGuid = destinationSelected,
+                    canConnect = canConnectForSource(nextSourceId) && current.licenseValid,
+                    testingGuids = current.testingGuids - guid,
+                    message = "کانفیگ حذف شد",
+                )
+            }
         }
     }
 
