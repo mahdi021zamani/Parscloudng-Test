@@ -212,7 +212,7 @@ fun SimpleVpnScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.simple_app_title)) },
+                title = { Text(stringResource(R.string.simple_app_title), fontSize = 18.sp, maxLines = 1, softWrap = false) },
                 actions = {
                     TextButton(onClick = { viewModel.showLicenseDialog() }) {
                         Text(stringResource(R.string.simple_license_manage))
