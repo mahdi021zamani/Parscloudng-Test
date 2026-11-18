@@ -207,7 +207,7 @@ fun AppSnackbarHost(
                     ) {
                         Text(
                             text = data.visuals.message,
-                            color = toastTextColor,
+                            color = if (isDark) toastTextColor else Color(0xFF6A3150),
                             fontSize = 14.sp,
                             maxLines = ToastMaxLines,
                             overflow = TextOverflow.Ellipsis,
