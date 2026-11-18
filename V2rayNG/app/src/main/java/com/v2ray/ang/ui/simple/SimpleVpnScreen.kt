@@ -572,7 +572,17 @@ private fun ServerRow(
             .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(\n            selected = selected,\n            enabled = enabled,\n            onClick = onSelect,\n            colors = androidx.compose.material3.RadioButtonDefaults.colors(\n                selectedColor = Color(0xFFFF8FBD),\n                unselectedColor = Color(0xFFB8B1BF),\n                disabledSelectedColor = Color(0xFFB77C9B),\n                disabledUnselectedColor = Color(0xFF77717D),\n            ),\n        )
+        RadioButton(
+            selected = selected,
+            enabled = enabled,
+            onClick = onSelect,
+            colors = androidx.compose.material3.RadioButtonDefaults.colors(
+                selectedColor = Color(0xFFFF8FBD),
+                unselectedColor = Color(0xFFB8B1BF),
+                disabledSelectedColor = Color(0xFFB77C9B),
+                disabledUnselectedColor = Color(0xFF77717D),
+            ),
+        )
         Spacer(modifier = Modifier.width(8.dp))
         if (server.flagEmoji.isNotEmpty()) {
             Text(server.flagEmoji)
