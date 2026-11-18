@@ -486,7 +486,7 @@ private fun ServerList(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFF211D27))
+                            .background(Color(0xFF2A2631))
                             .padding(start = 16.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -567,12 +567,12 @@ private fun ServerRow(
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) Color(0xFF2A202B) else Color(0xFF17161D))
+            .background(if (selected) Color(0xFF493344) else Color(0xFF292832))
             .selectable(selected = selected, enabled = enabled, onClick = onSelect)
             .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(selected = selected, enabled = enabled, onClick = onSelect)
+        RadioButton(\n            selected = selected,\n            enabled = enabled,\n            onClick = onSelect,\n            colors = androidx.compose.material3.RadioButtonDefaults.colors(\n                selectedColor = Color(0xFFFF8FBD),\n                unselectedColor = Color(0xFFB8B1BF),\n                disabledSelectedColor = Color(0xFFB77C9B),\n                disabledUnselectedColor = Color(0xFF77717D),\n            ),\n        )
         Spacer(modifier = Modifier.width(8.dp))
         if (server.flagEmoji.isNotEmpty()) {
             Text(server.flagEmoji)
@@ -658,7 +658,7 @@ private fun ConnectionBar(
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(30.dp))
-                .background(Color(0xFF211D27))
+                .background(Color(0xFF2A2631))
                 .padding(horizontal = 14.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
