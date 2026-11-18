@@ -295,7 +295,10 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun loadLocalState() {
         SimpleVpnRepository.ensureSubscriptions()
-        val sourceId = _uiState.value.selectedSourceId
+        val requestedSourceId = _uiState.value.selectedSourceId
+        val sourceId = if (requestedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID &&
+            SimpleVpnRepository.getPersonalServers().isEmpty()
+        ) SimpleVpnRepository.AETHER_SUB_ID else requestedSourceId
         refreshJob?.cancel()
         refreshJob = null
         val servers = if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID || sourceId.startsWith("personal_sub_")) {
@@ -313,6 +316,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         }
         _uiState.update {
             it.copy(
+                selectedSourceId = sourceId,
                 servers = servers,
                 selectedGuid = selected,
                 canConnect = canConnectForSource(sourceId) && _uiState.value.licenseValid,
@@ -874,8 +878,11 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 pingBatchGuids.remove(batchId)
                 val otherActiveGuids = pingBatchGuids.values.flatten().toSet()
                 val activeSourceId = _uiState.value.selectedSourceId
-                if (batchId.startsWith("source:") && activeSourceId != SimpleVpnRepository.PERSONAL_SUB_ID) {
-                    SimpleVpnRepository.sortByPing()
+                when {
+                    batchId.startsWith("source:") -> SimpleVpnRepository.sortByPing()
+                    batchId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+                        batchId.startsWith("personal_sub_") ->
+                        SimpleVpnRepository.sortPersonalSubscriptionByPing(batchId)
                 }
                 val refreshedServers = if (activeSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
                     activeSourceId.startsWith("personal_sub_"))
