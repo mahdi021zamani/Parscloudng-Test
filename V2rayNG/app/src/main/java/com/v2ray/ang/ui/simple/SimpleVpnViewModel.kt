@@ -788,6 +788,18 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         runPingTest(guids, subscriptionId)
     }
 
+    /** Starts a ping batch only after an explicit user action on the current tab. */
+    fun testCurrentSourcePing() {
+        val state = _uiState.value
+        if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+            state.selectedSourceId.startsWith("personal_sub_")
+        ) {
+            testPersonalSubscriptionPing(state.selectedSourceId)
+        } else {
+            runPingTest(state.servers.map { it.guid }, "source:${state.selectedSourceId}")
+        }
+    }
+
     fun deleteAllPersonalConfigs() {
         val personalIds = MmkvManager.decodeSubscriptions()
             .map { it.guid }
