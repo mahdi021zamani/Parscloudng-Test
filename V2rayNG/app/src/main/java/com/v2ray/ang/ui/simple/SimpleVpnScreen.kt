@@ -223,6 +223,10 @@ fun SimpleVpnScreen(
                         }
                         TextButton(onClick = { showPersonalImport = true }) { Text("افزودن") }
                     } else {
+                        TextButton(
+                            onClick = { viewModel.testCurrentSourcePing() },
+                            enabled = uiState.servers.isNotEmpty(),
+                        ) { Text("تست پینگ") }
                         TextButton(onClick = { viewModel.onRefresh() }, enabled = !uiState.isRefreshing) {
                             Text(stringResource(R.string.simple_refresh))
                         }
