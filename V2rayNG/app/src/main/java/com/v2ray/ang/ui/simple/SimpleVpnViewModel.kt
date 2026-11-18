@@ -800,6 +800,23 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /** Cancels only the ping batch owned by the selected personal subscription. */
+    fun cancelPersonalSubscriptionPing(subscriptionId: String) {
+        if (subscriptionId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+            subscriptionId.startsWith("personal_sub_")
+        ) cancelPingWorker(subscriptionId)
+    }
+
+    /** Cancels only the currently selected official source's ping batch. */
+    fun cancelCurrentSourcePing() {
+        val sourceId = _uiState.value.selectedSourceId
+        if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID || sourceId.startsWith("personal_sub_")) {
+            cancelPersonalSubscriptionPing(sourceId)
+        } else {
+            cancelPingWorker("source:$sourceId")
+        }
+    }
+
     fun deleteAllPersonalConfigs() {
         val personalIds = MmkvManager.decodeSubscriptions()
             .map { it.guid }
