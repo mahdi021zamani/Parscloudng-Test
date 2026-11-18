@@ -54,6 +54,8 @@ object SimpleVpnRepository {
             .takeIf { it.isNotBlank() }
             ?.let { Source(EMERGENCY_SUB_ID, "PARSCLOUD • Backup", it, SourceKind.V2RAY) }
 
+    data class PersonalSubscriptionTab(val id: String, val name: String)
+
     data class SimpleServerUiModel(
         val guid: String,
         val displayName: String,
@@ -196,18 +198,36 @@ object SimpleVpnRepository {
 
     fun getServers(): List<SimpleServerUiModel> = getServerGuids().mapNotNull(::getServerUiModel)
 
-    /** User-owned profiles live in a dedicated bucket, never in an official feed. */
-    fun getPersonalServers(): List<SimpleServerUiModel> {
-        val manualServers = MmkvManager.decodeServerList(PERSONAL_SUB_ID)
-            .mapNotNull(::getServerUiModel)
-            .map { it.copy(subscriptionName = "کانفیگ‌های دستی") }
-        val subscriptionIds = MmkvManager.decodeSubscriptions()
-            .map { it.guid }
-            .filter { it.startsWith("personal_sub_") }
-        val subscriptionServers = subscriptionIds.flatMap { subscriptionId ->
-            MmkvManager.decodeServerList(subscriptionId).mapNotNull(::getServerUiModel)
+    /** User-owned profiles are isolated by their subscription ID. */
+    fun getPersonalServers(sourceId: String = PERSONAL_SUB_ID): List<SimpleServerUiModel> {
+        if (sourceId != PERSONAL_SUB_ID && !sourceId.startsWith("personal_sub_")) return emptyList()
+        val servers = MmkvManager.decodeServerList(sourceId).mapNotNull(::getServerUiModel)
+        return if (sourceId == PERSONAL_SUB_ID) {
+            servers.map { it.copy(subscriptionName = "کانفیگ‌های دستی") }
+        } else {
+            servers
         }
-        return (manualServers + subscriptionServers).distinctBy { it.guid }
+    }
+
+    /** Dynamic tabs retain the subscription order and the saved user-facing remarks. */
+    fun getPersonalSubscriptionTabs(): List<PersonalSubscriptionTab> =
+        MmkvManager.decodeSubscriptions()
+            .filter { it.guid.startsWith("personal_sub_") }
+            .map { item ->
+                PersonalSubscriptionTab(
+                    id = item.guid,
+                    name = item.subscription.remarks.ifBlank {
+                        personalSubscriptionName(item.subscription.url)
+                    },
+                )
+            }
+
+    /** Derive a useful initial label from the URL's explicit fragment or host. */
+    fun personalSubscriptionName(url: String): String {
+        val parsed = android.net.Uri.parse(url)
+        return parsed.fragment?.takeIf { it.isNotBlank() }?.let(android.net.Uri::decode)
+            ?: parsed.host?.takeIf { it.isNotBlank() }
+            ?: "اشتراک شخصی"
     }
 
     /** Refreshes only user-created subscriptions; official PARSCLOUD feeds are never touched. */
