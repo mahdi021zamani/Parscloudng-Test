@@ -495,6 +495,7 @@ fun SimpleVpnScreen(
 
             ConnectionBar(
                 status = uiState.status,
+                selectedServerName = uiState.servers.firstOrNull { it.guid == uiState.selectedGuid }?.displayName,
                 canConnect = uiState.canConnect && uiState.selectedGuid != null,
                 onConnectClick = onConnectClick,
             )
@@ -667,12 +668,20 @@ private fun DelayLabel(delayMillis: Long?, testing: Boolean) {
         delayMillis < 0 -> stringResource(R.string.simple_timeout)
         else -> stringResource(R.string.simple_delay_ms, delayMillis)
     }
-    Text(text)
+    val labelColor = when {
+        testing -> Color(0xFFE7B36B)
+        delayMillis == null || delayMillis == 0L -> Color(0xFFAAA3AE)
+        delayMillis < 0L || delayMillis > 160L -> Color(0xFFFF8293)
+        delayMillis < 90L -> Color(0xFF78D6A8)
+        else -> Color(0xFFE8C66F)
+    }
+    Text(text, color = labelColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
 }
 
 @Composable
 private fun ConnectionBar(
     status: SimpleConnectionStatus,
+    selectedServerName: String?,
     canConnect: Boolean,
     onConnectClick: () -> Unit,
 ) {
@@ -682,75 +691,84 @@ private fun ConnectionBar(
         SimpleConnectionStatus.CONNECTED -> stringResource(R.string.simple_status_connected)
     }
     val statusColor = when (status) {
-        SimpleConnectionStatus.DISCONNECTED -> Color(0xFF8D8792)
+        SimpleConnectionStatus.DISCONNECTED -> Color(0xFFAAA3AE)
         SimpleConnectionStatus.CONNECTING -> Color(0xFFE7B36B)
-        SimpleConnectionStatus.CONNECTED -> Color(0xFF65C99A)
+        SimpleConnectionStatus.CONNECTED -> Color(0xFF78D6A8)
     }
     val actionContainerColor = when (status) {
         SimpleConnectionStatus.DISCONNECTED -> Color(0xFFE9A9C4)
         SimpleConnectionStatus.CONNECTING -> Color(0xFFE7B36B)
         SimpleConnectionStatus.CONNECTED -> Color(0xFF65C99A)
     }
-    val actionContentColor = Color(0xFF241820)
+    val actionText = when (status) {
+        SimpleConnectionStatus.DISCONNECTED -> "اتصال"
+        SimpleConnectionStatus.CONNECTING -> "لغو اتصال"
+        SimpleConnectionStatus.CONNECTED -> "قطع اتصال"
+    }
+    val actionEnabled = status != SimpleConnectionStatus.DISCONNECTED || canConnect
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(listOf(Color(0xFF211B27), Color(0xFF111018)))
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .background(Brush.verticalGradient(listOf(Color(0xFF211B27), Color(0xFF111018))))
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        androidx.compose.material3.FloatingActionButton(
+        Text(
+            text = selectedServerName?.takeIf { it.isNotBlank() } ?: "یک سرور انتخاب کن",
+            color = Color(0xFFF5EAF0),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(statusColor)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = statusText,
+                color = statusColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        androidx.compose.material3.Button(
             onClick = {
-                // CONNECTING remains cancellable: a failed Aether start must not trap the UI.
+                // Keep CONNECTING cancellable and preserve the existing connection callback.
                 if (status == SimpleConnectionStatus.CONNECTING ||
                     status == SimpleConnectionStatus.CONNECTED || canConnect
                 ) onConnectClick()
             },
-            modifier = Modifier.size(78.dp),
-            shape = CircleShape,
-            containerColor = actionContainerColor,
-            contentColor = actionContentColor,
+            enabled = actionEnabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp),
+            shape = RoundedCornerShape(18.dp),
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = actionContainerColor,
+                contentColor = Color(0xFF241820),
+                disabledContainerColor = Color(0xFF51434D),
+                disabledContentColor = Color(0xFFB8AAB2),
+            ),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
         ) {
             androidx.compose.material3.Icon(
                 painter = androidx.compose.ui.res.painterResource(
                     if (status != SimpleConnectionStatus.DISCONNECTED) R.drawable.ic_stop_24dp
                     else R.drawable.ic_play_24dp
                 ),
-                contentDescription = stringResource(
-                    if (status != SimpleConnectionStatus.DISCONNECTED) R.string.acc_stop else R.string.acc_start
-                ),
-                tint = actionContentColor,
-                modifier = Modifier.size(30.dp),
+                contentDescription = null,
+                modifier = Modifier.size(21.dp),
             )
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(30.dp))
-                .background(
-                    Brush.linearGradient(listOf(Color(0xCC3D3544), Color(0xCC25212D)))
-                )
-                .border(1.dp, Color(0x55E7C8D8), RoundedCornerShape(30.dp))
-                .padding(horizontal = 14.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .shadow(3.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(statusColor)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "وضعیت اتصال: $statusText",
-                color = Color(0xFFEDE4EB),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-            )
+            Spacer(modifier = Modifier.width(9.dp))
+            Text(actionText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
