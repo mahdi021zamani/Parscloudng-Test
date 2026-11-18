@@ -457,6 +457,14 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val servers = SimpleVpnRepository.getPersonalServers(personalSourceId)
         val selected = MmkvManager.getSelectServer(personalSourceId)
             ?.takeIf { id -> servers.any { it.guid == id } } ?: servers.firstOrNull()?.guid
+        val shouldFallback = _uiState.value.selectedSourceId == profileSubId &&
+            profileSubId.startsWith("personal_sub_") &&
+            MmkvManager.decodeSubscription(profileSubId) == null
+        if (shouldFallback) {
+            val nextSourceId = SimpleVpnRepository.getPersonalSubscriptionTabs().firstOrNull()?.id
+                ?: SimpleVpnRepository.PERSONAL_SUB_ID
+            onSelectSource(nextSourceId)
+        }
         _uiState.update {
             it.copy(
                 servers = if (it.selectedSourceId == personalSourceId) servers else it.servers,
@@ -495,13 +503,13 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             withContext(Dispatchers.Main) {
                 _uiState.update { state ->
                     state.copy(
-                        servers = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) servers else state.servers,
-                        selectedGuid = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+                        servers = if (state.selectedSourceId == subscriptionId) servers else state.servers,
+                        selectedGuid = if (state.selectedSourceId == subscriptionId) {
                             state.selectedGuid?.takeIf { guid -> servers.any { it.guid == guid } }
                                 ?: servers.firstOrNull()?.guid
                         } else state.selectedGuid,
                         refreshingPersonalSubscriptionIds = state.refreshingPersonalSubscriptionIds - subscriptionId,
-                        canConnect = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+                        canConnect = if (state.selectedSourceId == subscriptionId) {
                             servers.isNotEmpty() && state.licenseValid
                         } else state.canConnect,
                         message = getApplication<Application>().getString(
