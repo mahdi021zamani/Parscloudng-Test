@@ -52,6 +52,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -258,15 +260,31 @@ fun SimpleVpnScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFF17151D))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                    .padding(horizontal = 10.dp, vertical = 7.dp)
+                    .shadow(12.dp, RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xCC302638), Color(0xCC191923), Color(0xCC292231))
+                        )
+                    )
+                    .border(
+                        1.dp,
+                        Brush.linearGradient(listOf(Color(0x66FFD5E8), Color(0x1AFFFFFF), Color(0x55B58AA8))),
+                        RoundedCornerShape(20.dp)
+                    )
+                    .padding(horizontal = 6.dp, vertical = 5.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 TextButton(
                     onClick = { viewModel.showLicenseDialog() },
-                    contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                ) { Text("اشتراک", fontSize = 11.sp, color = Color(0xFFE9B0C8)) }
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(Color(0x44E9B0C8))
+                        .border(1.dp, Color(0x55E9B0C8), RoundedCornerShape(13.dp)),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                ) { Text("اشتراک", fontSize = 11.sp, color = Color(0xFFFFD9E9), fontWeight = FontWeight.SemiBold) }
 
                 if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
                     uiState.selectedSourceId.startsWith("personal_sub_")) {
@@ -274,14 +292,22 @@ fun SimpleVpnScreen(
                         onClick = { viewModel.onRefresh() },
                         enabled = !uiState.isRefreshing &&
                             uiState.selectedSourceId !in uiState.refreshingPersonalSubscriptionIds,
-                        contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                    ) { Text("به‌روزرسانی", fontSize = 11.sp) }
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(Color(0x3324BFA0))
+                            .border(1.dp, Color(0x5524BFA0), RoundedCornerShape(13.dp)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    ) { Text("به‌روزرسانی", fontSize = 11.sp, color = Color(0xFFB8F1DF)) }
                     if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID &&
                         uiState.servers.isNotEmpty()) {
                         TextButton(
                             onClick = { pendingDeleteAllPersonal = true },
-                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                        ) { Text("حذف همه", fontSize = 11.sp) }
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(Color(0x33E16D83))
+                                .border(1.dp, Color(0x55E16D83), RoundedCornerShape(13.dp)),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        ) { Text("حذف همه", fontSize = 11.sp, color = Color(0xFFFFB9C5)) }
                     }
                 } else {
                     val currentSourcePingRunning = uiState.servers.any { it.guid in uiState.testingGuids }
@@ -291,19 +317,31 @@ fun SimpleVpnScreen(
                             else viewModel.testCurrentSourcePing()
                         },
                         enabled = uiState.servers.isNotEmpty(),
-                        contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                    ) { Text(if (currentSourcePingRunning) "لغو پینگ" else "تست پینگ", fontSize = 11.sp) }
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(Color(0x334E9BD0))
+                            .border(1.dp, Color(0x555EACE0), RoundedCornerShape(13.dp)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    ) { Text(if (currentSourcePingRunning) "لغو پینگ" else "تست پینگ", fontSize = 11.sp, color = Color(0xFFC8E7FF)) }
                     TextButton(
                         onClick = { viewModel.onRefresh() },
                         enabled = !uiState.isRefreshing,
-                        contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                    ) { Text("تازه‌سازی", fontSize = 11.sp) }
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(13.dp))
+                            .background(Color(0x334E9BD0))
+                            .border(1.dp, Color(0x555EACE0), RoundedCornerShape(13.dp)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    ) { Text("تازه‌سازی", fontSize = 11.sp, color = Color(0xFFC8E7FF)) }
                 }
 
                 TextButton(
                     onClick = { showPersonalImport = true },
-                    contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
-                ) { Text("افزودن", fontSize = 11.sp) }
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(Brush.linearGradient(listOf(Color(0xFFE7A6C5), Color(0xFFB77FA8))))
+                        .border(1.dp, Color(0x99FFE5F0), RoundedCornerShape(13.dp)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                ) { Text("＋ افزودن", fontSize = 11.sp, color = Color(0xFF251722), fontWeight = FontWeight.Bold) }
             }
 
             val isV2RaySelected = uiState.selectedSourceId == SimpleVpnRepository.SIMPLE_SUB_ID ||
@@ -486,8 +524,14 @@ private fun ServerList(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFF2A2631))
-                            .padding(start = 16.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .shadow(7.dp, RoundedCornerShape(15.dp))
+                            .clip(RoundedCornerShape(15.dp))
+                            .background(
+                                Brush.linearGradient(listOf(Color(0xCC49394D), Color(0xCC292431)))
+                            )
+                            .border(1.dp, Color(0x44F4D8E8), RoundedCornerShape(15.dp))
+                            .padding(start = 14.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
@@ -565,9 +609,25 @@ private fun ServerRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) Color(0xFF493344) else Color(0xFF292832))
+            .padding(horizontal = 12.dp, vertical = 5.dp)
+            .shadow(if (selected) 9.dp else 4.dp, RoundedCornerShape(17.dp))
+            .clip(RoundedCornerShape(17.dp))
+            .background(
+                if (selected) {
+                    Brush.linearGradient(listOf(Color(0xFF65465D), Color(0xFF392B40), Color(0xFF493344)))
+                } else {
+                    Brush.linearGradient(listOf(Color(0xCC35313D), Color(0xCC22212B)))
+                }
+            )
+            .border(
+                1.dp,
+                if (selected) {
+                    Brush.linearGradient(listOf(Color(0x99FFD2E7), Color(0x338E7390)))
+                } else {
+                    Brush.linearGradient(listOf(Color(0x44FFFFFF), Color(0x117F7485)))
+                },
+                RoundedCornerShape(17.dp)
+            )
             .selectable(selected = selected, enabled = enabled, onClick = onSelect)
             .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -636,8 +696,10 @@ private fun ConnectionBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF121117))
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .background(
+                Brush.verticalGradient(listOf(Color(0xFF211B27), Color(0xFF111018)))
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         androidx.compose.material3.FloatingActionButton(
@@ -668,7 +730,10 @@ private fun ConnectionBar(
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(30.dp))
-                .background(Color(0xFF2A2631))
+                .background(
+                    Brush.linearGradient(listOf(Color(0xCC3D3544), Color(0xCC25212D)))
+                )
+                .border(1.dp, Color(0x55E7C8D8), RoundedCornerShape(30.dp))
                 .padding(horizontal = 14.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
