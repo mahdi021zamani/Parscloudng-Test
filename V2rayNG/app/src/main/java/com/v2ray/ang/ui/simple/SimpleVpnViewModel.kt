@@ -298,7 +298,6 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val sourceId = _uiState.value.selectedSourceId
         refreshJob?.cancel()
         refreshJob = null
-        cancelPingWorker()
         val servers = if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID) SimpleVpnRepository.getPersonalServers() else SimpleVpnRepository.getServersForSource(sourceId)
         val selected = MmkvManager.getSelectServer(sourceId)
             ?.takeIf { guid -> servers.any { it.guid == guid } }
@@ -429,7 +428,6 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     MmkvManager.setSelectServer(it, SimpleVpnRepository.PERSONAL_SUB_ID)
                     if (_uiState.value.status == SimpleConnectionStatus.DISCONNECTED) MmkvManager.setSelectServer(it)
                 }
-                runPingTest(servers.map { it.guid }, "personal_import")
             }
         }
     }
@@ -502,7 +500,6 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         ),
                     )
                 }
-                if (groupGuids.isNotEmpty()) runPingTest(groupGuids, subscriptionId)
             }
         }
         personalSubscriptionRefreshJobs[subscriptionId] = job
@@ -519,7 +516,6 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val state = _uiState.value
         val selected = state.selectedGuid?.takeIf { it !in removedGuids && servers.any { server -> server.guid == it } }
             ?: servers.firstOrNull()?.guid
-        val shouldRestartPing = state.testingGuids.any { it in removedGuids }
         cancelPingWorker(subscriptionId)
         _uiState.update {
             it.copy(
@@ -569,7 +565,6 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             message = if (count > 0) "$count کانفیگ شخصی به‌روزرسانی شد" else "اشتراک شخصی به‌روزرسانی نشد",
                         )
                     }
-                    runPingTest(servers.map { it.guid }, "personal_all")
                 }
             }
             return
@@ -622,7 +617,6 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                                 state.copy(
                                     servers = servers,
                                     selectedGuid = selected,
-                                    testingGuids = sourceGuids.toSet(),
                                     canConnect = canConnectForSource(sourceId) && state.licenseValid,
                                     message = aetherMessageId?.let(app::getString),
                                     // A normal feed refresh must not dismiss an already
@@ -633,8 +627,6 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             }
                         }
                     }
-                    // Ping is informational; test only the source that is still active.
-                    if (_uiState.value.selectedSourceId == sourceId) runPingTest(sourceGuids, "source:$sourceId")
                 }
 
                 SimpleVpnRepository.RefreshOutcome.EmptiedByServer -> withContext(Dispatchers.Main) {
@@ -648,7 +640,6 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             state.copy(
                                 servers = emptyList(),
                                 selectedGuid = null,
-                                testingGuids = emptySet(),
                                 canConnect = false,
                                 isRefreshing = false,
                                 // The refresh may target a different tab than the running VPN.
