@@ -118,7 +118,7 @@ val toastSuccessBg = Color(0xFF29232B) // Dark surface with pink text
 val toastErrorBg = Color(0xFF29232B) // Dark surface with pink text
 val toastInfoBg = Color(0xFF29232B) // Dark surface with pink text
 val toastIconCircleBg = Color(0x33FF6FAF) // Soft pink tint
-val toastTextColor = Color(0FFFF6FA) // Soft pink-white
+val toastTextColor = Color(0xFFFFF6FA) // Soft pink-white
 
 object ThemeManager {
     private val _themeMode = MutableStateFlow(
