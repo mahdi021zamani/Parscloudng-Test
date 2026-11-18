@@ -326,7 +326,12 @@ fun SimpleVpnScreen(
                 else -> if (selectedPersonalIndex >= 0) personalTabsStartIndex + selectedPersonalIndex else 0
             }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                ScrollableTabRow(\n                    selectedTabIndex = selectedProfileIndex,\n                    edgePadding = 8.dp,\n                    containerColor = Color(0xFF17151D),\n                    contentColor = Color(0xFFE9B0C8),\n                ) {
+                ScrollableTabRow(
+                    selectedTabIndex = selectedProfileIndex,
+                    edgePadding = 8.dp,
+                    containerColor = Color(0xFF17151D),
+                    contentColor = Color(0xFFE9B0C8),
+                ) {
                     Tab(
                         selected = selectedProfileIndex == 0,
                         onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.WIREGUARD) },
@@ -406,6 +411,8 @@ fun SimpleVpnScreen(
             if (isV2RaySelected) {
                 TabRow(
                     selectedTabIndex = if (uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID) 0 else 1,
+                    containerColor = Color(0xFF121117),
+                    contentColor = Color(0xFFE9B0C8),
                 ) {
                     Tab(
                         selected = uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID,
