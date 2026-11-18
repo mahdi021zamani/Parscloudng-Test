@@ -69,6 +69,36 @@ class SimpleVpnSourceTabStateTest {
     }
 
     @Test
+    fun selectsEachPersonalSubscriptionAsAnIndependentSource() {
+        val firstId = "personal_sub_first"
+        val secondId = "personal_sub_second"
+        val firstServers = listOf(server("first-1"), server("first-2"))
+        val secondServers = listOf(server("second-1"))
+        val pingGuids = setOf("first-1", "second-1")
+
+        val firstTab = selectSimpleVpnSourceTab(
+            current = SimpleVpnUiState(licenseValid = true, testingGuids = pingGuids),
+            sourceId = firstId,
+            servers = firstServers,
+            selectedGuid = "first-2",
+            canConnect = true,
+        )
+        val secondTab = selectSimpleVpnSourceTab(
+            current = requireNotNull(firstTab),
+            sourceId = secondId,
+            servers = secondServers,
+            selectedGuid = "second-1",
+            canConnect = true,
+        )
+
+        assertEquals(firstId, firstTab?.selectedSourceId)
+        assertEquals(firstServers, firstTab?.servers)
+        assertEquals(secondId, secondTab?.selectedSourceId)
+        assertEquals(secondServers, secondTab?.servers)
+        assertEquals(pingGuids, secondTab?.testingGuids)
+    }
+
+    @Test
     fun selectsAetherTab() {
         val servers = listOf(server("aether-1"))
 
