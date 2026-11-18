@@ -112,13 +112,13 @@ val dividerColorLight = Color(0xFFE0E0E0) // Light Gray
 val dividerColorDark = Color(0xFF424242) // Dark Gray
 
 // Toast Colors 70%
-val toastNormalBgLight = Color(0xB3353A3E) // Dark Gray
-val toastNormalBgDark = Color(0xB34A4F54) // Darker Gray
-val toastSuccessBg = Color(0xB3388E3C) // Green
-val toastErrorBg = Color(0xB3D50000) // Red
-val toastInfoBg = Color(0xB33F51B5) // Indigo Blue
-val toastIconCircleBg = Color(0x33FFFFFF) // Semi-transparent White
-val toastTextColor = Color.White // White
+val toastNormalBgLight = Color(0xFFF4EDF2) // Soft neutral surface
+val toastNormalBgDark = Color(0xFF29232B) // Dark surface
+val toastSuccessBg = Color(0xFF29232B) // Dark surface with pink text
+val toastErrorBg = Color(0xFF29232B) // Dark surface with pink text
+val toastInfoBg = Color(0xFF29232B) // Dark surface with pink text
+val toastIconCircleBg = Color(0x33FF6FAF) // Soft pink tint
+val toastTextColor = Color(0FFFF6FA) // Soft pink-white
 
 object ThemeManager {
     private val _themeMode = MutableStateFlow(
