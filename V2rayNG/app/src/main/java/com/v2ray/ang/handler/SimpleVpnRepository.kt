@@ -191,8 +191,10 @@ object SimpleVpnRepository {
             flagEmoji = info.flagEmoji,
             delayMillis = delay,
             subscriptionId = profile.subscriptionId,
-            subscriptionName = MmkvManager.decodeSubscription(profile.subscriptionId)?.remarks
-                ?: if (profile.subscriptionId == PERSONAL_SUB_ID) "کانفیگ‌های دستی" else "اشتراک شخصی",
+            subscriptionName = MmkvManager.decodeSubscription(profile.subscriptionId)?.let { sub ->
+                sub.remarks.takeIf { it.isNotBlank() && !it.startsWith("اشتراک شخصی ") }
+                    ?: personalSubscriptionName(sub.url)
+            } ?: if (profile.subscriptionId == PERSONAL_SUB_ID) "کانفیگ‌های دستی" else "اشتراک شخصی",
         )
     }
 
@@ -216,16 +218,16 @@ object SimpleVpnRepository {
             .map { item ->
                 PersonalSubscriptionTab(
                     id = item.guid,
-                    name = item.subscription.remarks.ifBlank {
-                        personalSubscriptionName(item.subscription.url)
-                    },
+                    name = item.subscription.remarks.takeIf {
+                        it.isNotBlank() && !it.startsWith("اشتراک شخصی ")
+                    } ?: personalSubscriptionName(item.subscription.url),
                 )
             }
 
     /** Derive a useful initial label from the URL's explicit fragment or host. */
     fun personalSubscriptionName(url: String): String {
         val parsed = android.net.Uri.parse(url)
-        return parsed.fragment?.takeIf { it.isNotBlank() }?.let(android.net.Uri::decode)
+        return parsed.fragment?.takeIf { it.isNotBlank() }?.let { android.net.Uri.decode(it) }
             ?: parsed.host?.takeIf { it.isNotBlank() }
             ?: "اشتراک شخصی"
     }
