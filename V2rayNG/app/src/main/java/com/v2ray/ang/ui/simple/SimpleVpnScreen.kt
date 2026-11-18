@@ -223,10 +223,14 @@ fun SimpleVpnScreen(
                         }
                         TextButton(onClick = { showPersonalImport = true }) { Text("افزودن") }
                     } else {
+                        val currentSourcePingRunning = uiState.servers.any { it.guid in uiState.testingGuids }
                         TextButton(
-                            onClick = { viewModel.testCurrentSourcePing() },
+                            onClick = {
+                                if (currentSourcePingRunning) viewModel.cancelCurrentSourcePing()
+                                else viewModel.testCurrentSourcePing()
+                            },
                             enabled = uiState.servers.isNotEmpty(),
-                        ) { Text("تست پینگ") }
+                        ) { Text(if (currentSourcePingRunning) "لغو پینگ" else "تست پینگ") }
                         TextButton(onClick = { viewModel.onRefresh() }, enabled = !uiState.isRefreshing) {
                             Text(stringResource(R.string.simple_refresh))
                         }
@@ -379,6 +383,7 @@ fun SimpleVpnScreen(
                         refreshingSubscriptionIds = uiState.refreshingPersonalSubscriptionIds,
                         onRefreshSubscription = viewModel::refreshPersonalSubscription,
                         onTestPingSubscription = viewModel::testPersonalSubscriptionPing,
+                        onCancelPingSubscription = viewModel::cancelPersonalSubscriptionPing,
                         onDeleteSubscription = { pendingDeleteSubscriptionId = it },
                     )
                 }
@@ -407,6 +412,7 @@ private fun ServerList(
     refreshingSubscriptionIds: Set<String> = emptySet(),
     onRefreshSubscription: ((String) -> Unit)? = null,
     onTestPingSubscription: ((String) -> Unit)? = null,
+    onCancelPingSubscription: ((String) -> Unit)? = null,
     onDeleteSubscription: ((String) -> Unit)? = null,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 4.dp)) {
@@ -427,9 +433,13 @@ private fun ServerList(
                             fontWeight = FontWeight.SemiBold,
                         )
                         if (subscriptionId == SimpleVpnRepository.PERSONAL_SUB_ID || subscriptionId.startsWith("personal_sub_")) {
+                            val pingIsRunning = groupServers.any { it.guid in testingGuids }
                             TextButton(
-                                onClick = { onTestPingSubscription?.invoke(subscriptionId) },
-                            ) { Text("تست پینگ") }
+                                onClick = {
+                                    if (pingIsRunning) onCancelPingSubscription?.invoke(subscriptionId)
+                                    else onTestPingSubscription?.invoke(subscriptionId)
+                                },
+                            ) { Text(if (pingIsRunning) "لغو پینگ" else "تست پینگ") }
                             if (subscriptionId.startsWith("personal_sub_")) TextButton(
                                 onClick = { onRefreshSubscription?.invoke(subscriptionId) },
                                 enabled = subscriptionId !in refreshingSubscriptionIds,
