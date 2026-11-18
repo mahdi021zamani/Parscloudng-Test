@@ -808,12 +808,15 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         )
         val servers = SimpleVpnRepository.getPersonalServers()
         _uiState.update { state ->
+            val wasOnPersonalSource = state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+                state.selectedSourceId.startsWith("personal_sub_")
             state.copy(
-                servers = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) servers else state.servers,
-                selectedGuid = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) null else state.selectedGuid,
+                selectedSourceId = if (wasOnPersonalSource) SimpleVpnRepository.PERSONAL_SUB_ID else state.selectedSourceId,
+                servers = if (wasOnPersonalSource) servers else state.servers,
+                selectedGuid = if (wasOnPersonalSource) null else state.selectedGuid,
                 testingGuids = state.testingGuids - removedGuids,
                 refreshingPersonalSubscriptionIds = emptySet(),
-                canConnect = if (state.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) false else state.canConnect,
+                canConnect = if (wasOnPersonalSource) false else state.canConnect,
                 message = "همه کانفیگ‌های شخصی حذف شدند",
             )
         }
