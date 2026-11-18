@@ -248,6 +248,13 @@ object SimpleVpnRepository {
         visibleSourceIds().forEach(AngConfigManager::sortByTestResultsForSub)
     }
 
+    /** Sort only the personal subscription whose explicit ping batch has finished. */
+    fun sortPersonalSubscriptionByPing(subscriptionId: String) {
+        if (subscriptionId == PERSONAL_SUB_ID || subscriptionId.startsWith("personal_sub_")) {
+            AngConfigManager.sortByTestResultsForSub(subscriptionId)
+        }
+    }
+
     /** Returns true when the Aether cache is absent or older than the configured freshness window. */
     fun isAetherRefreshDue(): Boolean {
         val source = primarySources.first { it.id == AETHER_SUB_ID }
