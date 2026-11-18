@@ -87,7 +87,7 @@ internal fun selectSimpleVpnSourceTab(
             SimpleVpnRepository.COMBINED_SUB_ID,
             SimpleVpnRepository.SERVICES_SUB_ID,
             SimpleVpnRepository.PERSONAL_SUB_ID,
-        )
+        ) && !sourceId.startsWith("personal_sub_")
     ) return null
 
     val validSelection = selectedGuid?.takeIf { guid -> servers.any { it.guid == guid } }
@@ -124,8 +124,8 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun canConnectForSource(sourceId: String): Boolean =
-        if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
-            SimpleVpnRepository.getPersonalServers().isNotEmpty()
+        if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID || sourceId.startsWith("personal_sub_")) {
+            SimpleVpnRepository.getPersonalServers(sourceId).isNotEmpty()
         } else {
             SimpleVpnRepository.canConnect(sourceId)
         }
@@ -298,7 +298,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val sourceId = _uiState.value.selectedSourceId
         refreshJob?.cancel()
         refreshJob = null
-        val servers = if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID) SimpleVpnRepository.getPersonalServers() else SimpleVpnRepository.getServersForSource(sourceId)
+        val servers = if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID || sourceId.startsWith("personal_sub_")) {
+            SimpleVpnRepository.getPersonalServers(sourceId)
+        } else SimpleVpnRepository.getServersForSource(sourceId)
         val selected = MmkvManager.getSelectServer(sourceId)
             ?.takeIf { guid -> servers.any { it.guid == guid } }
             ?: servers.firstOrNull()?.guid
@@ -349,12 +351,14 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 SimpleVpnRepository.COMBINED_SUB_ID,
                 SimpleVpnRepository.SERVICES_SUB_ID,
                 SimpleVpnRepository.PERSONAL_SUB_ID,
-            )
+            ) && !sourceId.startsWith("personal_sub_")
         ) return
         refreshJob?.cancel()
         refreshJob = null
         // Keep the current ping batch alive while the user browses another source.
-        val servers = if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID) SimpleVpnRepository.getPersonalServers() else SimpleVpnRepository.getServersForSource(sourceId)
+        val servers = if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID || sourceId.startsWith("personal_sub_")) {
+            SimpleVpnRepository.getPersonalServers(sourceId)
+        } else SimpleVpnRepository.getServersForSource(sourceId)
         val selected = MmkvManager.getSelectServer(sourceId)
             ?.takeIf { guid -> servers.any { it.guid == guid } }
             ?: servers.firstOrNull()?.guid
@@ -388,36 +392,44 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             val configLines = normalized.lineSequence().map { it.trim() }
                 .filter { it.isNotEmpty() && !Utils.isValidSubUrl(it) }.joinToString("\n")
             var imported = 0
+            var lastImportedSubscriptionId: String? = null
             val existingPersonalSubscriptions = MmkvManager.decodeSubscriptions()
                 .filter { it.guid.startsWith("personal_sub_") }
-            var nextSubscriptionNumber = existingPersonalSubscriptions.size + 1
             subscriptionUrls.forEach { url ->
-                // Do not create a second entry for a URL that is already registered.
-                if (existingPersonalSubscriptions.any { it.subscription.url == url }) return@forEach
+                val existing = existingPersonalSubscriptions.firstOrNull { it.subscription.url == url }
+                if (existing != null) {
+                    lastImportedSubscriptionId = existing.guid
+                    return@forEach
+                }
                 val id = "personal_sub_" + Utils.getUuid()
                 val item = SubscriptionItem(
-                    remarks = "اشتراک شخصی $nextSubscriptionNumber",
+                    remarks = SimpleVpnRepository.personalSubscriptionName(url),
                     url = url,
                     enabled = true,
                     autoUpdate = false,
                 )
-                nextSubscriptionNumber++
                 MmkvManager.encodeSubscription(id, item)
                 imported += com.v2ray.ang.handler.AngConfigManager
                     .updateConfigViaSub(SubscriptionCache(id, item)).configCount
+                lastImportedSubscriptionId = id
             }
             if (configLines.isNotBlank()) {
                 imported += com.v2ray.ang.handler.AngConfigManager.importBatchConfigWithoutSubscriptions(
                     configLines, SimpleVpnRepository.PERSONAL_SUB_ID, true
                 )
             }
+            val targetSourceId = if (configLines.isNotBlank()) {
+                SimpleVpnRepository.PERSONAL_SUB_ID
+            } else {
+                lastImportedSubscriptionId ?: SimpleVpnRepository.PERSONAL_SUB_ID
+            }
             withContext(Dispatchers.Main) {
-                val servers = SimpleVpnRepository.getPersonalServers()
-                val selected = MmkvManager.getSelectServer(SimpleVpnRepository.PERSONAL_SUB_ID)
+                val servers = SimpleVpnRepository.getPersonalServers(targetSourceId)
+                val selected = MmkvManager.getSelectServer(targetSourceId)
                     ?.takeIf { guid -> servers.any { it.guid == guid } } ?: servers.firstOrNull()?.guid
                 _uiState.update {
                     it.copy(
-                        selectedSourceId = SimpleVpnRepository.PERSONAL_SUB_ID,
+                        selectedSourceId = targetSourceId,
                         servers = servers,
                         selectedGuid = selected,
                         canConnect = servers.isNotEmpty() && it.licenseValid,
@@ -425,7 +437,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     )
                 }
                 selected?.let {
-                    MmkvManager.setSelectServer(it, SimpleVpnRepository.PERSONAL_SUB_ID)
+                    MmkvManager.setSelectServer(it, targetSourceId)
                     if (_uiState.value.status == SimpleConnectionStatus.DISCONNECTED) MmkvManager.setSelectServer(it)
                 }
             }
@@ -439,14 +451,17 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         if (MmkvManager.decodeServerList(profileSubId).isEmpty() && profileSubId.startsWith("personal_sub_")) {
             MmkvManager.removeSubscription(profileSubId)
         }
-        val servers = SimpleVpnRepository.getPersonalServers()
-        val selected = MmkvManager.getSelectServer(SimpleVpnRepository.PERSONAL_SUB_ID)
+        val activeSourceId = _uiState.value.selectedSourceId
+        val personalSourceId = if (activeSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+            activeSourceId.startsWith("personal_sub_")) activeSourceId else SimpleVpnRepository.PERSONAL_SUB_ID
+        val servers = SimpleVpnRepository.getPersonalServers(personalSourceId)
+        val selected = MmkvManager.getSelectServer(personalSourceId)
             ?.takeIf { id -> servers.any { it.guid == id } } ?: servers.firstOrNull()?.guid
         _uiState.update {
             it.copy(
-                servers = servers,
-                selectedGuid = selected,
-                canConnect = servers.isNotEmpty() && it.licenseValid,
+                servers = if (it.selectedSourceId == personalSourceId) servers else it.servers,
+                selectedGuid = if (it.selectedSourceId == personalSourceId) selected else it.selectedGuid,
+                canConnect = if (it.selectedSourceId == personalSourceId) servers.isNotEmpty() && it.licenseValid else it.canConnect,
                 message = "کانفیگ حذف شد",
             )
         }
@@ -476,9 +491,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 LogUtil.e(AppConfig.TAG, "Personal subscription refresh failed for $subscriptionId", e)
                 -1
             }
-            val servers = SimpleVpnRepository.getPersonalServers()
-            val groupGuids = MmkvManager.decodeServerList(subscriptionId)
-                .filter { MmkvManager.decodeServerConfig(it) != null }
+            val servers = SimpleVpnRepository.getPersonalServers(subscriptionId)
             withContext(Dispatchers.Main) {
                 _uiState.update { state ->
                     state.copy(
@@ -512,18 +525,30 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         personalSubscriptionRefreshJobs.remove(subscriptionId)?.cancel()
         val removedGuids = MmkvManager.decodeServerList(subscriptionId).toSet()
         MmkvManager.removeSubscription(subscriptionId)
-        val servers = SimpleVpnRepository.getPersonalServers()
         val state = _uiState.value
-        val selected = state.selectedGuid?.takeIf { it !in removedGuids && servers.any { server -> server.guid == it } }
-            ?: servers.firstOrNull()?.guid
+        val remainingTabs = SimpleVpnRepository.getPersonalSubscriptionTabs()
+        val nextSourceId = if (state.selectedSourceId == subscriptionId) {
+            if (MmkvManager.decodeServerList(SimpleVpnRepository.PERSONAL_SUB_ID).any {
+                    MmkvManager.decodeServerConfig(it) != null
+                }) SimpleVpnRepository.PERSONAL_SUB_ID else remainingTabs.firstOrNull()?.id
+                ?: SimpleVpnRepository.PERSONAL_SUB_ID
+        } else state.selectedSourceId
+        val servers = if (nextSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+            nextSourceId.startsWith("personal_sub_")) SimpleVpnRepository.getPersonalServers(nextSourceId)
+            else state.servers
+        val selected = if (nextSourceId == state.selectedSourceId) {
+            state.selectedGuid?.takeIf { it !in removedGuids && servers.any { server -> server.guid == it } }
+                ?: servers.firstOrNull()?.guid
+        } else servers.firstOrNull()?.guid
         cancelPingWorker(subscriptionId)
         _uiState.update {
             it.copy(
-                servers = if (it.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) servers else it.servers,
-                selectedGuid = if (it.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) selected else it.selectedGuid,
+                selectedSourceId = nextSourceId,
+                servers = if (it.selectedSourceId == subscriptionId) servers else it.servers,
+                selectedGuid = if (it.selectedSourceId == subscriptionId) selected else it.selectedGuid,
                 testingGuids = it.testingGuids - removedGuids,
                 refreshingPersonalSubscriptionIds = it.refreshingPersonalSubscriptionIds - subscriptionId,
-                canConnect = if (it.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
+                canConnect = if (it.selectedSourceId == subscriptionId) {
                     servers.isNotEmpty() && it.licenseValid
                 } else it.canConnect,
                 message = getApplication<Application>().getString(R.string.toast_success),
@@ -549,6 +574,10 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun onRefresh() {
         if (_uiState.value.isRefreshing) return
+        if (_uiState.value.selectedSourceId.startsWith("personal_sub_")) {
+            refreshPersonalSubscription(_uiState.value.selectedSourceId)
+            return
+        }
         if (_uiState.value.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID) {
             _uiState.update { it.copy(isRefreshing = true, message = null) }
             refreshJob = viewModelScope.launch(Dispatchers.IO) {
@@ -808,8 +837,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 if (batchId.startsWith("source:") && activeSourceId != SimpleVpnRepository.PERSONAL_SUB_ID) {
                     SimpleVpnRepository.sortByPing()
                 }
-                val refreshedServers = if (activeSourceId == SimpleVpnRepository.PERSONAL_SUB_ID)
-                    SimpleVpnRepository.getPersonalServers()
+                val refreshedServers = if (activeSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+                    activeSourceId.startsWith("personal_sub_"))
+                    SimpleVpnRepository.getPersonalServers(activeSourceId)
                 else SimpleVpnRepository.getServersForSource(activeSourceId)
                 _uiState.update { state ->
                     state.copy(
