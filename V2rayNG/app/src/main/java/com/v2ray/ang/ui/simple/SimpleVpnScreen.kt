@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.width
@@ -210,38 +211,31 @@ fun SimpleVpnScreen(
     }
 
     Scaffold(
+        containerColor = Color(0xFF0D0C12),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.simple_app_title), fontSize = 18.sp, maxLines = 1, softWrap = false) },
-                actions = {
-                    TextButton(onClick = { viewModel.showLicenseDialog() }) {
-                        Text(stringResource(R.string.simple_license_manage))
+                title = {
+                    Column {
+                        Text(
+                            "PARSCLOUD",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.1.sp,
+                            color = Color(0xFFF5EAF0),
+                            maxLines = 1,
+                        )
+                        Text(
+                            "اتصال امن و پایدار",
+                            fontSize = 10.sp,
+                            color = Color(0xFFAAA0AC),
+                            maxLines = 1,
+                        )
                     }
-                    if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
-                        uiState.selectedSourceId.startsWith("personal_sub_")) {
-                        TextButton(onClick = { viewModel.onRefresh() }, enabled = !uiState.isRefreshing &&
-                            uiState.selectedSourceId !in uiState.refreshingPersonalSubscriptionIds) {
-                            Text("به‌روزرسانی")
-                        }
-                        if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID &&
-                            uiState.servers.isNotEmpty()) {
-                            TextButton(onClick = { pendingDeleteAllPersonal = true }) { Text("حذف همه") }
-                        }
-                    } else {
-                        val currentSourcePingRunning = uiState.servers.any { it.guid in uiState.testingGuids }
-                        TextButton(
-                            onClick = {
-                                if (currentSourcePingRunning) viewModel.cancelCurrentSourcePing()
-                                else viewModel.testCurrentSourcePing()
-                            },
-                            enabled = uiState.servers.isNotEmpty(),
-                        ) { Text(if (currentSourcePingRunning) "لغو پینگ" else "تست پینگ") }
-                        TextButton(onClick = { viewModel.onRefresh() }, enabled = !uiState.isRefreshing) {
-                            Text(stringResource(R.string.simple_refresh))
-                        }
-                    }
-                    TextButton(onClick = { showPersonalImport = true }) { Text("افزودن") }
-                }
+                },
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF121117),
+                    titleContentColor = Color(0xFFF5EAF0),
+                ),
             )
         },
         snackbarHost = {
@@ -255,7 +249,63 @@ fun SimpleVpnScreen(
             }
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF0D0C12))
+                .padding(padding)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF17151D))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                TextButton(
+                    onClick = { viewModel.showLicenseDialog() },
+                    contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
+                ) { Text("اشتراک", fontSize = 11.sp, color = Color(0xFFE9B0C8)) }
+
+                if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+                    uiState.selectedSourceId.startsWith("personal_sub_")) {
+                    TextButton(
+                        onClick = { viewModel.onRefresh() },
+                        enabled = !uiState.isRefreshing &&
+                            uiState.selectedSourceId !in uiState.refreshingPersonalSubscriptionIds,
+                        contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
+                    ) { Text("به‌روزرسانی", fontSize = 11.sp) }
+                    if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID &&
+                        uiState.servers.isNotEmpty()) {
+                        TextButton(
+                            onClick = { pendingDeleteAllPersonal = true },
+                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
+                        ) { Text("حذف همه", fontSize = 11.sp) }
+                    }
+                } else {
+                    val currentSourcePingRunning = uiState.servers.any { it.guid in uiState.testingGuids }
+                    TextButton(
+                        onClick = {
+                            if (currentSourcePingRunning) viewModel.cancelCurrentSourcePing()
+                            else viewModel.testCurrentSourcePing()
+                        },
+                        enabled = uiState.servers.isNotEmpty(),
+                        contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
+                    ) { Text(if (currentSourcePingRunning) "لغو پینگ" else "تست پینگ", fontSize = 11.sp) }
+                    TextButton(
+                        onClick = { viewModel.onRefresh() },
+                        enabled = !uiState.isRefreshing,
+                        contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
+                    ) { Text("تازه‌سازی", fontSize = 11.sp) }
+                }
+
+                TextButton(
+                    onClick = { showPersonalImport = true },
+                    contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp),
+                ) { Text("افزودن", fontSize = 11.sp) }
+            }
+
             val isV2RaySelected = uiState.selectedSourceId == SimpleVpnRepository.SIMPLE_SUB_ID ||
                 uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID
             val personalSubscriptionTabs = SimpleVpnRepository.getPersonalSubscriptionTabs()
@@ -276,7 +326,7 @@ fun SimpleVpnScreen(
                 else -> if (selectedPersonalIndex >= 0) personalTabsStartIndex + selectedPersonalIndex else 0
             }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                ScrollableTabRow(selectedTabIndex = selectedProfileIndex, edgePadding = 0.dp) {
+                ScrollableTabRow(\n                    selectedTabIndex = selectedProfileIndex,\n                    edgePadding = 8.dp,\n                    containerColor = Color(0xFF17151D),\n                    contentColor = Color(0xFFE9B0C8),\n                ) {
                     Tab(
                         selected = selectedProfileIndex == 0,
                         onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.WIREGUARD) },
@@ -429,7 +479,7 @@ private fun ServerList(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .background(Color(0xFF211D27))
                             .padding(start = 16.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -508,8 +558,11 @@ private fun ServerRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) Color(0xFF2A202B) else Color(0xFF17161D))
             .selectable(selected = selected, enabled = enabled, onClick = onSelect)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(selected = selected, enabled = enabled, onClick = onSelect)
@@ -552,39 +605,24 @@ private fun ConnectionBar(
         SimpleConnectionStatus.CONNECTED -> stringResource(R.string.simple_status_connected)
     }
     val statusColor = when (status) {
-        SimpleConnectionStatus.DISCONNECTED -> MaterialTheme.colorScheme.outlineVariant
-        SimpleConnectionStatus.CONNECTING -> MaterialTheme.colorScheme.secondary
-        SimpleConnectionStatus.CONNECTED -> MaterialTheme.colorScheme.tertiary
+        SimpleConnectionStatus.DISCONNECTED -> Color(0xFF8D8792)
+        SimpleConnectionStatus.CONNECTING -> Color(0xFFE7B36B)
+        SimpleConnectionStatus.CONNECTED -> Color(0xFF65C99A)
     }
     val actionContainerColor = when (status) {
-        SimpleConnectionStatus.DISCONNECTED -> MaterialTheme.colorScheme.primary
-        SimpleConnectionStatus.CONNECTING -> MaterialTheme.colorScheme.secondary
-        SimpleConnectionStatus.CONNECTED -> MaterialTheme.colorScheme.tertiary
+        SimpleConnectionStatus.DISCONNECTED -> Color(0xFFE9A9C4)
+        SimpleConnectionStatus.CONNECTING -> Color(0xFFE7B36B)
+        SimpleConnectionStatus.CONNECTED -> Color(0xFF65C99A)
     }
-    val actionContentColor = when (status) {
-        SimpleConnectionStatus.DISCONNECTED -> MaterialTheme.colorScheme.onPrimary
-        SimpleConnectionStatus.CONNECTING -> MaterialTheme.colorScheme.onSecondary
-        SimpleConnectionStatus.CONNECTED -> MaterialTheme.colorScheme.onTertiary
-    }
-    Row(
+    val actionContentColor = Color(0xFF241820)
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .background(Color(0xFF121117))
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .width(9.dp)
-                    .height(9.dp)
-                    .shadow(4.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(statusColor)
-            )
-            Spacer(modifier = Modifier.width(9.dp))
-            Text(statusText, style = MaterialTheme.typography.bodyMedium)
-        }
         androidx.compose.material3.FloatingActionButton(
             onClick = {
                 // CONNECTING remains cancellable: a failed Aether start must not trap the UI.
@@ -592,6 +630,8 @@ private fun ConnectionBar(
                     status == SimpleConnectionStatus.CONNECTED || canConnect
                 ) onConnectClick()
             },
+            modifier = Modifier.size(78.dp),
+            shape = CircleShape,
             containerColor = actionContainerColor,
             contentColor = actionContentColor,
         ) {
@@ -604,7 +644,30 @@ private fun ConnectionBar(
                     if (status != SimpleConnectionStatus.DISCONNECTED) R.string.acc_stop else R.string.acc_start
                 ),
                 tint = actionContentColor,
-                modifier = Modifier.width(24.dp).height(24.dp),
+                modifier = Modifier.size(30.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(30.dp))
+                .background(Color(0xFF211D27))
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .shadow(3.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(statusColor)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "وضعیت اتصال: $statusText",
+                color = Color(0xFFEDE4EB),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
             )
         }
     }
