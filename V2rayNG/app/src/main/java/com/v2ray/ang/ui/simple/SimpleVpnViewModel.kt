@@ -581,16 +581,30 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         val nextSourceId = if (state.selectedSourceId == subscriptionId) {
             if (MmkvManager.decodeServerList(SimpleVpnRepository.PERSONAL_SUB_ID).any {
                     MmkvManager.decodeServerConfig(it) != null
-                }) SimpleVpnRepository.PERSONAL_SUB_ID else remainingTabs.firstOrNull()?.id
-                ?: SimpleVpnRepository.PERSONAL_SUB_ID
+                }) {
+                SimpleVpnRepository.PERSONAL_SUB_ID
+            } else {
+                // If the last URL subscription is deleted and there are no manual
+                // profiles, return to the real WireGuard source, not the hidden
+                // empty manual tab (whose visual index is also zero).
+                remainingTabs.firstOrNull()?.id ?: SimpleVpnRepository.AETHER_SUB_ID
+            }
         } else state.selectedSourceId
-        val servers = if (nextSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
-            nextSourceId.startsWith("personal_sub_")) SimpleVpnRepository.getPersonalServers(nextSourceId)
-            else state.servers
+        val servers = when {
+            nextSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+                nextSourceId.startsWith("personal_sub_") ->
+                SimpleVpnRepository.getPersonalServers(nextSourceId)
+            nextSourceId == state.selectedSourceId -> state.servers
+            else -> SimpleVpnRepository.getServersForSource(nextSourceId)
+        }
         val selected = if (nextSourceId == state.selectedSourceId) {
             state.selectedGuid?.takeIf { it !in removedGuids && servers.any { server -> server.guid == it } }
                 ?: servers.firstOrNull()?.guid
-        } else servers.firstOrNull()?.guid
+        } else {
+            MmkvManager.getSelectServer(nextSourceId)
+                ?.takeIf { guid -> servers.any { server -> server.guid == guid } }
+                ?: servers.firstOrNull()?.guid
+        }
         cancelPingWorker(subscriptionId)
         _uiState.update {
             it.copy(
@@ -600,7 +614,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 testingGuids = it.testingGuids - removedGuids,
                 refreshingPersonalSubscriptionIds = it.refreshingPersonalSubscriptionIds - subscriptionId,
                 canConnect = if (it.selectedSourceId == subscriptionId) {
-                    servers.isNotEmpty() && it.licenseValid
+                    canConnectForSource(nextSourceId) && it.licenseValid
                 } else it.canConnect,
                 message = getApplication<Application>().getString(R.string.toast_success),
             )
