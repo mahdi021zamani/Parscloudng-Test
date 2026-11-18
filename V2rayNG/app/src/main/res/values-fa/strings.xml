@@ -551,9 +551,9 @@
 
     <string name="simple_app_title">PARSCLOUD</string>
     <string name="simple_refresh">تازه‌سازی</string>
-    <string name="simple_status_disconnected">وضعیت: متصل نیست</string>
-    <string name="simple_status_connecting">وضعیت: در حال اتصال…</string>
-    <string name="simple_status_connected">وضعیت: متصل</string>
+    <string name="simple_status_disconnected">قطع</string>
+    <string name="simple_status_connecting">در حال اتصال…</string>
+    <string name="simple_status_connected">متصل</string>
     <string name="simple_connect">اتصال</string>
     <string name="simple_disconnect">قطع اتصال</string>
     <string name="simple_testing">در حال تست…</string>
