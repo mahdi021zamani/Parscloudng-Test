@@ -557,9 +557,9 @@
     <string name="simple_subtab_hamrah">Hamrah</string>
     <string name="simple_subtab_irancell">irancell</string>
     <string name="simple_refresh">Refresh</string>
-    <string name="simple_status_disconnected">Status: Not connected</string>
-    <string name="simple_status_connecting">Status: Connecting…</string>
-    <string name="simple_status_connected">Status: Connected</string>
+    <string name="simple_status_disconnected">Disconnected</string>
+    <string name="simple_status_connecting">Connecting…</string>
+    <string name="simple_status_connected">Connected</string>
     <string name="simple_connect">CONNECT</string>
     <string name="simple_disconnect">DISCONNECT</string>
     <string name="simple_testing">Testing…</string>
