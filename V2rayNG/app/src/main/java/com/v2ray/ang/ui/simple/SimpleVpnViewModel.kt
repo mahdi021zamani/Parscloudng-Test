@@ -71,6 +71,7 @@ data class SimpleVpnUiState(
     val licenseKeyInput: String = "",
     val isValidatingLicense: Boolean = false,
     val licenseValid: Boolean = false,
+    val licenseExpiresAtMillis: Long? = null,
 )
 
 internal fun selectSimpleVpnSourceTab(
@@ -218,6 +219,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             val storedLicense = withContext(Dispatchers.IO) {
                 SubscriptionLicenseRepository.getStoredLicense()
             }
+            _uiState.update { it.copy(licenseExpiresAtMillis = storedLicense?.expiresAtMillis) }
             if (storedLicense == null) {
                 // Do not start feed refresh before the first license is entered.
                 // Otherwise activation can race an in-flight refresh and its result
@@ -1061,6 +1063,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             licenseKeyInput = "",
                             isValidatingLicense = false,
                             licenseValid = true,
+                            licenseExpiresAtMillis = result.expiresAtMillis,
                             canConnect = canConnect,
                             message = app.getString(R.string.simple_license_active),
                         )
@@ -1106,6 +1109,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     it.copy(
                         isValidatingLicense = false,
                         licenseValid = saved,
+                        licenseExpiresAtMillis = result.expiresAtMillis,
                         canConnect = canConnect,
                         message = if (saved) null else getApplication<Application>().getString(R.string.simple_license_network_error),
                     )
@@ -1202,6 +1206,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                                 status = SimpleConnectionStatus.DISCONNECTED,
                                 isValidatingLicense = false,
                                 licenseValid = saved,
+                                licenseExpiresAtMillis = result.expiresAtMillis,
                                 canConnect = false,
                                 message = app.getString(
                                     if (saved) R.string.simple_no_servers_available
@@ -1217,6 +1222,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         it.copy(
                             isValidatingLicense = false,
                             licenseValid = true,
+                            licenseExpiresAtMillis = result.expiresAtMillis,
                             canConnect = true,
                         )
                     }
