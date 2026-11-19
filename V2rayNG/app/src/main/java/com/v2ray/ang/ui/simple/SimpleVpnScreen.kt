@@ -498,6 +498,7 @@ fun SimpleVpnScreen(
                 status = uiState.status,
                 selectedServerName = uiState.servers.firstOrNull { it.guid == uiState.selectedGuid }?.displayName,
                 canConnect = uiState.canConnect && uiState.selectedGuid != null,
+                licenseExpiresAtMillis = uiState.licenseExpiresAtMillis,
                 onConnectClick = onConnectClick,
             )
         }
@@ -684,6 +685,7 @@ private fun ConnectionBar(
     status: SimpleConnectionStatus,
     selectedServerName: String?,
     canConnect: Boolean,
+    licenseExpiresAtMillis: Long?,
     onConnectClick: () -> Unit,
 ) {
     var elapsedSeconds by remember { mutableStateOf(0L) }
@@ -713,12 +715,12 @@ private fun ConnectionBar(
     val actionContainerColor = when (status) {
         SimpleConnectionStatus.DISCONNECTED -> Color(0xFFE9A9C4)
         SimpleConnectionStatus.CONNECTING -> Color(0xFFE7B36B)
-        SimpleConnectionStatus.CONNECTED -> Color(0xFF302B35)
+        SimpleConnectionStatus.CONNECTED -> Color(0xFF101014)
     }
     val actionContentColor = when (status) {
         SimpleConnectionStatus.DISCONNECTED -> Color(0xFF241820)
         SimpleConnectionStatus.CONNECTING -> Color(0xFF241820)
-        SimpleConnectionStatus.CONNECTED -> Color(0xFFF5EAF0)
+        SimpleConnectionStatus.CONNECTED -> Color(0xFFF8F2F6)
     }
     val actionText = when (status) {
         SimpleConnectionStatus.DISCONNECTED -> "اتصال"
@@ -739,6 +741,37 @@ private fun ConnectionBar(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        val remainingMillis = (licenseExpiresAtMillis ?: 0L) - System.currentTimeMillis()
+        val remainingDays = if (licenseExpiresAtMillis != null && remainingMillis > 0L) {
+            (remainingMillis + 86_399_999L) / 86_400_000L
+        } else 0L
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(13.dp))
+                .background(Color(0xFF1A1720))
+                .border(1.dp, Color(0x332C2732), RoundedCornerShape(13.dp))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                Text("اعتبار PARSCLOUD", color = Color(0xFFBEB3C2), fontSize = 10.sp)
+                Text(
+                    if (licenseExpiresAtMillis == null) "در حال دریافت اطلاعات"
+                    else if (remainingDays > 0L) "$remainingDays روز باقی‌مانده"
+                    else "منقضی‌شده",
+                    color = if (remainingDays > 0L) Color(0xFFE8C6D8) else Color(0xFFFF9AA8),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("حجم مصرفی", color = Color(0xFFBEB3C2), fontSize = 10.sp)
+                Text("نامحدود", color = Color(0xFF9FE0C2), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = selectedServerName?.takeIf { it.isNotBlank() } ?: "یک سرور انتخاب کن",
             color = Color(0xFFF5EAF0),
@@ -776,10 +809,33 @@ private fun ConnectionBar(
             enabled = actionEnabled,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(54.dp),
+                .height(56.dp)
+                .shadow(
+                    elevation = if (status == SimpleConnectionStatus.CONNECTED) 13.dp else 5.dp,
+                    shape = RoundedCornerShape(18.dp),
+                    ambientColor = if (status == SimpleConnectionStatus.CONNECTED) Color(0xFF000000) else Color(0xFFB77F9A),
+                    spotColor = if (status == SimpleConnectionStatus.CONNECTED) Color(0xFF000000) else Color(0xFFB77F9A),
+                )
+                .clip(RoundedCornerShape(18.dp))
+                .background(
+                    if (status == SimpleConnectionStatus.CONNECTED) {
+                        Brush.verticalGradient(listOf(Color(0xFF29262E), Color(0xFF08080B), Color(0xFF17151B)))
+                    } else {
+                        Brush.verticalGradient(listOf(actionContainerColor, actionContainerColor.copy(alpha = 0.86f)))
+                    }
+                )
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        if (status == SimpleConnectionStatus.CONNECTED)
+                            listOf(Color(0xFF514B58), Color(0xFF17151B), Color(0xFF393440))
+                        else listOf(Color(0x66FFFFFF), Color(0x22808080))
+                    ),
+                    shape = RoundedCornerShape(18.dp),
+                ),
             shape = RoundedCornerShape(18.dp),
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = actionContainerColor,
+                containerColor = Color.Transparent,
                 contentColor = actionContentColor,
                 disabledContainerColor = Color(0xFF51434D),
                 disabledContentColor = Color(0xFFB8AAB2),
