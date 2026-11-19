@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import com.v2ray.ang.R
 import com.v2ray.ang.handler.SimpleVpnRepository
 import com.v2ray.ang.handler.SimpleVpnRepository.SimpleServerUiModel
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -685,10 +686,24 @@ private fun ConnectionBar(
     canConnect: Boolean,
     onConnectClick: () -> Unit,
 ) {
+    var elapsedSeconds by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(status) {
+        if (status == SimpleConnectionStatus.CONNECTED) {
+            val connectedAt = System.currentTimeMillis()
+            while (true) {
+                elapsedSeconds = ((System.currentTimeMillis() - connectedAt) / 1000L).coerceAtLeast(0L)
+                delay(1_000)
+            }
+        } else {
+            elapsedSeconds = 0L
+        }
+    }
+
     val statusText = when (status) {
         SimpleConnectionStatus.DISCONNECTED -> stringResource(R.string.simple_status_disconnected)
         SimpleConnectionStatus.CONNECTING -> stringResource(R.string.simple_status_connecting)
-        SimpleConnectionStatus.CONNECTED -> stringResource(R.string.simple_status_connected)
+        SimpleConnectionStatus.CONNECTED -> ""
     }
     val statusColor = when (status) {
         SimpleConnectionStatus.DISCONNECTED -> Color(0xFFAAA3AE)
@@ -698,13 +713,23 @@ private fun ConnectionBar(
     val actionContainerColor = when (status) {
         SimpleConnectionStatus.DISCONNECTED -> Color(0xFFE9A9C4)
         SimpleConnectionStatus.CONNECTING -> Color(0xFFE7B36B)
-        SimpleConnectionStatus.CONNECTED -> Color(0xFF65C99A)
+        SimpleConnectionStatus.CONNECTED -> Color(0xFF302B35)
+    }
+    val actionContentColor = when (status) {
+        SimpleConnectionStatus.DISCONNECTED -> Color(0xFF241820)
+        SimpleConnectionStatus.CONNECTING -> Color(0xFF241820)
+        SimpleConnectionStatus.CONNECTED -> Color(0xFFF5EAF0)
     }
     val actionText = when (status) {
         SimpleConnectionStatus.DISCONNECTED -> "اتصال"
         SimpleConnectionStatus.CONNECTING -> "لغو اتصال"
         SimpleConnectionStatus.CONNECTED -> "قطع اتصال"
     }
+    val timerText = "%02d:%02d:%02d".format(
+        elapsedSeconds / 3600L,
+        (elapsedSeconds % 3600L) / 60L,
+        elapsedSeconds % 60L,
+    )
     val actionEnabled = status != SimpleConnectionStatus.DISCONNECTED || canConnect
 
     Column(
@@ -722,21 +747,23 @@ private fun ConnectionBar(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(statusColor)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = statusText,
-                color = statusColor,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-            )
+        if (status != SimpleConnectionStatus.CONNECTED) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(statusColor)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = statusText,
+                    color = statusColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
         }
         Spacer(modifier = Modifier.height(8.dp))
         androidx.compose.material3.Button(
@@ -753,7 +780,7 @@ private fun ConnectionBar(
             shape = RoundedCornerShape(18.dp),
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                 containerColor = actionContainerColor,
-                contentColor = Color(0xFF241820),
+                contentColor = actionContentColor,
                 disabledContainerColor = Color(0xFF51434D),
                 disabledContentColor = Color(0xFFB8AAB2),
             ),
@@ -761,14 +788,18 @@ private fun ConnectionBar(
         ) {
             androidx.compose.material3.Icon(
                 painter = androidx.compose.ui.res.painterResource(
-                    if (status != SimpleConnectionStatus.DISCONNECTED) R.drawable.ic_stop_24dp
-                    else R.drawable.ic_play_24dp
+                    if (status == SimpleConnectionStatus.CONNECTING) R.drawable.ic_stop_24dp
+                    else android.R.drawable.ic_lock_power_off
                 ),
-                contentDescription = null,
+                contentDescription = if (status == SimpleConnectionStatus.CONNECTED) "قطع اتصال" else "اتصال",
                 modifier = Modifier.size(21.dp),
             )
             Spacer(modifier = Modifier.width(9.dp))
-            Text(actionText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(
+                text = if (status == SimpleConnectionStatus.CONNECTED) "$actionText  •  $timerText" else actionText,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+            )
         }
     }
 }
