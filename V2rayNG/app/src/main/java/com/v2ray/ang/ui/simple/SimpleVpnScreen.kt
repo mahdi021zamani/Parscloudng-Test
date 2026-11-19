@@ -842,20 +842,30 @@ private fun ConnectionBar(
             ),
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
         ) {
-            androidx.compose.material3.Icon(
-                painter = androidx.compose.ui.res.painterResource(
-                    if (status == SimpleConnectionStatus.CONNECTING) R.drawable.ic_stop_24dp
-                    else android.R.drawable.ic_lock_power_off
-                ),
-                contentDescription = if (status == SimpleConnectionStatus.CONNECTED) "قطع اتصال" else "اتصال",
-                modifier = Modifier.size(21.dp),
-            )
-            Spacer(modifier = Modifier.width(9.dp))
-            Text(
-                text = if (status == SimpleConnectionStatus.CONNECTED) "$actionText  •  $timerText" else actionText,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            // Keep the power icon fixed at the visual center in every state.
+            // The label/timer occupies the space to its left, so its width never moves the icon.
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.Icon(
+                    painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_lock_power_off),
+                    contentDescription = if (status == SimpleConnectionStatus.CONNECTED) "قطع اتصال" else "اتصال",
+                    modifier = Modifier.size(21.dp),
+                    tint = actionContentColor,
+                )
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Text(
+                        text = if (status == SimpleConnectionStatus.CONNECTED) "$actionText  •  $timerText" else actionText,
+                        modifier = Modifier
+                            .fillMaxWidth(0.46f)
+                            .align(Alignment.CenterStart),
+                        textAlign = TextAlign.End,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = actionContentColor,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+            }
         }
     }
 }
