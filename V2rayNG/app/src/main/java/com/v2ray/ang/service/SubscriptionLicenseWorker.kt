@@ -38,7 +38,9 @@ class SubscriptionLicenseWorker(
         return when (val result = SubscriptionLicenseRepository.validate(license.key)) {
             is SubscriptionLicenseRepository.ValidationResult.Active -> {
                 LogUtil.w(AppConfig.TAG, "Subscription monitor: server validation ACTIVE")
-                if (SubscriptionLicenseRepository.saveActiveLicense(license.key, result.expiresAtMillis)) {
+                if (SubscriptionLicenseRepository.saveActiveLicense(
+                    license.key, result.expiresAtMillis, result.serverTimeMillis
+                )) {
                     LogUtil.w(AppConfig.TAG, "Subscription monitor: active license expiry saved")
                     Result.success()
                 } else {
@@ -54,11 +56,14 @@ class SubscriptionLicenseWorker(
             }
 
             SubscriptionLicenseRepository.ValidationResult.NetworkError -> {
-                LogUtil.w(AppConfig.TAG, "Subscription monitor: validation ended with NETWORK_ERROR")
-                if (SubscriptionLicenseRepository.isExpired(license)) {
-                    LogUtil.w(AppConfig.TAG, "Subscription monitor: saved license is expired during network error; requesting service stop")
-                    stopActiveServices("saved license expired while server is unreachable")
-                }
+                val offlineAccess = SubscriptionLicenseRepository.hasOfflineAccess(license)
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "Subscription monitor: validation ended with NETWORK_ERROR; offlineAccess=$offlineAccess"
+                )
+                // A failed request is not proof of revocation. When the 24-hour
+                // offline window ends, the app UI blocks new use; an existing tunnel
+                // is intentionally not stopped solely because connectivity is absent.
                 Result.retry()
             }
         }
