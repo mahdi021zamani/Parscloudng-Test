@@ -233,30 +233,24 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
 
-        // WorkManager's periodic interval is at least 15 minutes and may be deferred
-        // by Android. While this screen/process is alive and VPN is connected, check
-        // the entitlement promptly so a revoked subscription does not stay connected.
+        // Check the saved expiry locally while the app process is alive. This does
+        // not make a network request and locks the app at expiry; it deliberately
+        // does not stop an already-running tunnel solely because the local clock
+        // reached the saved expiry.
         viewModelScope.launch {
             while (isActive) {
-                delay(30_000)
+                delay(60_000)
                 val state = _uiState.value
-                if (state.status == SimpleConnectionStatus.CONNECTED && !state.isValidatingLicense) {
-                    val stored = withContext(Dispatchers.IO) {
-                        SubscriptionLicenseRepository.getStoredLicense()
-                    }
-                    if (stored == null) {
-                        stopCurrentService(getApplication())
-                        _uiState.update {
-                            it.copy(
-                                status = SimpleConnectionStatus.DISCONNECTED,
-                                licenseValid = false,
-                                canConnect = false,
-                                licenseDialogVisible = true,
-                            )
-                        }
-                    } else {
-                        LogUtil.w(AppConfig.TAG, "Subscription monitor: foreground 30-second validation started")
-                        validateStoredLicense(stored.key, showDialogOnFailure = true)
+                val expiresAt = state.licenseExpiresAtMillis
+                if (state.licenseValid && expiresAt != null && expiresAt <= System.currentTimeMillis()) {
+                    LogUtil.w(AppConfig.TAG, "Subscription monitor: local entitlement expired; locking app UI")
+                    _uiState.update {
+                        it.copy(
+                            licenseValid = false,
+                            canConnect = false,
+                            licenseDialogVisible = true,
+                            message = getApplication<Application>().getString(R.string.simple_license_invalid),
+                        )
                     }
                 }
             }
