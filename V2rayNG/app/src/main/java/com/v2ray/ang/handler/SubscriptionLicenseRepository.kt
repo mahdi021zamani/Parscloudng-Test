@@ -132,10 +132,18 @@ object SubscriptionLicenseRepository {
             stored
         }
         val license = parseStoredRecord(plainText) ?: return null
-        if (!stored.startsWith(ENCRYPTED_PREFIX) && !saveActiveLicense(license.key, license.expiresAtMillis)) {
-            MmkvManager.encodeSettings(STORAGE_KEY, null)
-            LogUtil.e(AppConfig.TAG, "SubscriptionLicenseRepository: legacy license migration failed")
-            return null
+        if (!stored.startsWith(ENCRYPTED_PREFIX)) {
+            // Encrypt legacy records without inventing trusted server-time metadata.
+            // Such records remain readable, but cannot grant offline access until
+            // the next successful online validation refreshes their metadata.
+            val migrated = runCatching {
+                MmkvManager.encodeSettings(STORAGE_KEY, encryptRecord(plainText))
+            }.getOrDefault(false)
+            if (!migrated) {
+                MmkvManager.encodeSettings(STORAGE_KEY, null)
+                LogUtil.e(AppConfig.TAG, "SubscriptionLicenseRepository: legacy license migration failed")
+                return null
+            }
         }
         return license
     }
@@ -154,6 +162,12 @@ object SubscriptionLicenseRepository {
         }.onFailure {
             LogUtil.e(AppConfig.TAG, "SubscriptionLicenseRepository: encrypted license could not be saved", it)
         }.getOrDefault(false)
+    }
+
+    /** True only while a locally stored entitlement has a provable offline grant. */
+    fun hasActiveLocalLicense(): Boolean {
+        val license = getStoredLicense() ?: return false
+        return hasOfflineAccess(license)
     }
 
     internal fun currentBootId(): String? = runCatching {
