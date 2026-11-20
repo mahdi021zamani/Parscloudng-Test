@@ -24,7 +24,7 @@ class SettingsViewModel(application: Application) : BaseViewModel(application) {
             }) {
                 is SubscriptionLicenseRepository.ValidationResult.Active -> {
                     val saved = withContext(Dispatchers.IO) {
-                        SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis)
+                        SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis, result.serverTimeMillis)
                     }
                     if (saved) toastSuccess(R.string.simple_license_active)
                     else toastError(R.string.simple_license_network_error)
