@@ -183,9 +183,7 @@ object SubscriptionLicenseRepository {
         return estimatedServerTime < license.expiresAtMillis
     }
 
-    companion object {
-        const val OFFLINE_GRACE_MILLIS = 24L * 60L * 60L * 1000L
-    }
+    const val OFFLINE_GRACE_MILLIS = 24L * 60L * 60L * 1000L
 
     fun validate(key: String): ValidationResult {
         if (!isValidKeyFormat(key)) return ValidationResult.Rejected("invalid")
