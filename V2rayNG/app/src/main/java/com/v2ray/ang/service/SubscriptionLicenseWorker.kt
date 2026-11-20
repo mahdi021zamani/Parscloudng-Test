@@ -80,8 +80,14 @@ class SubscriptionLicenseWorker(
         fun schedule(context: Context) {
             LogUtil.w(AppConfig.TAG, "Subscription monitor: scheduling periodic validation")
             val request = PeriodicWorkRequestBuilder<SubscriptionLicenseWorker>(
-                15, TimeUnit.MINUTES
-            ).build()
+                12, TimeUnit.HOURS
+            )
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
             WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
                 WORK_NAME,
                 ExistingPeriodicWorkPolicy.UPDATE,
