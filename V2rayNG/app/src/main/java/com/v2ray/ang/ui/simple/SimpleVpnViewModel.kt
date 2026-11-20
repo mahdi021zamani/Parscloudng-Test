@@ -1111,6 +1111,10 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         licenseValid = saved,
                         licenseExpiresAtMillis = result.expiresAtMillis,
                         canConnect = canConnect,
+                        // A successful online validation also clears a stale license-entry dialog.
+                        // Keep it visible if the refreshed entitlement could not be persisted.
+                        licenseDialogVisible = if (saved) false else it.licenseDialogVisible,
+                        licenseKeyInput = if (saved) "" else it.licenseKeyInput,
                         message = if (saved) null else getApplication<Application>().getString(R.string.simple_license_network_error),
                     )
                 }
