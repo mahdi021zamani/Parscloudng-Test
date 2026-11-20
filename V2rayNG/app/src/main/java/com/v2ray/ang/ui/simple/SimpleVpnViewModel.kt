@@ -233,31 +233,39 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
 
-        // Enforce the 24-hour offline window using boot-scoped monotonic time.
-        // A wall-clock change cannot extend this grant. The running tunnel is not
-        // stopped solely because the offline window ends.
+        // Enforce the offline window using boot-scoped monotonic time.
+        // When it expires, keep retrying the server validation while the app is
+        // alive so restored connectivity can unlock the UI without an app resume.
+        // A wall-clock change cannot extend the local grant.
         viewModelScope.launch {
             while (isActive) {
-                delay(60_000)
+                delay(30_000)
                 val state = _uiState.value
-                if (state.licenseValid) {
-                    val stored = withContext(Dispatchers.IO) {
-                        SubscriptionLicenseRepository.getStoredLicense()
+                val stored = withContext(Dispatchers.IO) {
+                    SubscriptionLicenseRepository.getStoredLicense()
+                }
+                val offlineAccess = stored != null && withContext(Dispatchers.IO) {
+                    SubscriptionLicenseRepository.hasOfflineAccess(stored)
+                }
+
+                if (state.licenseValid && !offlineAccess) {
+                    LogUtil.w(AppConfig.TAG, "Subscription monitor: offline entitlement unavailable; locking app UI")
+                    _uiState.update {
+                        it.copy(
+                            licenseValid = false,
+                            canConnect = false,
+                            licenseDialogVisible = true,
+                            message = getApplication<Application>().getString(R.string.simple_license_network_error),
+                        )
                     }
-                    val offlineAccess = stored != null && withContext(Dispatchers.IO) {
-                        SubscriptionLicenseRepository.hasOfflineAccess(stored)
-                    }
-                    if (!offlineAccess) {
-                        LogUtil.w(AppConfig.TAG, "Subscription monitor: offline entitlement unavailable; locking app UI")
-                        _uiState.update {
-                            it.copy(
-                                licenseValid = false,
-                                canConnect = false,
-                                licenseDialogVisible = true,
-                                message = getApplication<Application>().getString(R.string.simple_license_network_error),
-                            )
-                        }
-                    }
+                } else if (!state.licenseValid && stored != null && !offlineAccess &&
+                    !_uiState.value.isValidatingLicense
+                ) {
+                    // The saved license previously had an offline grant, but its
+                    // grace period has ended. A successful server response is the
+                    // only way to restore access; NetworkError/Rejected stay locked.
+                    LogUtil.i(AppConfig.TAG, "Subscription monitor: retrying online validation for locked license")
+                    validateStoredLicense(stored.key, showDialogOnFailure = true)
                 }
             }
         }
