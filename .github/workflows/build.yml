@@ -21,6 +21,7 @@ on:
       - "work/parcloud-personal-ping-state-2026-11-18"
       - "work/parcloud-personal-management-2026-11-18"
       - "test/offline-grace-2m-2026-11-20"
+      - "test/offline-grace-resume-dialog-fix-2026-11-20"
 
 permissions:
   contents: read
