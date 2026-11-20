@@ -5,17 +5,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class SubscriptionLicenseRepositoryTest {
-    private val now = 1_800_000_000_000L
+    private val serverNow = 1_800_000_000_000L
 
     @Test
-    fun activeResponseWithFutureExpiryIsAccepted() {
-        val expiry = Instant.ofEpochMilli(now + 86_400_000L).toString()
-        val body = """{"valid":true,"status":"active","expiresAt":"$expiry"}"""
+    fun activeResponseWithFutureExpiryAndServerTimeIsAccepted() {
+        val expiry = Instant.ofEpochMilli(serverNow + 86_400_000L).toString()
+        val serverTime = Instant.ofEpochMilli(serverNow).toString()
+        val body = """{"valid":true,"status":"active","expiresAt":"$expiry","serverTime":"$serverTime"}"""
 
-        val result = SubscriptionLicenseRepository.parseValidationResponse(200, body, now)
+        val result = SubscriptionLicenseRepository.parseValidationResponse(200, body, 1L)
 
         assertEquals(
-            SubscriptionLicenseRepository.ValidationResult.Active(now + 86_400_000L),
+            SubscriptionLicenseRepository.ValidationResult.Active(serverNow + 86_400_000L, serverNow),
             result,
         )
     }
@@ -25,20 +26,86 @@ class SubscriptionLicenseRepositoryTest {
         val result = SubscriptionLicenseRepository.parseValidationResponse(
             200,
             """{"valid":false,"status":"revoked"}""",
-            now,
+            serverNow,
         )
 
         assertEquals(SubscriptionLicenseRepository.ValidationResult.Rejected("revoked"), result)
     }
 
     @Test
-    fun activeResponseWithPastExpiryIsRejected() {
-        val expiry = Instant.ofEpochMilli(now - 1L).toString()
-        val body = """{"valid":true,"status":"active","expiresAt":"$expiry"}"""
+    fun expiryIsComparedWithServerTimeNotPhoneClock() {
+        val expiry = Instant.ofEpochMilli(serverNow - 1L).toString()
+        val serverTime = Instant.ofEpochMilli(serverNow).toString()
+        val body = """{"valid":true,"status":"active","expiresAt":"$expiry","serverTime":"$serverTime"}"""
 
-        val result = SubscriptionLicenseRepository.parseValidationResponse(200, body, now)
+        val result = SubscriptionLicenseRepository.parseValidationResponse(200, body, 0L)
 
         assertEquals(SubscriptionLicenseRepository.ValidationResult.Rejected("expired"), result)
+    }
+
+    @Test
+    fun missingServerTimeIsNotTrusted() {
+        val expiry = Instant.ofEpochMilli(serverNow + 86_400_000L).toString()
+        val body = """{"valid":true,"status":"active","expiresAt":"$expiry"}"""
+
+        val result = SubscriptionLicenseRepository.parseValidationResponse(200, body, serverNow)
+
+        assertEquals(SubscriptionLicenseRepository.ValidationResult.NetworkError, result)
+    }
+
+    @Test
+    fun offlineGrantIsValidOnlyWithinTwentyFourHoursOnSameBoot() {
+        val license = offlineLicense()
+        assertEquals(
+            true,
+            SubscriptionLicenseRepository.hasOfflineAccess(
+                license,
+                nowElapsedRealtime = 10_000L + 23L * 60L * 60L * 1000L,
+                currentBootId = "boot-a",
+            ),
+        )
+        assertEquals(
+            false,
+            SubscriptionLicenseRepository.hasOfflineAccess(
+                license,
+                nowElapsedRealtime = 10_000L + 24L * 60L * 60L * 1000L,
+                currentBootId = "boot-a",
+            ),
+        )
+    }
+
+    @Test
+    fun offlineGrantCannotBeReusedAfterRebootOrMonotonicClockReset() {
+        val license = offlineLicense()
+        assertEquals(
+            false,
+            SubscriptionLicenseRepository.hasOfflineAccess(
+                license,
+                nowElapsedRealtime = 20_000L,
+                currentBootId = "boot-b",
+            ),
+        )
+        assertEquals(
+            false,
+            SubscriptionLicenseRepository.hasOfflineAccess(
+                license,
+                nowElapsedRealtime = 5_000L,
+                currentBootId = "boot-a",
+            ),
+        )
+    }
+
+    @Test
+    fun offlineGrantCannotOutliveSubscriptionExpiry() {
+        val license = offlineLicense(expiresAt = serverNow + 30L * 60L * 1000L)
+        assertEquals(
+            false,
+            SubscriptionLicenseRepository.hasOfflineAccess(
+                license,
+                nowElapsedRealtime = 10_000L + 31L * 60L * 1000L,
+                currentBootId = "boot-a",
+            ),
+        )
     }
 
     @Test
@@ -46,11 +113,12 @@ class SubscriptionLicenseRepositoryTest {
         val result = SubscriptionLicenseRepository.parseValidationResponse(
             503,
             """{"error":"temporarily unavailable"}""",
-            now,
+            serverNow,
         )
 
         assertEquals(SubscriptionLicenseRepository.ValidationResult.NetworkError, result)
     }
+
     @Test
     fun emptyOrMalformedKeysAreRejectedByFormatCheck() {
         assertEquals(false, SubscriptionLicenseRepository.isValidKeyFormat(""))
@@ -60,9 +128,17 @@ class SubscriptionLicenseRepositoryTest {
 
     @Test
     fun malformedSuccessBodyIsTreatedAsNetworkError() {
-        val result = SubscriptionLicenseRepository.parseValidationResponse(200, "not-json", now)
+        val result = SubscriptionLicenseRepository.parseValidationResponse(200, "not-json", serverNow)
 
         assertEquals(SubscriptionLicenseRepository.ValidationResult.NetworkError, result)
     }
 
+    private fun offlineLicense(expiresAt: Long = serverNow + 48L * 60L * 60L * 1000L) =
+        SubscriptionLicenseRepository.StoredLicense(
+            key = "pc_" + "a".repeat(64),
+            expiresAtMillis = expiresAt,
+            serverTimeMillis = serverNow,
+            validatedAtElapsedRealtime = 10_000L,
+            bootId = "boot-a",
+        )
 }
