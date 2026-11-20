@@ -6,6 +6,8 @@ import com.v2ray.ang.util.LogUtil
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.os.SystemClock
+import java.io.File
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import okhttp3.MediaType.Companion.toMediaType
@@ -41,12 +43,18 @@ object SubscriptionLicenseRepository {
         .callTimeout(12, TimeUnit.SECONDS)
         .build()
 
-    data class StoredLicense(val key: String, val expiresAtMillis: Long)
+    data class StoredLicense(
+        val key: String,
+        val expiresAtMillis: Long,
+        val serverTimeMillis: Long,
+        val validatedAtElapsedRealtime: Long,
+        val bootId: String?,
+    )
 
     internal fun isValidKeyFormat(key: String): Boolean = keyPattern.matches(key)
 
     sealed class ValidationResult {
-        data class Active(val expiresAtMillis: Long) : ValidationResult()
+        data class Active(val expiresAtMillis: Long, val serverTimeMillis: Long) : ValidationResult()
         data class Rejected(val status: String) : ValidationResult()
         data object NetworkError : ValidationResult()
     }
@@ -98,7 +106,16 @@ object SubscriptionLicenseRepository {
             json.get("expiresAtMillis")?.takeIf { !it.isJsonNull }?.asLong ?: 0L
         }.getOrDefault(0L)
         if (expiry <= 0L) return null
-        return StoredLicense(key, expiry)
+        val serverTime = runCatching {
+            json.get("serverTimeMillis")?.takeIf { !it.isJsonNull }?.asLong ?: 0L
+        }.getOrDefault(0L)
+        val elapsed = runCatching {
+            json.get("validatedAtElapsedRealtime")?.takeIf { !it.isJsonNull }?.asLong ?: 0L
+        }.getOrDefault(0L)
+        val boot = runCatching {
+            json.get("bootId")?.takeIf { !it.isJsonNull }?.asString
+        }.getOrNull()
+        return StoredLicense(key, expiry, serverTime, elapsed, boot)
     }
 
     fun getStoredLicense(): StoredLicense? {
@@ -123,11 +140,14 @@ object SubscriptionLicenseRepository {
         return license
     }
 
-    fun saveActiveLicense(key: String, expiresAtMillis: Long): Boolean {
-        if (!isValidKeyFormat(key) || expiresAtMillis <= System.currentTimeMillis()) return false
+    fun saveActiveLicense(key: String, expiresAtMillis: Long, serverTimeMillis: Long): Boolean {
+        if (!isValidKeyFormat(key) || serverTimeMillis <= 0L || expiresAtMillis <= serverTimeMillis) return false
         val value = JsonObject().apply {
             addProperty("key", key)
             addProperty("expiresAtMillis", expiresAtMillis)
+            addProperty("serverTimeMillis", serverTimeMillis)
+            addProperty("validatedAtElapsedRealtime", SystemClock.elapsedRealtime())
+            currentBootId()?.let { addProperty("bootId", it) }
         }.toString()
         return runCatching {
             MmkvManager.encodeSettings(STORAGE_KEY, encryptRecord(value))
@@ -136,12 +156,36 @@ object SubscriptionLicenseRepository {
         }.getOrDefault(false)
     }
 
-    fun isExpired(license: StoredLicense, nowMillis: Long = System.currentTimeMillis()): Boolean =
-        license.expiresAtMillis <= nowMillis
+    internal fun currentBootId(): String? = runCatching {
+        File("/proc/sys/kernel/random/boot_id").readText().trim().takeIf { it.isNotEmpty() }
+    }.getOrNull()
 
-    /** Fast, offline entitlement gate used by every service-start path. */
-    fun hasActiveLocalLicense(nowMillis: Long = System.currentTimeMillis()): Boolean =
-        getStoredLicense()?.let { !isExpired(it, nowMillis) } == true
+    /**
+     * Offline access is granted only while the device can prove it is still in
+     * the same boot session as the last successful server validation.
+     * Wall-clock time is deliberately not consulted.
+     */
+    internal fun hasOfflineAccess(
+        license: StoredLicense,
+        nowElapsedRealtime: Long = SystemClock.elapsedRealtime(),
+        currentBootId: String? = currentBootId(),
+    ): Boolean {
+        if (license.serverTimeMillis <= 0L ||
+            license.validatedAtElapsedRealtime <= 0L ||
+            license.bootId.isNullOrBlank() ||
+            currentBootId.isNullOrBlank() ||
+            license.bootId != currentBootId
+        ) return false
+
+        val elapsedSinceValidation = nowElapsedRealtime - license.validatedAtElapsedRealtime
+        if (elapsedSinceValidation < 0L || elapsedSinceValidation >= OFFLINE_GRACE_MILLIS) return false
+        val estimatedServerTime = license.serverTimeMillis + elapsedSinceValidation
+        return estimatedServerTime < license.expiresAtMillis
+    }
+
+    companion object {
+        const val OFFLINE_GRACE_MILLIS = 24L * 60L * 60L * 1000L
+    }
 
     fun validate(key: String): ValidationResult {
         if (!isValidKeyFormat(key)) return ValidationResult.Rejected("invalid")
@@ -203,8 +247,11 @@ object SubscriptionLicenseRepository {
         val expiry = runCatching {
             Instant.parse(json.get("expiresAt").asString).toEpochMilli()
         }.getOrNull() ?: return ValidationResult.NetworkError
+        val serverTime = runCatching {
+            Instant.parse(json.get("serverTime").asString).toEpochMilli()
+        }.getOrNull() ?: return ValidationResult.NetworkError
 
-        if (expiry <= nowMillis) return ValidationResult.Rejected("expired")
-        return ValidationResult.Active(expiry)
+        if (expiry <= serverTime) return ValidationResult.Rejected("expired")
+        return ValidationResult.Active(expiry, serverTime)
     }
 }
