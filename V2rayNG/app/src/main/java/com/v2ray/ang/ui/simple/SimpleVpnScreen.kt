@@ -654,6 +654,7 @@ private fun ServerRow(
         Text(
             text = server.displayName,
             modifier = Modifier.weight(1f),
+            color = Color(0xFFEAF4FF),
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         )
         DelayLabel(delayMillis = server.delayMillis, testing = testing)
@@ -663,10 +664,11 @@ private fun ServerRow(
 
 @Composable
 private fun DelayLabel(delayMillis: Long?, testing: Boolean) {
+    // Match the V2Ray list: keep the delay area empty until a test has run.
+    if (!testing && (delayMillis == null || delayMillis == 0L)) return
     val text = when {
         testing -> stringResource(R.string.simple_testing)
-        // AetherDelayTester uses 0 as its explicit "not tested" sentinel.
-        delayMillis == null || delayMillis == 0L -> stringResource(R.string.simple_not_tested)
+        delayMillis == null || delayMillis == 0L -> ""
         delayMillis < 0 -> stringResource(R.string.simple_timeout)
         else -> stringResource(R.string.simple_delay_ms, delayMillis)
     }
@@ -835,15 +837,49 @@ private fun ConnectionBar(
             ),
             contentPadding = PaddingValues(8.dp),
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                androidx.compose.material3.Icon(
-                    painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_lock_power_off),
-                    contentDescription = actionText,
-                    modifier = Modifier.size(39.dp),
-                    tint = actionContentColor,
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(actionText, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = actionContentColor)
+            // Layered metallic face: steel rim, dark inset and a soft illuminated core.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                Color(0xFFE0F0F7),
+                                Color(0xFF7898AE),
+                                Color(0xFF263F59),
+                                Color(0xFFB5CEDB),
+                            )
+                        )
+                    )
+                    .border(1.dp, Color(0xFFE7F8FF), CircleShape)
+                    .padding(4.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            colors = when (status) {
+                                SimpleConnectionStatus.DISCONNECTED ->
+                                    listOf(Color(0xFF47799F), Color(0xFF183957), Color(0xFF07172C))
+                                SimpleConnectionStatus.CONNECTING ->
+                                    listOf(Color(0xFFFFD69A), Color(0xFF9A5D2D), Color(0xFF291A16))
+                                SimpleConnectionStatus.CONNECTED ->
+                                    listOf(Color(0xFF55F4DE), Color(0xFF126D78), Color(0xFF06263B))
+                            }
+                        )
+                    )
+                    .border(1.dp, Color(0x885DE5F5), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    androidx.compose.material3.Icon(
+                        painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_lock_power_off),
+                        contentDescription = actionText,
+                        modifier = Modifier.size(39.dp),
+                        tint = actionContentColor,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(actionText, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = actionContentColor)
+                }
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
