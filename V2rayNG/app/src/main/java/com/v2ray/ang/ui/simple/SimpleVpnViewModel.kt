@@ -1274,8 +1274,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     val offlineAccess = withContext(Dispatchers.IO) {
                         SubscriptionLicenseRepository.hasOfflineAccess(stored)
                     }
-                    val canConnectOffline = offlineAccess && canConnectForSource(_uiState.value.selectedSourceId)
-                    if (!canConnectOffline) {
+                    if (!offlineAccess) {
                         _uiState.update {
                             it.copy(
                                 status = SimpleConnectionStatus.DISCONNECTED,
@@ -1284,6 +1283,20 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                                 canConnect = false,
                                 licenseDialogVisible = true,
                                 message = app.getString(R.string.simple_license_network_error),
+                            )
+                        }
+                        return@launch
+                    }
+                    val canConnectOffline = canConnectForSource(_uiState.value.selectedSourceId)
+                    if (!canConnectOffline) {
+                        _uiState.update {
+                            it.copy(
+                                status = SimpleConnectionStatus.DISCONNECTED,
+                                isValidatingLicense = false,
+                                licenseValid = true,
+                                canConnect = false,
+                                licenseExpiresAtMillis = stored.expiresAtMillis,
+                                message = app.getString(R.string.simple_no_servers_available),
                             )
                         }
                         return@launch
