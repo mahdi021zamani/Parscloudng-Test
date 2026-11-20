@@ -214,7 +214,7 @@ fun SimpleVpnScreen(
     }
 
     Scaffold(
-        containerColor = Color(0xFF0D0C12),
+        containerColor = Color(0xFF071126),
         topBar = {
             TopAppBar(
                 title = {
@@ -224,20 +224,20 @@ fun SimpleVpnScreen(
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.1.sp,
-                            color = Color(0xFFF5EAF0),
+                            color = Color(0xFFEAF7FF),
                             maxLines = 1,
                         )
                         Text(
                             "اتصال امن و پایدار",
                             fontSize = 10.sp,
-                            color = Color(0xFFAAA0AC),
+                            color = Color(0xFF91A9C7),
                             maxLines = 1,
                         )
                     }
                 },
                 colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF121117),
-                    titleContentColor = Color(0xFFF5EAF0),
+                    containerColor = Color(0xFF0C1830),
+                    titleContentColor = Color(0xFFEAF7FF),
                 ),
             )
         },
@@ -245,8 +245,8 @@ fun SimpleVpnScreen(
             SnackbarHost(snackbarHostState) { data ->
                 Snackbar(
                     snackbarData = data,
-                    containerColor = Color(0xFF29232B),
-                    contentColor = Color(0xFFFFF6FA),
+                    containerColor = Color(0xFF142642),
+                    contentColor = Color(0xFFEAF7FF),
                     shape = RoundedCornerShape(20.dp),
                 )
             }
@@ -255,7 +255,7 @@ fun SimpleVpnScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF0D0C12))
+                .background(Color(0xFF071126))
                 .padding(padding)
         ) {
             Row(
@@ -266,12 +266,12 @@ fun SimpleVpnScreen(
                     .clip(RoundedCornerShape(20.dp))
                     .background(
                         Brush.linearGradient(
-                            listOf(Color(0xCC302638), Color(0xCC191923), Color(0xCC292231))
+                            listOf(Color(0xCC1A3152), Color(0xCC101D35), Color(0xCC142642))
                         )
                     )
                     .border(
                         1.dp,
-                        Brush.linearGradient(listOf(Color(0x66FFD5E8), Color(0x1AFFFFFF), Color(0x55B58AA8))),
+                        Brush.linearGradient(listOf(Color(0x66FFD5E8), Color(0x1AFFFFFF), Color(0x5555BCE0))),
                         RoundedCornerShape(20.dp)
                     )
                     .padding(horizontal = 6.dp, vertical = 5.dp),
@@ -368,8 +368,8 @@ fun SimpleVpnScreen(
                 ScrollableTabRow(
                     selectedTabIndex = selectedProfileIndex,
                     edgePadding = 8.dp,
-                    containerColor = Color(0xFF17151D),
-                    contentColor = Color(0xFFE9B0C8),
+                    containerColor = Color(0xFF0D1B35),
+                    contentColor = Color(0xFF65DDF2),
                 ) {
                     Tab(
                         selected = selectedProfileIndex == 0,
@@ -450,8 +450,8 @@ fun SimpleVpnScreen(
             if (isV2RaySelected) {
                 TabRow(
                     selectedTabIndex = if (uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID) 0 else 1,
-                    containerColor = Color(0xFF121117),
-                    contentColor = Color(0xFFE9B0C8),
+                    containerColor = Color(0xFF0C1830),
+                    contentColor = Color(0xFF65DDF2),
                 ) {
                     Tab(
                         selected = uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID,
@@ -531,9 +531,9 @@ private fun ServerList(
                             .shadow(7.dp, RoundedCornerShape(15.dp))
                             .clip(RoundedCornerShape(15.dp))
                             .background(
-                                Brush.linearGradient(listOf(Color(0xCC49394D), Color(0xCC292431)))
+                                Brush.linearGradient(listOf(Color(0xCC1B3457), Color(0xCC10213B)))
                             )
-                            .border(1.dp, Color(0x44F4D8E8), RoundedCornerShape(15.dp))
+                            .border(1.dp, Color(0x4468DDF5), RoundedCornerShape(15.dp))
                             .padding(start = 14.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -617,15 +617,15 @@ private fun ServerRow(
             .clip(RoundedCornerShape(17.dp))
             .background(
                 if (selected) {
-                    Brush.linearGradient(listOf(Color(0xFF65465D), Color(0xFF392B40), Color(0xFF493344)))
+                    Brush.linearGradient(listOf(Color(0xFF244D70), Color(0xFF142C49), Color(0xFF1A3B59)))
                 } else {
-                    Brush.linearGradient(listOf(Color(0xCC35313D), Color(0xCC22212B)))
+                    Brush.linearGradient(listOf(Color(0xCC1A2A43), Color(0xCC101D32)))
                 }
             )
             .border(
                 1.dp,
                 if (selected) {
-                    Brush.linearGradient(listOf(Color(0x99FFD2E7), Color(0x338E7390)))
+                    Brush.linearGradient(listOf(Color(0x996BE8F7), Color(0x338E7390)))
                 } else {
                     Brush.linearGradient(listOf(Color(0x44FFFFFF), Color(0x117F7485)))
                 },
@@ -640,7 +640,7 @@ private fun ServerRow(
             enabled = enabled,
             onClick = onSelect,
             colors = androidx.compose.material3.RadioButtonDefaults.colors(
-                selectedColor = Color(0xFFFF8FBD),
+                selectedColor = Color(0xFF58DDF0),
                 unselectedColor = Color(0xFFB8B1BF),
                 disabledSelectedColor = Color(0xFFB77C9B),
                 disabledUnselectedColor = Color(0xFF77717D),
@@ -702,25 +702,15 @@ private fun ConnectionBar(
         }
     }
 
-    val statusText = when (status) {
-        SimpleConnectionStatus.DISCONNECTED -> stringResource(R.string.simple_status_disconnected)
-        SimpleConnectionStatus.CONNECTING -> stringResource(R.string.simple_status_connecting)
-        SimpleConnectionStatus.CONNECTED -> ""
-    }
     val statusColor = when (status) {
-        SimpleConnectionStatus.DISCONNECTED -> Color(0xFFAAA3AE)
-        SimpleConnectionStatus.CONNECTING -> Color(0xFFE7B36B)
-        SimpleConnectionStatus.CONNECTED -> Color(0xFF78D6A8)
-    }
-    val actionContainerColor = when (status) {
-        SimpleConnectionStatus.DISCONNECTED -> Color(0xFFE9A9C4)
-        SimpleConnectionStatus.CONNECTING -> Color(0xFFE7B36B)
-        SimpleConnectionStatus.CONNECTED -> Color(0xFF101014)
+        SimpleConnectionStatus.DISCONNECTED -> Color(0xFF9AA9C5)
+        SimpleConnectionStatus.CONNECTING -> Color(0xFFFFC36B)
+        SimpleConnectionStatus.CONNECTED -> Color(0xFF55F0C2)
     }
     val actionContentColor = when (status) {
-        SimpleConnectionStatus.DISCONNECTED -> Color(0xFF241820)
-        SimpleConnectionStatus.CONNECTING -> Color(0xFF241820)
-        SimpleConnectionStatus.CONNECTED -> Color(0xFFF8F2F6)
+        SimpleConnectionStatus.DISCONNECTED -> Color(0xFFBDFBFF)
+        SimpleConnectionStatus.CONNECTING -> Color(0xFF2A1D12)
+        SimpleConnectionStatus.CONNECTED -> Color(0xFFB8FFF0)
     }
     val actionText = when (status) {
         SimpleConnectionStatus.DISCONNECTED -> "اتصال"
@@ -737,8 +727,12 @@ private fun ConnectionBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color(0xFF211B27), Color(0xFF111018))))
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF101C3A), Color(0xFF071126), Color(0xFF080D1C))
+                )
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val remainingMillis = (licenseExpiresAtMillis ?: 0L) - System.currentTimeMillis()
@@ -748,124 +742,116 @@ private fun ConnectionBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(13.dp))
-                .background(Color(0xFF1A1720))
-                .border(1.dp, Color(0x332C2732), RoundedCornerShape(13.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .clip(RoundedCornerShape(18.dp))
+                .background(Brush.linearGradient(listOf(Color(0xCC17294A), Color(0xCC101A32))))
+                .border(1.dp, Color(0x6656DDF5), RoundedCornerShape(18.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
-                Text("اعتبار PARSCLOUD", color = Color(0xFFBEB3C2), fontSize = 10.sp)
+                Text("اعتبار PARSCLOUD", color = Color(0xFF9CB6D5), fontSize = 10.sp)
                 Text(
                     if (licenseExpiresAtMillis == null) "در حال دریافت اطلاعات"
                     else if (remainingDays > 0L) "$remainingDays روز باقی‌مانده"
                     else "منقضی‌شده",
-                    color = if (remainingDays > 0L) Color(0xFFE8C6D8) else Color(0xFFFF9AA8),
+                    color = if (remainingDays > 0L) Color(0xFFB8FFF0) else Color(0xFFFF9AA8),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text("حجم مصرفی", color = Color(0xFFBEB3C2), fontSize = 10.sp)
-                Text("نامحدود", color = Color(0xFF9FE0C2), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("حجم مصرفی", color = Color(0xFF9CB6D5), fontSize = 10.sp)
+                Text("نامحدود", color = Color(0xFF72E8C4), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
         }
+
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = selectedServerName?.takeIf { it.isNotBlank() } ?: "یک سرور انتخاب کن",
-            color = Color(0xFFF5EAF0),
+            color = Color(0xFFEAF7FF),
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (status != SimpleConnectionStatus.CONNECTED) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(statusColor)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = statusText,
-                    color = statusColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
+        Spacer(modifier = Modifier.height(5.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(statusColor)
+            )
+            Spacer(modifier = Modifier.width(7.dp))
+            Text(
+                text = when (status) {
+                    SimpleConnectionStatus.DISCONNECTED -> "آماده اتصال"
+                    SimpleConnectionStatus.CONNECTING -> "در حال برقراری اتصال..."
+                    SimpleConnectionStatus.CONNECTED -> "متصل • $timerText"
+                },
+                color = statusColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
         androidx.compose.material3.Button(
-            onClick = {
-                // Keep CONNECTING cancellable and preserve the existing connection callback.
-                if (status == SimpleConnectionStatus.CONNECTING ||
-                    status == SimpleConnectionStatus.CONNECTED || canConnect
-                ) onConnectClick()
-            },
+            onClick = onConnectClick,
             enabled = actionEnabled,
             modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
+                .size(112.dp)
                 .shadow(
-                    elevation = if (status == SimpleConnectionStatus.CONNECTED) 13.dp else 5.dp,
-                    shape = RoundedCornerShape(18.dp),
-                    ambientColor = if (status == SimpleConnectionStatus.CONNECTED) Color(0xFF000000) else Color(0xFFB77F9A),
-                    spotColor = if (status == SimpleConnectionStatus.CONNECTED) Color(0xFF000000) else Color(0xFFB77F9A),
+                    elevation = 20.dp,
+                    shape = CircleShape,
+                    ambientColor = Color(0xFF22DDF2),
+                    spotColor = Color(0xFF22DDF2),
                 )
-                .clip(RoundedCornerShape(18.dp))
+                .clip(CircleShape)
                 .background(
-                    if (status == SimpleConnectionStatus.CONNECTED) {
-                        Brush.verticalGradient(listOf(Color(0xFF29262E), Color(0xFF08080B), Color(0xFF17151B)))
-                    } else {
-                        Brush.verticalGradient(listOf(actionContainerColor, actionContainerColor.copy(alpha = 0.86f)))
-                    }
+                    Brush.radialGradient(
+                        colors = when (status) {
+                            SimpleConnectionStatus.DISCONNECTED ->
+                                listOf(Color(0xFF315D83), Color(0xFF102D50), Color(0xFF07172F))
+                            SimpleConnectionStatus.CONNECTING ->
+                                listOf(Color(0xFFFFD18A), Color(0xFFB87531), Color(0xFF51301D))
+                            SimpleConnectionStatus.CONNECTED ->
+                                listOf(Color(0xFF42E8D0), Color(0xFF126F79), Color(0xFF092B42))
+                        }
+                    )
                 )
                 .border(
-                    width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        if (status == SimpleConnectionStatus.CONNECTED)
-                            listOf(Color(0xFF514B58), Color(0xFF17151B), Color(0xFF393440))
-                        else listOf(Color(0x66FFFFFF), Color(0x22808080))
-                    ),
-                    shape = RoundedCornerShape(18.dp),
+                    2.dp,
+                    Brush.linearGradient(listOf(Color(0xFFE4FFFF), Color(0xFF49DFF4), Color(0xFF527DA8))),
+                    CircleShape,
                 ),
-            shape = RoundedCornerShape(18.dp),
+            shape = CircleShape,
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                 containerColor = Color.Transparent,
                 contentColor = actionContentColor,
-                disabledContainerColor = Color(0xFF51434D),
-                disabledContentColor = Color(0xFFB8AAB2),
+                disabledContainerColor = Color(0xFF27344A),
+                disabledContentColor = Color(0xFF8293A8),
             ),
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(8.dp),
         ) {
-            // Keep the power icon fixed at the visual center in every state.
-            // The label/timer occupies the space to its left, so its width never moves the icon.
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 androidx.compose.material3.Icon(
                     painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_lock_power_off),
-                    contentDescription = if (status == SimpleConnectionStatus.CONNECTED) "قطع اتصال" else "اتصال",
-                    modifier = Modifier.size(21.dp),
+                    contentDescription = actionText,
+                    modifier = Modifier.size(39.dp),
                     tint = actionContentColor,
                 )
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Text(
-                        text = if (status == SimpleConnectionStatus.CONNECTED) "$actionText  •  $timerText" else actionText,
-                        modifier = Modifier
-                            .fillMaxWidth(0.46f)
-                            .align(Alignment.CenterStart),
-                        textAlign = TextAlign.End,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = actionContentColor,
-                        maxLines = 1,
-                        softWrap = false,
-                    )
-                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(actionText, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = actionContentColor)
             }
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "PARSCLOUD  •  اتصال امن و پایدار",
+            color = Color(0xFF7795B8),
+            fontSize = 10.sp,
+            letterSpacing = 0.5.sp,
+        )
     }
 }
