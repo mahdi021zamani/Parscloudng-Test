@@ -271,6 +271,21 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     fun onAppResumed() {
         if (_uiState.value.isValidatingLicense) return
 
+        // Start the resume check before any disk I/O. If the offline grace expired
+        // while the app was backgrounded, do not briefly render the stale dialog
+        // while an online validation is already about to restore the entitlement.
+        // Keep the dialog visible for a first launch where no saved expiry exists.
+        _uiState.update {
+            it.copy(
+                isValidatingLicense = true,
+                licenseDialogVisible = if (it.licenseExpiresAtMillis != null || it.licenseValid) {
+                    false
+                } else {
+                    it.licenseDialogVisible
+                },
+            )
+        }
+
         viewModelScope.launch {
             val stored = withContext(Dispatchers.IO) {
                 SubscriptionLicenseRepository.getStoredLicense()
@@ -278,6 +293,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             if (stored == null) {
                 _uiState.update {
                     it.copy(
+                        isValidatingLicense = false,
                         licenseValid = false,
                         canConnect = false,
                         licenseDialogVisible = true,
