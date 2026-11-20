@@ -233,24 +233,30 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
 
-        // Check the saved expiry locally while the app process is alive. This does
-        // not make a network request and locks the app at expiry; it deliberately
-        // does not stop an already-running tunnel solely because the local clock
-        // reached the saved expiry.
+        // Enforce the 24-hour offline window using boot-scoped monotonic time.
+        // A wall-clock change cannot extend this grant. The running tunnel is not
+        // stopped solely because the offline window ends.
         viewModelScope.launch {
             while (isActive) {
                 delay(60_000)
                 val state = _uiState.value
-                val expiresAt = state.licenseExpiresAtMillis
-                if (state.licenseValid && expiresAt != null && expiresAt <= System.currentTimeMillis()) {
-                    LogUtil.w(AppConfig.TAG, "Subscription monitor: local entitlement expired; locking app UI")
-                    _uiState.update {
-                        it.copy(
-                            licenseValid = false,
-                            canConnect = false,
-                            licenseDialogVisible = true,
-                            message = getApplication<Application>().getString(R.string.simple_license_invalid),
-                        )
+                if (state.licenseValid) {
+                    val stored = withContext(Dispatchers.IO) {
+                        SubscriptionLicenseRepository.getStoredLicense()
+                    }
+                    val offlineAccess = stored != null && withContext(Dispatchers.IO) {
+                        SubscriptionLicenseRepository.hasOfflineAccess(stored)
+                    }
+                    if (!offlineAccess) {
+                        LogUtil.w(AppConfig.TAG, "Subscription monitor: offline entitlement unavailable; locking app UI")
+                        _uiState.update {
+                            it.copy(
+                                licenseValid = false,
+                                canConnect = false,
+                                licenseDialogVisible = true,
+                                message = getApplication<Application>().getString(R.string.simple_license_network_error),
+                            )
+                        }
                     }
                 }
             }
@@ -1035,7 +1041,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         SubscriptionLicenseRepository.getStoredLicense()
                     }
                     val saved = withContext(Dispatchers.IO) {
-                        SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis)
+                        SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis, result.serverTimeMillis)
                     }
                     if (!saved) {
                         _uiState.update {
@@ -1096,7 +1102,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         }) {
             is SubscriptionLicenseRepository.ValidationResult.Active -> {
                 val saved = withContext(Dispatchers.IO) {
-                    SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis)
+                    SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis, result.serverTimeMillis)
                 }
                 val canConnect = saved && canConnectForSource(_uiState.value.selectedSourceId)
                 _uiState.update {
@@ -1124,18 +1130,18 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             SubscriptionLicenseRepository.ValidationResult.NetworkError -> {
-                val locallyActive = stored != null && !SubscriptionLicenseRepository.isExpired(stored)
-                if (!locallyActive) {
-                    stopCurrentService(getApplication())
+                val offlineAccess = stored != null && withContext(Dispatchers.IO) {
+                    SubscriptionLicenseRepository.hasOfflineAccess(stored)
                 }
                 _uiState.update {
                     it.copy(
                         isValidatingLicense = false,
-                        licenseValid = locallyActive,
-                        canConnect = locallyActive && canConnectForSource(it.selectedSourceId),
-                        // A temporary validation network failure is not a rejected subscription.
-                        licenseDialogVisible = showDialogOnFailure && !locallyActive,
-                        message = if (locallyActive) null else getApplication<Application>().getString(R.string.simple_license_network_error),
+                        licenseValid = offlineAccess,
+                        canConnect = offlineAccess && canConnectForSource(it.selectedSourceId),
+                        // Network failure is not revocation; only a valid offline grant
+                        // may keep the app unlocked.
+                        licenseDialogVisible = showDialogOnFailure && !offlineAccess,
+                        message = if (offlineAccess) null else getApplication<Application>().getString(R.string.simple_license_network_error),
                     )
                 }
             }
@@ -1191,7 +1197,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             }) {
                 is SubscriptionLicenseRepository.ValidationResult.Active -> {
                     val saved = withContext(Dispatchers.IO) {
-                        SubscriptionLicenseRepository.saveActiveLicense(stored.key, result.expiresAtMillis)
+                        SubscriptionLicenseRepository.saveActiveLicense(stored.key, result.expiresAtMillis, result.serverTimeMillis)
                     }
                     val canConnect = saved && canConnectForSource(_uiState.value.selectedSourceId)
                     if (!canConnect) {
@@ -1265,19 +1271,61 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 }
 
                 SubscriptionLicenseRepository.ValidationResult.NetworkError -> {
-                    val locallyActive = !SubscriptionLicenseRepository.isExpired(stored)
-                    if (!locallyActive) {
-                        stopCurrentService(app)
+                    val offlineAccess = withContext(Dispatchers.IO) {
+                        SubscriptionLicenseRepository.hasOfflineAccess(stored)
                     }
+                    val canConnectOffline = offlineAccess && canConnectForSource(_uiState.value.selectedSourceId)
+                    if (!canConnectOffline) {
+                        _uiState.update {
+                            it.copy(
+                                status = SimpleConnectionStatus.DISCONNECTED,
+                                isValidatingLicense = false,
+                                licenseValid = false,
+                                canConnect = false,
+                                licenseDialogVisible = true,
+                                message = app.getString(R.string.simple_license_network_error),
+                            )
+                        }
+                        return@launch
+                    }
+
+                    SubscriptionLicenseWorker.schedule(app)
                     _uiState.update {
                         it.copy(
-                            status = SimpleConnectionStatus.DISCONNECTED,
                             isValidatingLicense = false,
-                            licenseValid = locallyActive,
-                            canConnect = locallyActive && canConnectForSource(it.selectedSourceId),
-                            // A transient validation outage must not disable either protocol tab.
-                            message = if (locallyActive) null else app.getString(R.string.simple_license_network_error),
+                            licenseValid = true,
+                            licenseExpiresAtMillis = stored.expiresAtMillis,
+                            canConnect = true,
                         )
+                    }
+                    try {
+                        val startedSessionId = LauncherManager.startService(app, guid)
+                        if (startedSessionId == null) {
+                            expectedServiceSessionId = null
+                            _uiState.update {
+                                it.copy(
+                                    status = SimpleConnectionStatus.DISCONNECTED,
+                                    isValidatingLicense = false,
+                                    licenseValid = true,
+                                    canConnect = true,
+                                    message = app.getString(R.string.simple_connect_failed),
+                                )
+                            }
+                        } else {
+                            expectedServiceSessionId = startedSessionId
+                        }
+                    } catch (e: Exception) {
+                        expectedServiceSessionId = null
+                        LogUtil.e(AppConfig.TAG, "SimpleVpnViewModel: failed to start service during offline grace", e)
+                        _uiState.update {
+                            it.copy(
+                                status = SimpleConnectionStatus.DISCONNECTED,
+                                isValidatingLicense = false,
+                                licenseValid = true,
+                                canConnect = true,
+                                message = app.getString(R.string.simple_connect_failed),
+                            )
+                        }
                     }
                 }
             }
