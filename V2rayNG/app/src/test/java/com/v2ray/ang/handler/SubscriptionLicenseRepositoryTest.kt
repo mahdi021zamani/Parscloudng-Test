@@ -54,13 +54,14 @@ class SubscriptionLicenseRepositoryTest {
     }
 
     @Test
-    fun offlineGrantIsValidOnlyWithinTwentyFourHoursOnSameBoot() {
+    fun offlineGrantIsValidOnlyWithinConfiguredGraceOnSameBoot() {
         val license = offlineLicense()
+        val grace = SubscriptionLicenseRepository.OFFLINE_GRACE_MILLIS
         assertEquals(
             true,
             SubscriptionLicenseRepository.hasOfflineAccess(
                 license,
-                nowElapsedRealtime = 10_000L + 23L * 60L * 60L * 1000L,
+                nowElapsedRealtime = 10_000L + grace - 1L,
                 currentBootId = "boot-a",
             ),
         )
@@ -68,7 +69,7 @@ class SubscriptionLicenseRepositoryTest {
             false,
             SubscriptionLicenseRepository.hasOfflineAccess(
                 license,
-                nowElapsedRealtime = 10_000L + 24L * 60L * 60L * 1000L,
+                nowElapsedRealtime = 10_000L + grace,
                 currentBootId = "boot-a",
             ),
         )
