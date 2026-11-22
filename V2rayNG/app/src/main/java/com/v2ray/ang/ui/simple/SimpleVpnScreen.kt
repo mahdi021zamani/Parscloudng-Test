@@ -36,6 +36,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -379,6 +381,14 @@ fun SimpleVpnScreen(
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 ScrollableTabRow(
                     selectedTabIndex = selectedProfileIndex,
+                    // Personal tabs are dynamic. During a tab-count change, Material3 can
+                    // briefly expose the previous positions list; its default indicator
+                    // indexes it directly and can crash. Wait for the selected position.
+                    indicator = { tabPositions ->
+                        tabPositions.getOrNull(selectedProfileIndex)?.let { position ->
+                            TabRowDefaults.Indicator(Modifier.tabIndicatorOffset(position))
+                        }
+                    },
                     edgePadding = 8.dp,
                     containerColor = Color(0xFF0D1B35),
                     contentColor = Color(0xFF65DDF2),
