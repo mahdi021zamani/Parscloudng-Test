@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import com.v2ray.ang.R
 import com.v2ray.ang.handler.SimpleVpnRepository
 import com.v2ray.ang.handler.SimpleVpnRepository.SimpleServerUiModel
+import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,6 +117,7 @@ fun SimpleVpnScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
+                    LogUtil.w(message = "IMPORT_TRACE UI add clicked chars=${personalText.length} lines=${personalText.lineSequence().count()}")
                     viewModel.importPersonalConfig(personalText)
                     personalText = ""
                     showPersonalImport = false
