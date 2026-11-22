@@ -277,7 +277,11 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
      * action or the best-effort periodic WorkManager check.
      */
     fun onAppResumed() {
-        if (_uiState.value.isValidatingLicense) return
+        ImportDiagnosticLog.record(getApplication(), "VM onAppResumed validating=${_uiState.value.isValidatingLicense}")
+        if (_uiState.value.isValidatingLicense) {
+            ImportDiagnosticLog.record(getApplication(), "VM onAppResumed skipped validation already running")
+            return
+        }
 
         // Start the resume check before any disk I/O. If the offline grace expired
         // while the app was backgrounded, do not briefly render the stale dialog
@@ -1127,13 +1131,21 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private suspend fun validateStoredLicense(key: String, showDialogOnFailure: Boolean) {
+        ImportDiagnosticLog.record(getApplication(), "VM license validation started showDialogOnFailure=$showDialogOnFailure")
         _uiState.update { it.copy(isValidatingLicense = true) }
         val stored = withContext(Dispatchers.IO) {
             SubscriptionLicenseRepository.getStoredLicense()
         }
-        when (val result = withContext(Dispatchers.IO) {
+        val validationResult = withContext(Dispatchers.IO) {
             SubscriptionLicenseRepository.validate(key)
-        }) {
+        }
+        val validationLabel = when (validationResult) {
+            is SubscriptionLicenseRepository.ValidationResult.Active -> "Active"
+            is SubscriptionLicenseRepository.ValidationResult.Rejected -> "Rejected"
+            SubscriptionLicenseRepository.ValidationResult.NetworkError -> "NetworkError"
+        }
+        ImportDiagnosticLog.record(getApplication(), "VM license validation response=$validationLabel")
+        when (val result = validationResult) {
             is SubscriptionLicenseRepository.ValidationResult.Active -> {
                 val saved = withContext(Dispatchers.IO) {
                     SubscriptionLicenseRepository.saveActiveLicense(key, result.expiresAtMillis, result.serverTimeMillis)
@@ -1184,6 +1196,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
         }
+        ImportDiagnosticLog.record(getApplication(), "VM license validation finished validating=${_uiState.value.isValidatingLicense} licenseValid=${_uiState.value.licenseValid}")
     }
 
     /** Called when the user cancels/denies the VPN permission prompt. */
