@@ -420,67 +420,97 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            ImportDiagnosticLog.record(getApplication(), "VM worker started")
-            LogUtil.w(message = "IMPORT_TRACE VM worker started")
-            val subscriptionUrls = normalized.lineSequence().map { it.trim() }
-                .filter { Utils.isValidSubUrl(it) }.distinct().toList()
-            val configLines = normalized.lineSequence().map { it.trim() }
-                .filter { it.isNotEmpty() && !Utils.isValidSubUrl(it) }.joinToString("\n")
-            ImportDiagnosticLog.record(getApplication(), "VM classified subscriptions=${subscriptionUrls.size} configLines=${configLines.lineSequence().count()}")
-            LogUtil.w(message = "IMPORT_TRACE VM classified subscriptions=${subscriptionUrls.size} configLines=${configLines.lineSequence().count()}")
-            var imported = 0
-            var lastImportedSubscriptionId: String? = null
-            val existingPersonalSubscriptions = MmkvManager.decodeSubscriptions()
-                .filter { it.guid.startsWith("personal_sub_") }
-            subscriptionUrls.forEach { url ->
-                val existing = existingPersonalSubscriptions.firstOrNull { it.subscription.url == url }
-                if (existing != null) {
-                    lastImportedSubscriptionId = existing.guid
-                    return@forEach
-                }
-                val id = "personal_sub_" + Utils.getUuid()
-                val item = SubscriptionItem(
-                    remarks = SimpleVpnRepository.personalSubscriptionName(url),
-                    url = url,
-                    enabled = true,
-                    autoUpdate = false,
-                )
-                MmkvManager.encodeSubscription(id, item)
-                imported += com.v2ray.ang.handler.AngConfigManager
-                    .updateConfigViaSub(SubscriptionCache(id, item)).configCount
-                lastImportedSubscriptionId = id
-            }
-            if (configLines.isNotBlank()) {
-                imported += com.v2ray.ang.handler.AngConfigManager.importBatchConfigWithoutSubscriptions(
-                    configLines, SimpleVpnRepository.PERSONAL_SUB_ID, true
-                )
-            }
-            val targetSourceId = if (configLines.isNotBlank()) {
-                SimpleVpnRepository.PERSONAL_SUB_ID
-            } else {
-                lastImportedSubscriptionId ?: SimpleVpnRepository.PERSONAL_SUB_ID
-            }
-            ImportDiagnosticLog.record(getApplication(), "VM storage finished imported=$imported")
-            LogUtil.w(message = "IMPORT_TRACE VM storage finished imported=$imported targetSource=$targetSourceId")
-            withContext(Dispatchers.Main) {
-                val servers = SimpleVpnRepository.getPersonalServers(targetSourceId)
-                val selected = MmkvManager.getSelectServer(targetSourceId)
-                    ?.takeIf { guid -> servers.any { it.guid == guid } } ?: servers.firstOrNull()?.guid
-                _uiState.update {
-                    it.copy(
-                        selectedSourceId = targetSourceId,
-                        servers = servers,
-                        selectedGuid = selected,
-                        canConnect = servers.isNotEmpty() && it.licenseValid,
-                        message = if (imported > 0) "$imported مورد شخصی اضافه شد" else "لینک یا کانفیگ قابل شناسایی نیست",
+            try {
+                ImportDiagnosticLog.record(getApplication(), "VM worker started thread=${Thread.currentThread().name}")
+                LogUtil.w(message = "IMPORT_TRACE VM worker started")
+                val subscriptionUrls = normalized.lineSequence().map { it.trim() }
+                    .filter { Utils.isValidSubUrl(it) }.distinct().toList()
+                val configLines = normalized.lineSequence().map { it.trim() }
+                    .filter { it.isNotEmpty() && !Utils.isValidSubUrl(it) }.joinToString("\n")
+                ImportDiagnosticLog.record(getApplication(), "VM classified subscriptions=${subscriptionUrls.size} configLines=${configLines.lineSequence().count()}")
+                LogUtil.w(message = "IMPORT_TRACE VM classified subscriptions=${subscriptionUrls.size} configLines=${configLines.lineSequence().count()}")
+                var imported = 0
+                var lastImportedSubscriptionId: String? = null
+                ImportDiagnosticLog.record(getApplication(), "VM subscription index read started")
+                val existingPersonalSubscriptions = MmkvManager.decodeSubscriptions()
+                    .filter { it.guid.startsWith("personal_sub_") }
+                ImportDiagnosticLog.record(getApplication(), "VM subscription index read finished count=${existingPersonalSubscriptions.size}")
+                subscriptionUrls.forEachIndexed { index, url ->
+                    ImportDiagnosticLog.record(getApplication(), "VM subscription item started index=$index")
+                    val existing = existingPersonalSubscriptions.firstOrNull { it.subscription.url == url }
+                    if (existing != null) {
+                        lastImportedSubscriptionId = existing.guid
+                        ImportDiagnosticLog.record(getApplication(), "VM subscription item already exists index=$index")
+                        return@forEachIndexed
+                    }
+                    val id = "personal_sub_" + Utils.getUuid()
+                    val item = SubscriptionItem(
+                        remarks = SimpleVpnRepository.personalSubscriptionName(url),
+                        url = url,
+                        enabled = true,
+                        autoUpdate = false,
                     )
+                    ImportDiagnosticLog.record(getApplication(), "VM subscription metadata prepared index=$index")
+                    MmkvManager.encodeSubscription(id, item)
+                    ImportDiagnosticLog.record(getApplication(), "VM subscription metadata saved index=$index")
+                    val result = com.v2ray.ang.handler.AngConfigManager
+                        .updateConfigViaSub(SubscriptionCache(id, item))
+                    imported += result.configCount
+                    lastImportedSubscriptionId = id
+                    ImportDiagnosticLog.record(getApplication(), "VM subscription update finished index=$index configs=${result.configCount} failures=${result.failureCount}")
                 }
-                selected?.let {
-                    MmkvManager.setSelectServer(it, targetSourceId)
-                    if (_uiState.value.status == SimpleConnectionStatus.DISCONNECTED) MmkvManager.setSelectServer(it)
+                if (configLines.isNotBlank()) {
+                    ImportDiagnosticLog.record(getApplication(), "VM manual config parse started")
+                    val manualCount = com.v2ray.ang.handler.AngConfigManager.importBatchConfigWithoutSubscriptions(
+                        configLines, SimpleVpnRepository.PERSONAL_SUB_ID, true
+                    )
+                    imported += manualCount
+                    ImportDiagnosticLog.record(getApplication(), "VM manual config parse finished configs=$manualCount")
                 }
-                ImportDiagnosticLog.record(getApplication(), "VM UI published servers=${servers.size} selected=${selected != null}")
-                LogUtil.w(message = "IMPORT_TRACE VM UI published servers=${servers.size} selected=${selected != null}")
+                val targetSourceId = if (configLines.isNotBlank()) {
+                    SimpleVpnRepository.PERSONAL_SUB_ID
+                } else {
+                    lastImportedSubscriptionId ?: SimpleVpnRepository.PERSONAL_SUB_ID
+                }
+                ImportDiagnosticLog.record(getApplication(), "VM storage finished imported=$imported target=$targetSourceId")
+                LogUtil.w(message = "IMPORT_TRACE VM storage finished imported=$imported targetSource=$targetSourceId")
+                withContext(Dispatchers.Main) {
+                    ImportDiagnosticLog.record(getApplication(), "VM UI model read started target=$targetSourceId")
+                    val servers = SimpleVpnRepository.getPersonalServers(targetSourceId)
+                    ImportDiagnosticLog.record(getApplication(), "VM UI model read finished servers=${servers.size}")
+                    val selected = MmkvManager.getSelectServer(targetSourceId)
+                        ?.takeIf { guid -> servers.any { it.guid == guid } } ?: servers.firstOrNull()?.guid
+                    ImportDiagnosticLog.record(getApplication(), "VM selection resolved selected=${selected != null}")
+                    _uiState.update {
+                        it.copy(
+                            selectedSourceId = targetSourceId,
+                            servers = servers,
+                            selectedGuid = selected,
+                            canConnect = servers.isNotEmpty() && it.licenseValid,
+                            message = if (imported > 0) "$imported مورد شخصی اضافه شد" else "لینک یا کانفیگ قابل شناسایی نیست",
+                        )
+                    }
+                    ImportDiagnosticLog.record(getApplication(), "VM state published")
+                    selected?.let {
+                        MmkvManager.setSelectServer(it, targetSourceId)
+                        ImportDiagnosticLog.record(getApplication(), "VM source selection saved")
+                        if (_uiState.value.status == SimpleConnectionStatus.DISCONNECTED) {
+                            MmkvManager.setSelectServer(it)
+                            ImportDiagnosticLog.record(getApplication(), "VM active selection saved")
+                        }
+                    }
+                    ImportDiagnosticLog.record(getApplication(), "VM UI published servers=${servers.size} selected=${selected != null}")
+                    LogUtil.w(message = "IMPORT_TRACE VM UI published servers=${servers.size} selected=${selected != null}")
+                }
+            } catch (error: Exception) {
+                val frames = error.stackTrace.take(16).joinToString(" <- ") {
+                    "${it.className}.${it.methodName}(${it.fileName}:${it.lineNumber})"
+                }
+                ImportDiagnosticLog.record(
+                    getApplication(),
+                    "VM import failed type=${error.javaClass.name} message=${error.message?.take(240)} thread=${Thread.currentThread().name} frames=$frames"
+                )
+                throw error
             }
         }
     }
