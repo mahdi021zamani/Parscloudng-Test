@@ -24,6 +24,7 @@ on:
       - "test/offline-grace-resume-dialog-fix-2026-11-20"
       - "test/offline-grace-auto-revalidation-2026-11-20"
       - "debug/personal-import-background-trace-2026-11-22"
+      - "debug/personal-import-lifecycle-trace-2-2026-11-22"
 
 permissions:
   contents: read
