@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.ui.ScannerActivity
 import com.v2ray.ang.ui.base.BaseComponentActivity
+import com.v2ray.ang.util.LogUtil
 
 /**
  * Simplified single-screen "Free VPN" client: server list + Refresh + Connect/Disconnect.
@@ -38,9 +39,35 @@ class SimpleVpnActivity : BaseComponentActivity() {
             }
         }
 
+    override fun onStart() {
+        super.onStart()
+        LogUtil.w(message = "IMPORT_TRACE Activity onStart taskId=$taskId")
+    }
+
     override fun onResume() {
         super.onResume()
+        LogUtil.w(message = "IMPORT_TRACE Activity onResume taskId=$taskId")
         viewModel.onAppResumed()
+    }
+
+    override fun onPause() {
+        LogUtil.w(message = "IMPORT_TRACE Activity onPause finishing=$isFinishing changingConfig=$isChangingConfigurations")
+        super.onPause()
+    }
+
+    override fun onStop() {
+        LogUtil.w(message = "IMPORT_TRACE Activity onStop finishing=$isFinishing changingConfig=$isChangingConfigurations")
+        super.onStop()
+    }
+
+    override fun onUserLeaveHint() {
+        LogUtil.w(message = "IMPORT_TRACE Activity onUserLeaveHint")
+        super.onUserLeaveHint()
+    }
+
+    override fun onDestroy() {
+        LogUtil.w(message = "IMPORT_TRACE Activity onDestroy finishing=$isFinishing changingConfig=$isChangingConfigurations")
+        super.onDestroy()
     }
 
     private fun requestPermissionAndConnect() {
