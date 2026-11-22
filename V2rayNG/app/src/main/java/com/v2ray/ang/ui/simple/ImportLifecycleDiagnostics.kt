@@ -7,15 +7,12 @@ import android.app.ApplicationExitInfo
 import android.content.Intent
 import android.os.Build
 import android.os.Process
-import android.util.Log
 
 /**
  * Read-only process and activity diagnostics for the personal-import backgrounding issue.
  * Never records config contents, clipboard data, URL query strings, or license values.
  */
 object ImportLifecycleDiagnostics {
-    private const val TAG = "IMPORT_TRACE"
-
     fun install(application: Application) {
         val processName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             Application.getProcessName()
@@ -56,15 +53,17 @@ object ImportLifecycleDiagnostics {
         })
 
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
-            val frames = error.stackTrace.take(10).joinToString(" <- ") {
-                "${it.className}.${it.methodName}(${it.fileName}:${it.lineNumber})"
+        if (previousHandler != null) {
+            Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+                val frames = error.stackTrace.take(10).joinToString(" <- ") {
+                    "${it.className}.${it.methodName}(${it.fileName}:${it.lineNumber})"
+                }
+                ImportDiagnosticLog.record(
+                    application,
+                    "Process uncaughtException pid=${Process.myPid()} thread=${thread.name} type=${error.javaClass.name} frames=$frames"
+                )
+                previousHandler.uncaughtException(thread, error)
             }
-            ImportDiagnosticLog.record(
-                application,
-                "Process uncaughtException pid=${Process.myPid()} thread=${thread.name} type=${error.javaClass.name} frames=$frames"
-            )
-            previousHandler?.uncaughtException(thread, error)
         }
     }
 
