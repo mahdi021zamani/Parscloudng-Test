@@ -101,7 +101,7 @@ class SimpleVpnActivity : BaseComponentActivity() {
     }
 
     override fun onPause() {
-        ImportDiagnosticLog.record(this, "Activity onPause finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId instance=$diagnosticInstanceId hasFocus=$hasWindowFocus()")
+        ImportDiagnosticLog.record(this, "Activity onPause finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId instance=$diagnosticInstanceId hasFocus=${hasWindowFocus()}")
         LogUtil.w(message = "IMPORT_TRACE Activity onPause finishing=$isFinishing changingConfig=$isChangingConfigurations taskId=$taskId instance=$diagnosticInstanceId")
         super.onPause()
     }
