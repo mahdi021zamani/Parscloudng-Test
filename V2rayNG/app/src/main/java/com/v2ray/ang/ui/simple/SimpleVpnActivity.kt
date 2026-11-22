@@ -2,6 +2,7 @@ package com.v2ray.ang.ui.simple
 
 import android.content.Intent
 import android.net.VpnService
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
@@ -30,6 +31,24 @@ class SimpleVpnActivity : BaseComponentActivity() {
             }
         }
 
+    private val exportImportDiagnostic =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+            if (uri != null) {
+                val result = runCatching {
+                    val output = contentResolver.openOutputStream(uri)
+                        ?: error("Unable to open selected destination")
+                    output.bufferedWriter(Charsets.UTF_8).use {
+                        it.write(ImportDiagnosticLog.read(this@SimpleVpnActivity))
+                    }
+                }
+                Toast.makeText(
+                    this,
+                    if (result.isSuccess) "گزارش ذخیره شد" else "ذخیره گزارش ناموفق بود",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+
     private val requestVpnPermission =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             if (it.resultCode == RESULT_OK) {
@@ -41,31 +60,37 @@ class SimpleVpnActivity : BaseComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        ImportDiagnosticLog.record(this, "Activity onStart taskId=$taskId")
         LogUtil.w(message = "IMPORT_TRACE Activity onStart taskId=$taskId")
     }
 
     override fun onResume() {
         super.onResume()
+        ImportDiagnosticLog.record(this, "Activity onResume taskId=$taskId")
         LogUtil.w(message = "IMPORT_TRACE Activity onResume taskId=$taskId")
         viewModel.onAppResumed()
     }
 
     override fun onPause() {
+        ImportDiagnosticLog.record(this, "Activity onPause finishing=$isFinishing changingConfig=$isChangingConfigurations")
         LogUtil.w(message = "IMPORT_TRACE Activity onPause finishing=$isFinishing changingConfig=$isChangingConfigurations")
         super.onPause()
     }
 
     override fun onStop() {
+        ImportDiagnosticLog.record(this, "Activity onStop finishing=$isFinishing changingConfig=$isChangingConfigurations")
         LogUtil.w(message = "IMPORT_TRACE Activity onStop finishing=$isFinishing changingConfig=$isChangingConfigurations")
         super.onStop()
     }
 
     override fun onUserLeaveHint() {
+        ImportDiagnosticLog.record(this, "Activity onUserLeaveHint")
         LogUtil.w(message = "IMPORT_TRACE Activity onUserLeaveHint")
         super.onUserLeaveHint()
     }
 
     override fun onDestroy() {
+        ImportDiagnosticLog.record(this, "Activity onDestroy finishing=$isFinishing changingConfig=$isChangingConfigurations")
         LogUtil.w(message = "IMPORT_TRACE Activity onDestroy finishing=$isFinishing changingConfig=$isChangingConfigurations")
         super.onDestroy()
     }
@@ -89,6 +114,7 @@ class SimpleVpnActivity : BaseComponentActivity() {
             viewModel = viewModel,
             onConnectClick = { viewModel.onToggleConnect { requestPermissionAndConnect() } },
             onScanClick = { scanQr.launch(Intent(this, ScannerActivity::class.java)) },
+            onExportDiagnosticClick = { exportImportDiagnostic.launch("PARSCLOUD_import_diagnostic.txt") },
         )
     }
 }
