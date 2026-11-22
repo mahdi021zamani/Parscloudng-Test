@@ -409,17 +409,20 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun importPersonalConfig(content: String) {
         val normalized = content.trim()
+        ImportDiagnosticLog.record(getApplication(), "VM import requested chars=${normalized.length} lines=${normalized.lineSequence().count()}")
         LogUtil.w(message = "IMPORT_TRACE VM import requested chars=${normalized.length} lines=${normalized.lineSequence().count()}")
         if (normalized.isBlank()) {
             _uiState.update { it.copy(message = "متن کانفیگ خالی است") }
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
+            ImportDiagnosticLog.record(getApplication(), "VM worker started")
             LogUtil.w(message = "IMPORT_TRACE VM worker started")
             val subscriptionUrls = normalized.lineSequence().map { it.trim() }
                 .filter { Utils.isValidSubUrl(it) }.distinct().toList()
             val configLines = normalized.lineSequence().map { it.trim() }
                 .filter { it.isNotEmpty() && !Utils.isValidSubUrl(it) }.joinToString("\n")
+            ImportDiagnosticLog.record(getApplication(), "VM classified subscriptions=${subscriptionUrls.size} configLines=${configLines.lineSequence().count()}")
             LogUtil.w(message = "IMPORT_TRACE VM classified subscriptions=${subscriptionUrls.size} configLines=${configLines.lineSequence().count()}")
             var imported = 0
             var lastImportedSubscriptionId: String? = null
@@ -453,6 +456,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             } else {
                 lastImportedSubscriptionId ?: SimpleVpnRepository.PERSONAL_SUB_ID
             }
+            ImportDiagnosticLog.record(getApplication(), "VM storage finished imported=$imported")
             LogUtil.w(message = "IMPORT_TRACE VM storage finished imported=$imported targetSource=$targetSourceId")
             withContext(Dispatchers.Main) {
                 val servers = SimpleVpnRepository.getPersonalServers(targetSourceId)
@@ -471,6 +475,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     MmkvManager.setSelectServer(it, targetSourceId)
                     if (_uiState.value.status == SimpleConnectionStatus.DISCONNECTED) MmkvManager.setSelectServer(it)
                 }
+                ImportDiagnosticLog.record(getApplication(), "VM UI published servers=${servers.size} selected=${selected != null}")
                 LogUtil.w(message = "IMPORT_TRACE VM UI published servers=${servers.size} selected=${selected != null}")
             }
         }
