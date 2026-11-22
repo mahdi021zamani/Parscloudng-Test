@@ -74,6 +74,7 @@ fun SimpleVpnScreen(
     viewModel: SimpleVpnViewModel,
     onConnectClick: () -> Unit,
     onScanClick: () -> Unit,
+    onExportDiagnosticClick: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -235,6 +236,11 @@ fun SimpleVpnScreen(
                             color = Color(0xFF91A9C7),
                             maxLines = 1,
                         )
+                    }
+                },
+                actions = {
+                    TextButton(onClick = onExportDiagnosticClick) {
+                        Text("گزارش مشکل", fontSize = 11.sp, color = Color(0xFFB8DFFF))
                     }
                 },
                 colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
