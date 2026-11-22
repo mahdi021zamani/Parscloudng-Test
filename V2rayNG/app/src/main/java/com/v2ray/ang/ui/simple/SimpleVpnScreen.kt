@@ -47,6 +47,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -83,6 +84,7 @@ fun SimpleVpnScreen(
     var pendingDeleteSubscriptionId by remember { mutableStateOf<String?>(null) }
     var pendingDeleteAllPersonal by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
@@ -118,8 +120,10 @@ fun SimpleVpnScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
+                    ImportDiagnosticLog.record(context, "UI personalAdd clicked chars=${personalText.length} lines=${personalText.lineSequence().count()}")
                     LogUtil.w(message = "IMPORT_TRACE UI add clicked chars=${personalText.length} lines=${personalText.lineSequence().count()}")
                     viewModel.importPersonalConfig(personalText)
+                    ImportDiagnosticLog.record(context, "UI personalAdd importCallReturned")
                     personalText = ""
                     showPersonalImport = false
                 }, enabled = personalText.isNotBlank()) { Text("افزودن") }
