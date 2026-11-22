@@ -10,6 +10,7 @@ import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.ui.compose.ThemeManager
+import com.v2ray.ang.ui.simple.ImportLifecycleDiagnostics
 
 class AngApplication : Application() {
     companion object {
@@ -47,5 +48,8 @@ class AngApplication : Application() {
 
         // Initialize theme state from MMKV
         ThemeManager.refresh()
+
+        // Diagnostic-only: records process exits and Activity lifecycle without changing app flow.
+        ImportLifecycleDiagnostics.install(this)
     }
 }
