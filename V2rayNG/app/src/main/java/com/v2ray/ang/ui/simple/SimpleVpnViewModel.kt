@@ -409,15 +409,18 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun importPersonalConfig(content: String) {
         val normalized = content.trim()
+        LogUtil.w(message = "IMPORT_TRACE VM import requested chars=${normalized.length} lines=${normalized.lineSequence().count()}")
         if (normalized.isBlank()) {
             _uiState.update { it.copy(message = "متن کانفیگ خالی است") }
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
+            LogUtil.w(message = "IMPORT_TRACE VM worker started")
             val subscriptionUrls = normalized.lineSequence().map { it.trim() }
                 .filter { Utils.isValidSubUrl(it) }.distinct().toList()
             val configLines = normalized.lineSequence().map { it.trim() }
                 .filter { it.isNotEmpty() && !Utils.isValidSubUrl(it) }.joinToString("\n")
+            LogUtil.w(message = "IMPORT_TRACE VM classified subscriptions=${subscriptionUrls.size} configLines=${configLines.lineSequence().count()}")
             var imported = 0
             var lastImportedSubscriptionId: String? = null
             val existingPersonalSubscriptions = MmkvManager.decodeSubscriptions()
@@ -450,6 +453,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             } else {
                 lastImportedSubscriptionId ?: SimpleVpnRepository.PERSONAL_SUB_ID
             }
+            LogUtil.w(message = "IMPORT_TRACE VM storage finished imported=$imported targetSource=$targetSourceId")
             withContext(Dispatchers.Main) {
                 val servers = SimpleVpnRepository.getPersonalServers(targetSourceId)
                 val selected = MmkvManager.getSelectServer(targetSourceId)
@@ -467,6 +471,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     MmkvManager.setSelectServer(it, targetSourceId)
                     if (_uiState.value.status == SimpleConnectionStatus.DISCONNECTED) MmkvManager.setSelectServer(it)
                 }
+                LogUtil.w(message = "IMPORT_TRACE VM UI published servers=${servers.size} selected=${selected != null}")
             }
         }
     }
