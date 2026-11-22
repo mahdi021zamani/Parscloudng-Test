@@ -13,6 +13,9 @@ import android.os.Process
  * Never records config contents, clipboard data, URL query strings, or license values.
  */
 object ImportLifecycleDiagnostics {
+    private const val MAX_TRACE_LINES = 140
+    private const val MAX_TRACE_CHARS = 28_000
+
     fun install(application: Application) {
         val processName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             Application.getProcessName()
@@ -55,12 +58,12 @@ object ImportLifecycleDiagnostics {
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
         if (previousHandler != null) {
             Thread.setDefaultUncaughtExceptionHandler { thread, error ->
-                val frames = error.stackTrace.take(10).joinToString(" <- ") {
+                val frames = error.stackTrace.take(16).joinToString(" <- ") {
                     "${it.className}.${it.methodName}(${it.fileName}:${it.lineNumber})"
                 }
                 ImportDiagnosticLog.record(
                     application,
-                    "Process uncaughtException pid=${Process.myPid()} thread=${thread.name} type=${error.javaClass.name} frames=$frames"
+                    "Process uncaughtException pid=${Process.myPid()} thread=${thread.name} type=${error.javaClass.name} message=${error.message?.take(240)} frames=$frames"
                 )
                 previousHandler.uncaughtException(thread, error)
             }
@@ -100,12 +103,76 @@ object ImportLifecycleDiagnostics {
                         application,
                         "Process historicalExit pid=${exit.pid} process=${exit.processName} reason=${exit.reason} status=${exit.status} importance=${exit.importance} timestamp=${exit.timestamp} description=$description"
                     )
+                    if (exit.reason == ApplicationExitInfo.REASON_CRASH ||
+                        exit.reason == ApplicationExitInfo.REASON_CRASH_NATIVE ||
+                        exit.reason == ApplicationExitInfo.REASON_ANR
+                    ) {
+                        recordExitTrace(application, exit)
+                    }
                 }
             }
         }.onFailure {
             ImportDiagnosticLog.record(
                 application,
                 "Process historicalExitInfo error=${it.javaClass.simpleName}"
+            )
+        }
+    }
+
+    /**
+     * Android may retain a tombstone/ANR trace for a previous process. Keep only a
+     * bounded, private diagnostic excerpt; never dump the full trace or memory data.
+     */
+    private fun recordExitTrace(application: Application, exit: ApplicationExitInfo) {
+        val stream = runCatching { exit.traceInputStream }.getOrNull()
+        if (stream == null) {
+            ImportDiagnosticLog.record(
+                application,
+                "Process exitTrace unavailable pid=${exit.pid} reason=${exit.reason}"
+            )
+            return
+        }
+
+        runCatching {
+            var lineCount = 0
+            var charCount = 0
+            var keptCount = 0
+            stream.bufferedReader().use { reader ->
+                while (lineCount < MAX_TRACE_LINES && charCount < MAX_TRACE_CHARS) {
+                    val line = reader.readLine() ?: break
+                    lineCount++
+                    val trimmed = line.trim()
+                    val useful = trimmed.startsWith("#") ||
+                        trimmed.startsWith("at ") ||
+                        trimmed.startsWith("backtrace:") ||
+                        trimmed.startsWith("Abort message:") ||
+                        trimmed.startsWith("signal ") ||
+                        trimmed.startsWith("Cause:") ||
+                        trimmed.startsWith("DALVIK THREADS") ||
+                        trimmed.startsWith("----- pid") ||
+                        trimmed.startsWith("Cmd line:") ||
+                        trimmed.startsWith('"')
+                    if (useful && trimmed.isNotEmpty()) {
+                        val safeLine = trimmed.take(360)
+                        if (charCount + safeLine.length <= MAX_TRACE_CHARS) {
+                            ImportDiagnosticLog.record(
+                                application,
+                                "Process exitTrace pid=${exit.pid} reason=${exit.reason} line=$safeLine"
+                            )
+                            charCount += safeLine.length
+                            keptCount++
+                        }
+                    }
+                }
+            }
+            ImportDiagnosticLog.record(
+                application,
+                "Process exitTrace finished pid=${exit.pid} reason=${exit.reason} scanned=$lineCount kept=$keptCount chars=$charCount"
+            )
+        }.onFailure {
+            ImportDiagnosticLog.record(
+                application,
+                "Process exitTrace error pid=${exit.pid} type=${it.javaClass.simpleName}"
             )
         }
     }
