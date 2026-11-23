@@ -493,8 +493,49 @@ fun SimpleVpnScreen(
                         CircularProgressIndicator()
                     }
                 } else if (uiState.servers.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(stringResource(R.string.simple_no_servers_available))
+                    if (uiState.selectedSourceId.startsWith("personal_sub_")) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(
+                                    personalSubscriptionTabs.firstOrNull {
+                                        it.id == uiState.selectedSourceId
+                                    }?.name ?: "اشتراک شخصی",
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFEAF7FF),
+                                )
+                                TextButton(
+                                    onClick = { viewModel.onRefresh() },
+                                    enabled = !uiState.isRefreshing &&
+                                        uiState.selectedSourceId !in uiState.refreshingPersonalSubscriptionIds,
+                                ) {
+                                    Text(stringResource(R.string.simple_refresh))
+                                }
+                                TextButton(
+                                    onClick = {
+                                        pendingDeleteSubscriptionId = uiState.selectedSourceId
+                                    },
+                                ) {
+                                    Text(stringResource(R.string.action_delete))
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(20.dp))
+                            Text(stringResource(R.string.simple_no_servers_available))
+                        }
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(stringResource(R.string.simple_no_servers_available))
+                        }
                     }
                 } else {
                     ServerList(
