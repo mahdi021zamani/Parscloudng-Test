@@ -14,5 +14,7 @@ data class SubscriptionItem(
     var allowInsecureUrl: Boolean = false,
     var userAgent: String? = null,
     var requestHeaders: String? = null,
+    /** Raw quota header; populated only for personal URL subscriptions. */
+    var subscriptionUserInfo: String? = null,
 )
 
