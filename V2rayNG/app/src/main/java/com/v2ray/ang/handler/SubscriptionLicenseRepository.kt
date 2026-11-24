@@ -17,6 +17,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
+import java.security.KeyPairGenerator
+import java.security.PrivateKey
+import java.security.PublicKey
+import java.security.Signature
+import java.security.spec.ECGenParameterSpec
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -34,6 +39,7 @@ import java.util.concurrent.TimeUnit
 object SubscriptionLicenseRepository {
     private const val STORAGE_KEY = "PARSCLOUD_SUBSCRIPTION_LICENSE"
     private const val KEY_ALIAS = "parscloud.subscription.aes.v1"
+    private const val DEVICE_KEY_ALIAS = "parscloud.subscription.device.ec.v1"
     private const val ENCRYPTED_PREFIX = "enc:v1:"
     private const val GCM_TAG_BITS = 128
     private val keyPattern = Regex("^pc_[a-f0-9]{64}$")
@@ -199,27 +205,82 @@ object SubscriptionLicenseRepository {
 
     const val OFFLINE_GRACE_MILLIS = 24L * 60L * 60L * 1000L
 
+    private fun getOrCreateDeviceKeyPair(): Pair<PrivateKey, PublicKey> {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        val existing = keyStore.getEntry(DEVICE_KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry
+        if (existing != null) return existing.privateKey to existing.certificate.publicKey
+
+        val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
+        generator.initialize(
+            KeyGenParameterSpec.Builder(DEVICE_KEY_ALIAS, KeyProperties.PURPOSE_SIGN)
+                .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
+                .setDigests(KeyProperties.DIGEST_SHA256)
+                .setUserAuthenticationRequired(false)
+                .build()
+        )
+        val pair = generator.generateKeyPair()
+        return pair.private to pair.public
+    }
+
+    private fun signDeviceChallenge(challenge: String): Pair<String, String> {
+        val (privateKey, publicKey) = getOrCreateDeviceKeyPair()
+        val publicKeyEncoded = Base64.encodeToString(publicKey.encoded, Base64.NO_WRAP)
+        val signer = Signature.getInstance("SHA256withECDSA")
+        signer.initSign(privateKey)
+        signer.update(challenge.toByteArray(StandardCharsets.UTF_8))
+        val signature = Base64.encodeToString(signer.sign(), Base64.NO_WRAP)
+        return publicKeyEncoded to signature
+    }
+
+    private fun postJson(url: String, body: JsonObject): Pair<Int, String> {
+        val requestBody = body.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val request = Request.Builder().url(url).post(requestBody).build()
+        return client.newCall(request).execute().use { response ->
+            response.code to response.body?.string().orEmpty()
+        }
+    }
+
     fun validate(key: String): ValidationResult {
         if (!isValidKeyFormat(key)) return ValidationResult.Rejected("invalid")
 
-        val requestBody = JsonObject().apply {
-            addProperty("subscriptionKey", key)
-        }.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-        val request = Request.Builder()
-            .url(RemoteConfig.SUBSCRIPTION_VALIDATE_URL)
-            .post(requestBody)
-            .build()
-
         return try {
-            client.newCall(request).execute().use { response ->
-                val body = response.body?.string().orEmpty()
-                parseValidationResponse(response.code, body, System.currentTimeMillis())
+            val (publicKey, _) = signDeviceChallenge("keypair-check")
+            val challengeBody = JsonObject().apply {
+                addProperty("subscriptionKey", key)
+                addProperty("devicePublicKey", publicKey)
             }
+            val (challengeCode, challengeResponse) = postJson(
+                RemoteConfig.SUBSCRIPTION_DEVICE_CHALLENGE_URL,
+                challengeBody,
+            )
+            if (challengeCode !in 200..299) {
+                return parseValidationResponse(challengeCode, challengeResponse, System.currentTimeMillis())
+            }
+
+            val challengeJson = runCatching { JsonParser.parseString(challengeResponse).asJsonObject }.getOrNull()
+                ?: return ValidationResult.NetworkError
+            val challengeId = challengeJson.get("challengeId")?.takeUnless { it.isJsonNull }?.asString
+                ?: return ValidationResult.NetworkError
+            val challenge = challengeJson.get("challenge")?.takeUnless { it.isJsonNull }?.asString
+                ?: return ValidationResult.NetworkError
+            val (_, signature) = signDeviceChallenge(challenge)
+
+            val validationBody = JsonObject().apply {
+                addProperty("subscriptionKey", key)
+                addProperty("devicePublicKey", publicKey)
+                addProperty("challengeId", challengeId)
+                addProperty("signature", signature)
+            }
+            val (validationCode, validationResponse) = postJson(
+                RemoteConfig.SUBSCRIPTION_VALIDATE_URL,
+                validationBody,
+            )
+            parseValidationResponse(validationCode, validationResponse, System.currentTimeMillis())
         } catch (e: IOException) {
-            LogUtil.e(AppConfig.TAG, "SubscriptionLicenseRepository: validation network request failed", e)
+            LogUtil.e(AppConfig.TAG, "SubscriptionLicenseRepository: device validation network request failed", e)
             ValidationResult.NetworkError
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "SubscriptionLicenseRepository: validation response failed", e)
+            LogUtil.e(AppConfig.TAG, "SubscriptionLicenseRepository: device validation failed", e)
             ValidationResult.NetworkError
         }
     }
@@ -229,7 +290,7 @@ object SubscriptionLicenseRepository {
         responseBody: String,
         nowMillis: Long,
     ): ValidationResult {
-        val rejectedStatuses = setOf("invalid", "expired", "revoked")
+        val rejectedStatuses = setOf("invalid", "expired", "revoked", "device_limit", "device_revoked", "device_required")
         if (httpCode !in 200..299) {
             if (httpCode !in 400..499) return ValidationResult.NetworkError
             val status = runCatching {
