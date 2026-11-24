@@ -11,7 +11,7 @@ on:
       release_tag:
         description: Test version
         required: false
-        default: V26.10.11-test
+        default: V26.11.24-device-limits-test
         type: string
   push:
     branches:
@@ -27,6 +27,7 @@ on:
       - "debug/personal-import-lifecycle-trace-2-2026-11-22"
       - "debug/personal-import-final-process-trace-2026-11-22"
       - "feature/parcloud-chrome-ui-complete-safe-merge-2026-11-24"
+      - "feature/app-device-registration-limits-2026-11-24"
 
 permissions:
   contents: read
