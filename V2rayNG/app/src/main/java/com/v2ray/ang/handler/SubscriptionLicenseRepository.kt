@@ -253,6 +253,14 @@ object SubscriptionLicenseRepository {
                 RemoteConfig.SUBSCRIPTION_DEVICE_CHALLENGE_URL,
                 challengeBody,
             )
+            if (challengeCode == 404) {
+                // Compatibility with the currently deployed Worker during staged rollout.
+                // The app falls back only when the challenge route does not exist; once the
+                // new Worker is deployed, every successful validation uses Keystore proof.
+                val legacyBody = JsonObject().apply { addProperty("subscriptionKey", key) }
+                val (legacyCode, legacyResponse) = postJson(RemoteConfig.SUBSCRIPTION_VALIDATE_URL, legacyBody)
+                return parseValidationResponse(legacyCode, legacyResponse, System.currentTimeMillis())
+            }
             if (challengeCode !in 200..299) {
                 return parseValidationResponse(challengeCode, challengeResponse, System.currentTimeMillis())
             }
