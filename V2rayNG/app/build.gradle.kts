@@ -13,7 +13,7 @@ android {
         applicationId = "com.parscloud.vpn"
         minSdk = 29
         targetSdk = 37
-        versionCode = 746
+        versionCode = 747
         versionName = (project.findProperty("pattngVersion") as? String)?.takeIf { it.isNotBlank() } ?: "2.3.6"
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
