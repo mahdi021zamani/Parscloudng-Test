@@ -1,15 +1,29 @@
 package com.v2ray.ang.ui.simple
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -22,7 +36,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
@@ -36,8 +49,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -47,12 +58,31 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,6 +92,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,6 +101,37 @@ import com.v2ray.ang.handler.SimpleVpnRepository
 import com.v2ray.ang.handler.SimpleVpnRepository.SimpleServerUiModel
 import com.v2ray.ang.util.LogUtil
 import kotlinx.coroutines.delay
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+
+// ---------------------------------------------------------------------------------------------
+// Visual identity (UI only): near-black navy canvas, solid dark cards with thin borders,
+// turquoise accent, chrome power button. None of these values is used by any connection logic.
+// ---------------------------------------------------------------------------------------------
+private val ScreenBg = Color(0xFF070B12)
+private val CardColor = Color(0xFF0F1620)
+private val CardSelectedColor = Color(0xFF0C1D22)
+private val LineColor = Color(0xFF1F2B3B)
+private val Turquoise = Color(0xFF2EE6D0)
+private val Gold = Color(0xFFF4C24E)
+private val Silver = Color(0xFFDBE6F3)
+private val TextPrimary = Color(0xFFF3F7FC)
+private val TextSecondary = Color(0xFFA9B8CF)
+private val TextDim = Color(0xFF8A99AE)
+
+// Tabler "cloud" outline, used only for the decorative brand tile in the header.
+private const val CLOUD_PATH =
+    "M6.657 18c-2.572 0 -4.657 -2.007 -4.657 -4.483c0 -2.475 2.085 -4.482 4.657 -4.482" +
+        "c.393 -1.762 1.794 -3.2 3.675 -3.773c1.88 -.572 3.956 -.193 5.444 1" +
+        "c1.488 1.19 2.162 3.007 1.77 4.769h.99c1.913 0 3.464 1.56 3.464 3.486" +
+        "c0 1.927 -1.551 3.487 -3.465 3.487h-11.878"
+
+/** Solid dark card with a thin border. [selected] switches to the teal-tinted variant. */
+private fun Modifier.cardSurface(shape: Shape, selected: Boolean = false): Modifier = this
+    .clip(shape)
+    .background(if (selected) CardSelectedColor else CardColor)
+    .border(0.8.dp, if (selected) Turquoise else LineColor, shape)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -223,35 +285,39 @@ fun SimpleVpnScreen(
     }
 
     Scaffold(
-        containerColor = Color(0xFF071126),
+        containerColor = ScreenBg,
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            "PARSCLOUD",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.1.sp,
-                            color = Color(0xFFEAF7FF),
-                            maxLines = 1,
-                        )
-                        Text(
-                            "اتصال امن و پایدار",
-                            fontSize = 10.sp,
-                            color = Color(0xFF91A9C7),
-                            maxLines = 1,
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        BrandTile()
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "PARSCLOUD",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 1.4.sp,
+                                color = TextPrimary,
+                                maxLines = 1,
+                            )
+                            Text(
+                                "اتصال امن و پایدار",
+                                fontSize = 12.sp,
+                                color = TextDim,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 },
                 actions = {
                     TextButton(onClick = onExportDiagnosticClick) {
-                        Text("گزارش مشکل", fontSize = 11.sp, color = Color(0xFFB8DFFF))
+                        Text("گزارش مشکل", fontSize = 11.sp, color = TextSecondary)
                     }
                 },
                 colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0C1830),
-                    titleContentColor = Color(0xFFEAF7FF),
+                    containerColor = Color.Transparent,
+                    titleContentColor = TextPrimary,
                 ),
             )
         },
@@ -269,96 +335,9 @@ fun SimpleVpnScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF071126))
+                .background(ScreenBg)
                 .padding(padding)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 7.dp)
-                    .shadow(12.dp, RoundedCornerShape(20.dp))
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(Color(0xCC1A3152), Color(0xCC101D35), Color(0xCC142642))
-                        )
-                    )
-                    .border(
-                        1.dp,
-                        Brush.linearGradient(listOf(Color(0x66FFD5E8), Color(0x1AFFFFFF), Color(0x5555BCE0))),
-                        RoundedCornerShape(20.dp)
-                    )
-                    .padding(horizontal = 6.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                TextButton(
-                    onClick = { viewModel.showLicenseDialog() },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(13.dp))
-                        .background(Color(0x44E9B0C8))
-                        .border(1.dp, Color(0x55E9B0C8), RoundedCornerShape(13.dp)),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                ) { Text("اشتراک", fontSize = 11.sp, color = Color(0xFFFFD9E9), fontWeight = FontWeight.SemiBold) }
-
-                if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
-                    uiState.selectedSourceId.startsWith("personal_sub_")) {
-                    TextButton(
-                        onClick = { viewModel.onRefresh() },
-                        enabled = !uiState.isRefreshing &&
-                            uiState.selectedSourceId !in uiState.refreshingPersonalSubscriptionIds,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(13.dp))
-                            .background(Color(0x3324BFA0))
-                            .border(1.dp, Color(0x5524BFA0), RoundedCornerShape(13.dp)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    ) { Text("به‌روزرسانی", fontSize = 11.sp, color = Color(0xFFB8F1DF)) }
-                    if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID &&
-                        uiState.servers.isNotEmpty()) {
-                        TextButton(
-                            onClick = { pendingDeleteAllPersonal = true },
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(13.dp))
-                                .background(Color(0x33E16D83))
-                                .border(1.dp, Color(0x55E16D83), RoundedCornerShape(13.dp)),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        ) { Text("حذف همه", fontSize = 11.sp, color = Color(0xFFFFB9C5)) }
-                    }
-                } else {
-                    val currentSourcePingRunning = uiState.servers.any { it.guid in uiState.testingGuids }
-                    TextButton(
-                        onClick = {
-                            if (currentSourcePingRunning) viewModel.cancelCurrentSourcePing()
-                            else viewModel.testCurrentSourcePing()
-                        },
-                        enabled = uiState.servers.isNotEmpty(),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(13.dp))
-                            .background(Color(0x334E9BD0))
-                            .border(1.dp, Color(0x555EACE0), RoundedCornerShape(13.dp)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    ) { Text(if (currentSourcePingRunning) "لغو پینگ" else "تست پینگ", fontSize = 11.sp, color = Color(0xFFC8E7FF)) }
-                    TextButton(
-                        onClick = { viewModel.onRefresh() },
-                        enabled = !uiState.isRefreshing,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(13.dp))
-                            .background(Color(0x334E9BD0))
-                            .border(1.dp, Color(0x555EACE0), RoundedCornerShape(13.dp)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    ) { Text("تازه‌سازی", fontSize = 11.sp, color = Color(0xFFC8E7FF)) }
-                }
-
-                TextButton(
-                    onClick = { showPersonalImport = true },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(13.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFFE7A6C5), Color(0xFFB77FA8))))
-                        .border(1.dp, Color(0x99FFE5F0), RoundedCornerShape(13.dp)),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                ) { Text("＋ افزودن", fontSize = 11.sp, color = Color(0xFF251722), fontWeight = FontWeight.Bold) }
-            }
-
             val isV2RaySelected = uiState.selectedSourceId == SimpleVpnRepository.SIMPLE_SUB_ID ||
                 uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID
             val personalSubscriptionTabs = SimpleVpnRepository.getPersonalSubscriptionTabs()
@@ -378,93 +357,75 @@ fun SimpleVpnScreen(
                 SimpleVpnRepository.PERSONAL_SUB_ID -> if (hasManualPersonal) manualTabIndex else 0
                 else -> if (selectedPersonalIndex >= 0) personalTabsStartIndex + selectedPersonalIndex else 0
             }
+            // Name of the active profile, taken from the same tab labels the strip below uses.
+            val tabAetherLabel = stringResource(R.string.simple_tab_aether)
+            val tabCombinedLabel = stringResource(R.string.simple_tab_combined)
+            val tabServicesLabel = stringResource(R.string.simple_tab_services_iran)
+            val tabV2RayLabel = stringResource(R.string.simple_tab_v2ray)
+            val selectedProfileLabel = when {
+                selectedProfileIndex == 0 -> tabAetherLabel
+                selectedProfileIndex == 1 -> tabCombinedLabel
+                selectedProfileIndex == 2 -> tabServicesLabel
+                selectedProfileIndex == 3 -> tabV2RayLabel
+                hasManualPersonal && selectedProfileIndex == manualTabIndex -> "کانفیگ‌های دستی"
+                else -> personalSubscriptionTabs.getOrNull(selectedProfileIndex - personalTabsStartIndex)?.name
+            }
+
+            // Hero: power button, selected server, status + timer, credit and volume cards.
+            ConnectionBar(
+                status = uiState.status,
+                selectedServerName = uiState.servers.firstOrNull { it.guid == uiState.selectedGuid }?.displayName,
+                profileLabel = selectedProfileLabel,
+                canConnect = uiState.canConnect && uiState.selectedGuid != null,
+                licenseExpiresAtMillis = uiState.licenseExpiresAtMillis,
+                onConnectClick = onConnectClick,
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // The profile strip stays left-to-right exactly like the original screen.
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 ScrollableTabRow(
                     selectedTabIndex = selectedProfileIndex,
-                    // Personal tabs are dynamic. During a tab-count change, Material3 can
-                    // briefly expose the previous positions list; its default indicator
-                    // indexes it directly and can crash. Wait for the selected position.
-                    indicator = { tabPositions ->
-                        tabPositions.getOrNull(selectedProfileIndex)?.let { position ->
-                            TabRowDefaults.Indicator(Modifier.tabIndicatorOffset(position))
-                        }
-                    },
-                    edgePadding = 8.dp,
-                    containerColor = Color(0xFF0D1B35),
-                    contentColor = Color(0xFF65DDF2),
+                    edgePadding = 10.dp,
+                    containerColor = Color.Transparent,
+                    contentColor = Turquoise,
+                    indicator = {},
+                    divider = {},
                 ) {
-                    Tab(
+                    ProfileTab(
                         selected = selectedProfileIndex == 0,
                         onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.WIREGUARD) },
-                        text = {
-                            Text(
-                                stringResource(R.string.simple_tab_aether),
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                fontSize = 12.sp,
-                            )
-                        },
+                        label = tabAetherLabel,
                     )
-                    Tab(
+                    ProfileTab(
                         selected = selectedProfileIndex == 1,
                         onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.COMBINED) },
-                        text = {
-                            Text(
-                                stringResource(R.string.simple_tab_combined),
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                fontSize = 12.sp,
-                            )
-                        },
+                        label = tabCombinedLabel,
                     )
-                    Tab(
+                    ProfileTab(
                         selected = selectedProfileIndex == 2,
                         onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.SERVICES_FOR_IRAN) },
-                        text = {
-                            Text(
-                                stringResource(R.string.simple_tab_services_iran),
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                fontSize = 12.sp,
-                            )
-                        },
+                        label = tabServicesLabel,
                     )
-                    Tab(
+                    ProfileTab(
                         selected = selectedProfileIndex == 3,
                         onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.V2RAY) },
-                        text = {
-                            Text(
-                                stringResource(R.string.simple_tab_v2ray),
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                fontSize = 12.sp,
-                            )
-                        },
+                        label = tabV2RayLabel,
                     )
                     if (hasManualPersonal) {
-                        Tab(
+                        ProfileTab(
                             selected = selectedProfileIndex == manualTabIndex,
                             onClick = { viewModel.onSelectProfile(SimpleVpnProfileTab.PERSONAL) },
-                            text = { Text("کانفیگ‌های دستی", textAlign = TextAlign.Center, fontSize = 12.sp) },
+                            label = "کانفیگ‌های دستی",
+                            limitLines = false,
                         )
                     }
                     personalSubscriptionTabs.forEachIndexed { index, tab ->
-                        Tab(
+                        ProfileTab(
                             selected = selectedProfileIndex == personalTabsStartIndex + index,
                             onClick = { viewModel.onSelectSource(tab.id) },
-                            text = {
-                                Text(
-                                    tab.name,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    fontSize = 12.sp,
-                                )
-                            },
+                            label = tab.name,
                         )
                     }
                 }
@@ -472,32 +433,35 @@ fun SimpleVpnScreen(
             if (isV2RaySelected) {
                 TabRow(
                     selectedTabIndex = if (uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID) 0 else 1,
-                    containerColor = Color(0xFF0C1830),
-                    contentColor = Color(0xFF65DDF2),
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                    containerColor = Color.Transparent,
+                    contentColor = Turquoise,
+                    indicator = {},
+                    divider = {},
                 ) {
-                    Tab(
+                    ProfileTab(
                         selected = uiState.selectedSourceId == SimpleVpnRepository.HAMRAH_SUB_ID,
                         onClick = { viewModel.onSelectV2RaySubtab(SimpleVpnRepository.HAMRAH_SUB_ID) },
-                        text = { Text(stringResource(R.string.simple_subtab_hamrah)) },
+                        label = stringResource(R.string.simple_subtab_hamrah),
                     )
-                    Tab(
+                    ProfileTab(
                         selected = uiState.selectedSourceId == SimpleVpnRepository.SIMPLE_SUB_ID,
                         onClick = { viewModel.onSelectV2RaySubtab(SimpleVpnRepository.SIMPLE_SUB_ID) },
-                        text = { Text(stringResource(R.string.simple_subtab_irancell)) },
+                        label = stringResource(R.string.simple_subtab_irancell),
                     )
                 }
             }
             Box(modifier = Modifier.weight(1f)) {
                 if (uiState.isRefreshing && uiState.servers.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = Turquoise)
                     }
                 } else if (uiState.servers.isEmpty()) {
                     if (uiState.selectedSourceId.startsWith("personal_sub_")) {
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Row(
@@ -506,35 +470,35 @@ fun SimpleVpnScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Text(
-                                    personalSubscriptionTabs.firstOrNull {
-                                        it.id == uiState.selectedSourceId
-                                    }?.name ?: "اشتراک شخصی",
+                                    personalSubscriptionTabs.firstOrNull { it.id == uiState.selectedSourceId }?.name
+                                        ?: "اشتراک شخصی",
                                     modifier = Modifier.weight(1f),
-                                    style = MaterialTheme.typography.titleSmall,
+                                    color = TextPrimary,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFFEAF7FF),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                                 TextButton(
                                     onClick = { viewModel.onRefresh() },
                                     enabled = !uiState.isRefreshing &&
                                         uiState.selectedSourceId !in uiState.refreshingPersonalSubscriptionIds,
-                                ) {
-                                    Text(stringResource(R.string.simple_refresh))
-                                }
+                                ) { Text(stringResource(R.string.simple_refresh)) }
                                 TextButton(
-                                    onClick = {
-                                        pendingDeleteSubscriptionId = uiState.selectedSourceId
-                                    },
+                                    onClick = { pendingDeleteSubscriptionId = uiState.selectedSourceId },
                                 ) {
-                                    Text(stringResource(R.string.action_delete))
+                                    Text(stringResource(R.string.action_delete), color = Color(0xFFFF8D9A))
                                 }
                             }
-                            Spacer(modifier = Modifier.height(20.dp))
-                            Text(stringResource(R.string.simple_no_servers_available))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            if (uiState.isRefreshing || uiState.selectedSourceId in uiState.refreshingPersonalSubscriptionIds) {
+                                CircularProgressIndicator(color = Turquoise)
+                            } else {
+                                Text(stringResource(R.string.simple_no_servers_available), color = TextSecondary)
+                            }
                         }
                     } else {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(stringResource(R.string.simple_no_servers_available))
+                            Text(stringResource(R.string.simple_no_servers_available), color = TextSecondary)
                         }
                     }
                 } else {
@@ -555,17 +519,121 @@ fun SimpleVpnScreen(
                 }
             }
 
-            HorizontalDivider()
+            // Bottom action bar: the same actions, same conditions and same callbacks as before.
+            ActionBarContainer {
+                BottomAction(
+                    label = "اشتراک",
+                    glyph = ActionGlyph.CROWN,
+                    onClick = { viewModel.showLicenseDialog() },
+                )
 
-            ConnectionBar(
-                status = uiState.status,
-                selectedServerName = uiState.servers.firstOrNull { it.guid == uiState.selectedGuid }?.displayName,
-                canConnect = uiState.canConnect && uiState.selectedGuid != null,
-                licenseExpiresAtMillis = uiState.licenseExpiresAtMillis,
-                onConnectClick = onConnectClick,
-            )
+                if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+                    uiState.selectedSourceId.startsWith("personal_sub_")) {
+                    BottomAction(
+                        label = "به‌روزرسانی",
+                        glyph = ActionGlyph.REFRESH,
+                        onClick = { viewModel.onRefresh() },
+                        enabled = !uiState.isRefreshing &&
+                            uiState.selectedSourceId !in uiState.refreshingPersonalSubscriptionIds,
+                    )
+                    if (uiState.selectedSourceId == SimpleVpnRepository.PERSONAL_SUB_ID &&
+                        uiState.servers.isNotEmpty()) {
+                        BottomAction(
+                            label = "حذف همه",
+                            glyph = ActionGlyph.TRASH,
+                            onClick = { pendingDeleteAllPersonal = true },
+                            tint = Color(0xFFFFB9C5),
+                        )
+                    }
+                } else {
+                    val currentSourcePingRunning = uiState.servers.any { it.guid in uiState.testingGuids }
+                    BottomAction(
+                        label = if (currentSourcePingRunning) "لغو پینگ" else "تست پینگ",
+                        glyph = if (currentSourcePingRunning) ActionGlyph.STOP else ActionGlyph.ACTIVITY,
+                        onClick = {
+                            if (currentSourcePingRunning) viewModel.cancelCurrentSourcePing()
+                            else viewModel.testCurrentSourcePing()
+                        },
+                        enabled = uiState.servers.isNotEmpty(),
+                    )
+                    BottomAction(
+                        label = "تازه‌سازی",
+                        glyph = ActionGlyph.REFRESH,
+                        onClick = { viewModel.onRefresh() },
+                        enabled = !uiState.isRefreshing,
+                    )
+                }
+
+                BottomAction(
+                    label = "افزودن",
+                    glyph = ActionGlyph.PLUS,
+                    onClick = { showPersonalImport = true },
+                )
+            }
         }
     }
+}
+
+/** Decorative brand tile next to the title (cloud outline). Not clickable. */
+@Composable
+private fun BrandTile() {
+    val cloud = remember { runCatching { PathParser().parsePathString(CLOUD_PATH).toPath() }.getOrNull() }
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF0E2B2E))
+            .border(1.dp, Color(0xFF1B5A58), RoundedCornerShape(12.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.size(22.dp)) {
+            if (cloud != null) {
+                val u = size.minDimension / 24f
+                withTransform({ scale(u, u, Offset.Zero) }) {
+                    drawPath(
+                        path = cloud,
+                        color = Turquoise,
+                        style = Stroke(width = 1.8f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Visual-only wrapper around the original [Tab]: same selected/onClick, pill styling. */
+@Composable
+private fun ProfileTab(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: String,
+    limitLines: Boolean = true,
+) {
+    Tab(
+        selected = selected,
+        onClick = onClick,
+        modifier = Modifier
+            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) Color(0xFF0E2B2E) else CardColor)
+            .border(
+                0.8.dp,
+                if (selected) Turquoise else LineColor,
+                RoundedCornerShape(50),
+            ),
+        selectedContentColor = Turquoise,
+        unselectedContentColor = TextSecondary,
+        text = {
+            Text(
+                label,
+                textAlign = TextAlign.Center,
+                maxLines = if (limitLines) 2 else Int.MAX_VALUE,
+                overflow = if (limitLines) TextOverflow.Ellipsis else TextOverflow.Clip,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            )
+        },
+    )
 }
 
 @Composable
@@ -590,13 +658,8 @@ private fun ServerList(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                            .shadow(7.dp, RoundedCornerShape(15.dp))
-                            .clip(RoundedCornerShape(15.dp))
-                            .background(
-                                Brush.linearGradient(listOf(Color(0xCC1B3457), Color(0xCC10213B)))
-                            )
-                            .border(1.dp, Color(0x4468DDF5), RoundedCornerShape(15.dp))
+                            .padding(horizontal = 14.dp, vertical = 4.dp)
+                            .cardSurface(RoundedCornerShape(14.dp))
                             .padding(start = 14.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -605,6 +668,7 @@ private fun ServerList(
                             modifier = Modifier.weight(1f),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary,
                         )
                         if (subscriptionId == SimpleVpnRepository.PERSONAL_SUB_ID || subscriptionId.startsWith("personal_sub_")) {
                             val pingIsRunning = groupServers.any { it.guid in testingGuids }
@@ -613,22 +677,34 @@ private fun ServerList(
                                     if (pingIsRunning) onCancelPingSubscription?.invoke(subscriptionId)
                                     else onTestPingSubscription?.invoke(subscriptionId)
                                 },
+                                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                    contentColor = Color(0xFF7FDCF5),
+                                ),
                             ) { Text(if (pingIsRunning) "لغو پینگ" else "تست پینگ") }
                             if (subscriptionId.startsWith("personal_sub_")) TextButton(
                                 onClick = { onRefreshSubscription?.invoke(subscriptionId) },
                                 enabled = subscriptionId !in refreshingSubscriptionIds,
+                                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                    contentColor = Color(0xFF7FDCF5),
+                                ),
                             ) {
                                 if (subscriptionId in refreshingSubscriptionIds) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.width(16.dp).height(16.dp),
                                         strokeWidth = 2.dp,
+                                        color = Turquoise,
                                     )
                                 } else {
                                     Text(stringResource(R.string.simple_refresh))
                                 }
                             }
                             if (subscriptionId.startsWith("personal_sub_")) {
-                                TextButton(onClick = { onDeleteSubscription?.invoke(subscriptionId) }) {
+                                TextButton(
+                                    onClick = { onDeleteSubscription?.invoke(subscriptionId) },
+                                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                        contentColor = Color(0xFFFF8D9A),
+                                    ),
+                                ) {
                                     Text(stringResource(R.string.action_delete))
                                 }
                             }
@@ -644,7 +720,6 @@ private fun ServerList(
                         onSelect = { onSelect(server.guid) },
                         onDelete = onDelete?.let { delete -> { delete(server.guid) } },
                     )
-                    HorizontalDivider()
                 }
             }
         } else {
@@ -657,7 +732,6 @@ private fun ServerList(
                     onSelect = { onSelect(server.guid) },
                     onDelete = onDelete?.let { delete -> { delete(server.guid) } },
                 )
-                HorizontalDivider()
             }
         }
     }
@@ -675,27 +749,10 @@ private fun ServerRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp)
-            .shadow(if (selected) 9.dp else 4.dp, RoundedCornerShape(17.dp))
-            .clip(RoundedCornerShape(17.dp))
-            .background(
-                if (selected) {
-                    Brush.linearGradient(listOf(Color(0xFF244D70), Color(0xFF142C49), Color(0xFF1A3B59)))
-                } else {
-                    Brush.linearGradient(listOf(Color(0xCC1A2A43), Color(0xCC101D32)))
-                }
-            )
-            .border(
-                1.dp,
-                if (selected) {
-                    Brush.linearGradient(listOf(Color(0x996BE8F7), Color(0x338E7390)))
-                } else {
-                    Brush.linearGradient(listOf(Color(0x44FFFFFF), Color(0x117F7485)))
-                },
-                RoundedCornerShape(17.dp)
-            )
+            .padding(horizontal = 14.dp, vertical = 4.dp)
+            .cardSurface(RoundedCornerShape(16.dp), selected)
             .selectable(selected = selected, enabled = enabled, onClick = onSelect)
-            .padding(horizontal = 12.dp, vertical = 13.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(
@@ -703,10 +760,10 @@ private fun ServerRow(
             enabled = enabled,
             onClick = onSelect,
             colors = androidx.compose.material3.RadioButtonDefaults.colors(
-                selectedColor = Color(0xFF58DDF0),
-                unselectedColor = Color(0xFFB8B1BF),
-                disabledSelectedColor = Color(0xFFB77C9B),
-                disabledUnselectedColor = Color(0xFF77717D),
+                selectedColor = Turquoise,
+                unselectedColor = Color(0xFF5A6B88),
+                disabledSelectedColor = Color(0x802EE6D0),
+                disabledUnselectedColor = Color(0xFF3F4C61),
             ),
         )
         Spacer(modifier = Modifier.width(8.dp))
@@ -714,14 +771,23 @@ private fun ServerRow(
             Text(server.flagEmoji)
             Spacer(modifier = Modifier.width(8.dp))
         }
+        // Server name and info always come from the real server model.
         Text(
             text = server.displayName,
             modifier = Modifier.weight(1f),
-            color = Color(0xFFEAF4FF),
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = TextPrimary,
+            fontSize = 15.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
         )
         DelayLabel(delayMillis = server.delayMillis, testing = testing)
-        if (onDelete != null) TextButton(onClick = onDelete) { Text("حذف") }
+        if (onDelete != null) {
+            TextButton(
+                onClick = onDelete,
+                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    contentColor = Color(0xFFFF8D9A),
+                ),
+            ) { Text("حذف") }
+        }
     }
 }
 
@@ -729,26 +795,57 @@ private fun ServerRow(
 private fun DelayLabel(delayMillis: Long?, testing: Boolean) {
     // Match the V2Ray list: keep the delay area empty until a test has run.
     if (!testing && (delayMillis == null || delayMillis == 0L)) return
-    val text = when {
-        testing -> stringResource(R.string.simple_testing)
-        delayMillis == null || delayMillis == 0L -> ""
-        delayMillis < 0 -> stringResource(R.string.simple_timeout)
-        else -> stringResource(R.string.simple_delay_ms, delayMillis)
+    Spacer(modifier = Modifier.width(8.dp))
+    if (testing) {
+        // Progress of a running test is shown as plain text, never as a result chip.
+        Text(
+            stringResource(R.string.simple_testing),
+            color = Color(0xFFE7B36B),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        return
     }
-    val labelColor = when {
-        testing -> Color(0xFFE7B36B)
-        delayMillis == null || delayMillis == 0L -> Color(0xFFAAA3AE)
-        delayMillis < 0L || delayMillis > 160L -> Color(0xFFFF8293)
-        delayMillis < 90L -> Color(0xFF78D6A8)
-        else -> Color(0xFFE8C66F)
+    val value = delayMillis ?: return
+    val text = if (value < 0L) {
+        stringResource(R.string.simple_timeout)
+    } else {
+        stringResource(R.string.simple_delay_ms, value)
     }
-    Text(text, color = labelColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    // Colour comes only from the real test result:
+    // up to 100ms turquoise, 101-250ms gold, above 250ms red, failed test red.
+    // Red means high latency or a failed test, not that the server is offline.
+    val chipBackground: Color
+    val chipText: Color
+    when {
+        value < 0L || value > 250L -> {
+            chipBackground = Color(0xFF2E1519)
+            chipText = Color(0xFFFF8D9A)
+        }
+        value <= 100L -> {
+            chipBackground = Color(0xFF0D2B2A)
+            chipText = Color(0xFF2EE6D0)
+        }
+        else -> {
+            chipBackground = Color(0xFF2E2711)
+            chipText = Color(0xFFF2C14E)
+        }
+    }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(chipBackground)
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+    ) {
+        Text(text, color = chipText, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    }
 }
 
 @Composable
 private fun ConnectionBar(
     status: SimpleConnectionStatus,
     selectedServerName: String?,
+    profileLabel: String?,
     canConnect: Boolean,
     licenseExpiresAtMillis: Long?,
     onConnectClick: () -> Unit,
@@ -767,15 +864,11 @@ private fun ConnectionBar(
         }
     }
 
-    val statusColor = when (status) {
-        SimpleConnectionStatus.DISCONNECTED -> Color(0xFF9AA9C5)
-        SimpleConnectionStatus.CONNECTING -> Color(0xFFFFC36B)
-        SimpleConnectionStatus.CONNECTED -> Color(0xFF55F0C2)
-    }
-    val actionContentColor = when (status) {
-        SimpleConnectionStatus.DISCONNECTED -> Color(0xFFBDFBFF)
-        SimpleConnectionStatus.CONNECTING -> Color(0xFF2A1D12)
-        SimpleConnectionStatus.CONNECTED -> Color(0xFFB8FFF0)
+    // Lighting colour of the button, status dot and timer: silver / gold / turquoise.
+    val stateColor = when (status) {
+        SimpleConnectionStatus.DISCONNECTED -> Silver
+        SimpleConnectionStatus.CONNECTING -> Gold
+        SimpleConnectionStatus.CONNECTED -> Turquoise
     }
     val actionText = when (status) {
         SimpleConnectionStatus.DISCONNECTED -> "اتصال"
@@ -788,169 +881,679 @@ private fun ConnectionBar(
         elapsedSeconds % 60L,
     )
     val actionEnabled = status != SimpleConnectionStatus.DISCONNECTED || canConnect
+    val compactScreen = LocalConfiguration.current.screenHeightDp < 700
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF101C3A), Color(0xFF071126), Color(0xFF080D1C))
-                )
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp)
+            .padding(top = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        ChromePowerButton(
+            status = status,
+            stateColor = stateColor,
+            enabled = actionEnabled,
+            label = actionText,
+            onClick = onConnectClick,
+            size = if (compactScreen) 140.dp else 168.dp,
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+        val serverName = selectedServerName?.takeIf { it.isNotBlank() }
+        if (serverName != null) {
+            // Server names are Latin in most profiles: keep "name  profile" reading left-to-right.
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = serverName,
+                        color = TextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (!profileLabel.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = profileLabel,
+                            color = TextDim,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        } else {
+            Text(
+                text = "یک سرور انتخاب کن",
+                color = TextPrimary,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Status on one side of a thin divider, timer on the other. Both sides are equal-width,
+        // so the timer appearing never moves the status text or the power button.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(stateColor)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = when (status) {
+                            SimpleConnectionStatus.DISCONNECTED -> "آماده اتصال"
+                            SimpleConnectionStatus.CONNECTING -> "در حال برقراری اتصال..."
+                            SimpleConnectionStatus.CONNECTED -> "متصل"
+                        },
+                        color = Color(0xFFC9D6E8),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 12.dp)
+                    .width(1.dp)
+                    .height(14.dp)
+                    .background(if (status == SimpleConnectionStatus.CONNECTED) Color(0x2EFFFFFF) else Color.Transparent)
+            )
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                if (status == SimpleConnectionStatus.CONNECTED) {
+                    Text(
+                        text = timerText,
+                        color = stateColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
         val remainingMillis = (licenseExpiresAtMillis ?: 0L) - System.currentTimeMillis()
         val remainingDays = if (licenseExpiresAtMillis != null && remainingMillis > 0L) {
             (remainingMillis + 86_399_999L) / 86_400_000L
         } else 0L
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(Brush.linearGradient(listOf(Color(0xCC17294A), Color(0xCC101A32))))
-                .border(1.dp, Color(0x6656DDF5), RoundedCornerShape(18.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Column {
-                Text("اعتبار PARSCLOUD", color = Color(0xFF9CB6D5), fontSize = 10.sp)
-                Text(
-                    if (licenseExpiresAtMillis == null) "در حال دریافت اطلاعات"
-                    else if (remainingDays > 0L) "$remainingDays روز باقی‌مانده"
-                    else "منقضی‌شده",
-                    color = if (remainingDays > 0L) Color(0xFFB8FFF0) else Color(0xFFFF9AA8),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text("حجم مصرفی", color = Color(0xFF9CB6D5), fontSize = 10.sp)
-                Text("نامحدود", color = Color(0xFF72E8C4), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = selectedServerName?.takeIf { it.isNotBlank() } ?: "یک سرور انتخاب کن",
-            color = Color(0xFFEAF7FF),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(modifier = Modifier.height(5.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
+            Column(
                 modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(statusColor)
-            )
-            Spacer(modifier = Modifier.width(7.dp))
-            Text(
-                text = when (status) {
-                    SimpleConnectionStatus.DISCONNECTED -> "آماده اتصال"
-                    SimpleConnectionStatus.CONNECTING -> "در حال برقراری اتصال..."
-                    SimpleConnectionStatus.CONNECTED -> "متصل • $timerText"
-                },
-                color = statusColor,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-
-        androidx.compose.material3.Button(
-            onClick = onConnectClick,
-            enabled = actionEnabled,
-            modifier = Modifier
-                .size(112.dp)
-                .shadow(
-                    elevation = 20.dp,
-                    shape = CircleShape,
-                    ambientColor = Color(0xFF22DDF2),
-                    spotColor = Color(0xFF22DDF2),
-                )
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = when (status) {
-                            SimpleConnectionStatus.DISCONNECTED ->
-                                listOf(Color(0xFF315D83), Color(0xFF102D50), Color(0xFF07172F))
-                            SimpleConnectionStatus.CONNECTING ->
-                                listOf(Color(0xFFFFD18A), Color(0xFFB87531), Color(0xFF51301D))
-                            SimpleConnectionStatus.CONNECTED ->
-                                listOf(Color(0xFF42E8D0), Color(0xFF126F79), Color(0xFF092B42))
-                        }
-                    )
-                )
-                .border(
-                    2.dp,
-                    Brush.linearGradient(listOf(Color(0xFFE4FFFF), Color(0xFF49DFF4), Color(0xFF527DA8))),
-                    CircleShape,
-                ),
-            shape = CircleShape,
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = Color.Transparent,
-                contentColor = actionContentColor,
-                disabledContainerColor = Color(0xFF27344A),
-                disabledContentColor = Color(0xFF8293A8),
-            ),
-            contentPadding = PaddingValues(8.dp),
-        ) {
-            // Layered metallic face: steel rim, dark inset and a soft illuminated core.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            listOf(
-                                Color(0xFFE0F0F7),
-                                Color(0xFF7898AE),
-                                Color(0xFF263F59),
-                                Color(0xFFB5CEDB),
-                            )
-                        )
-                    )
-                    .border(1.dp, Color(0xFFE7F8FF), CircleShape)
-                    .padding(4.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            colors = when (status) {
-                                SimpleConnectionStatus.DISCONNECTED ->
-                                    listOf(Color(0xFF47799F), Color(0xFF183957), Color(0xFF07172C))
-                                SimpleConnectionStatus.CONNECTING ->
-                                    listOf(Color(0xFFFFD69A), Color(0xFF9A5D2D), Color(0xFF291A16))
-                                SimpleConnectionStatus.CONNECTED ->
-                                    listOf(Color(0xFF55F4DE), Color(0xFF126D78), Color(0xFF06263B))
-                            }
-                        )
-                    )
-                    .border(1.dp, Color(0x885DE5F5), CircleShape),
-                contentAlignment = Alignment.Center,
+                    .weight(1f)
+                    .cardSurface(RoundedCornerShape(14.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    androidx.compose.material3.Icon(
-                        painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_lock_power_off),
-                        contentDescription = actionText,
-                        modifier = Modifier.size(39.dp),
-                        tint = actionContentColor,
+                Text("اعتبار PARSCLOUD", color = TextDim, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CardGlyph(type = CardGlyphType.CLOCK, color = Gold, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        if (licenseExpiresAtMillis == null) "در حال دریافت اطلاعات"
+                        else if (remainingDays > 0L) "$remainingDays روز باقی‌مانده"
+                        else "منقضی‌شده",
+                        color = if (remainingDays > 0L) TextPrimary else Color(0xFFFF9AA8),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(actionText, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = actionContentColor)
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .cardSurface(RoundedCornerShape(14.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Text("حجم مصرفی", color = TextDim, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CardGlyph(type = CardGlyphType.INFINITY, color = Turquoise, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("نامحدود", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+    }
+}
+
+private enum class CardGlyphType { CLOCK, INFINITY }
+
+/** Small line glyphs for the credit and volume cards, drawn on a Canvas (no icon library). */
+@Composable
+private fun CardGlyph(type: CardGlyphType, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val u = size.minDimension / 24f
+        val stroke = Stroke(width = 2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        when (type) {
+            CardGlyphType.CLOCK -> {
+                drawCircle(color = color, radius = 9f * u, center = Offset(12f * u, 12f * u), style = stroke)
+                val hands = Path().apply {
+                    moveTo(12f * u, 7.5f * u)
+                    lineTo(12f * u, 12f * u)
+                    lineTo(15.2f * u, 14f * u)
+                }
+                drawPath(hands, color, style = stroke)
+            }
+            CardGlyphType.INFINITY -> {
+                val loop = Path().apply {
+                    moveTo(12f * u, 12f * u)
+                    cubicTo(13.5f * u, 9.5f * u, 15f * u, 8f * u, 17f * u, 8f * u)
+                    cubicTo(19.2f * u, 8f * u, 21f * u, 9.8f * u, 21f * u, 12f * u)
+                    cubicTo(21f * u, 14.2f * u, 19.2f * u, 16f * u, 17f * u, 16f * u)
+                    cubicTo(15f * u, 16f * u, 13.5f * u, 14.5f * u, 12f * u, 12f * u)
+                    cubicTo(10.5f * u, 9.5f * u, 9f * u, 8f * u, 7f * u, 8f * u)
+                    cubicTo(4.8f * u, 8f * u, 3f * u, 9.8f * u, 3f * u, 12f * u)
+                    cubicTo(3f * u, 14.2f * u, 4.8f * u, 16f * u, 7f * u, 16f * u)
+                    cubicTo(9f * u, 16f * u, 10.5f * u, 14.5f * u, 12f * u, 12f * u)
+                }
+                drawPath(loop, color, style = stroke)
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Chrome power button. Pure drawing: it only receives the state and forwards the click to the
+// original onConnectClick through the same material3 Button (same enabled rule as before).
+// The power glyph geometry is identical in every state; only colour and lighting change.
+// ---------------------------------------------------------------------------------------------
+@Composable
+private fun ChromePowerButton(
+    status: SimpleConnectionStatus,
+    stateColor: Color,
+    enabled: Boolean,
+    label: String,
+    onClick: () -> Unit,
+    size: Dp,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val press by animateFloatAsState(if (pressed && enabled) 1f else 0f, tween(110))
+    val color by animateColorAsState(stateColor, tween(300))
+    val faceTint by animateFloatAsState(
+        when (status) {
+            SimpleConnectionStatus.DISCONNECTED -> 0f
+            SimpleConnectionStatus.CONNECTING -> 0.40f
+            SimpleConnectionStatus.CONNECTED -> 0.50f
+        },
+        tween(400),
+    )
+    val reflection by animateFloatAsState(
+        when (status) {
+            SimpleConnectionStatus.DISCONNECTED -> 0f
+            SimpleConnectionStatus.CONNECTING -> 0.40f
+            SimpleConnectionStatus.CONNECTED -> 0.50f
+        },
+        tween(400),
+    )
+    val glow by animateFloatAsState(
+        if (!enabled) 0f else when (status) {
+            SimpleConnectionStatus.DISCONNECTED -> 0f
+            SimpleConnectionStatus.CONNECTING -> 0.28f
+            SimpleConnectionStatus.CONNECTED -> 0.36f
+        },
+        tween(400),
+    )
+    val density = LocalDensity.current
+    val unitPx = with(density) { size.toPx() } / 224f
+    val floorExtra = 18.dp
+
+    Box(
+        modifier = Modifier.size(width = size, height = size + floorExtra),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        if (status == SimpleConnectionStatus.CONNECTED) {
+            PulsingHeroGlow(size = size, color = color, alpha = glow)
+        } else {
+            HeroGlow(size = size, color = color, alpha = glow)
+        }
+
+        Canvas(
+            modifier = Modifier
+                .size(width = size, height = size + floorExtra)
+                .graphicsLayer { alpha = if (enabled) 1f else 0.45f },
+        ) {
+            drawChromeButton(
+                stateColor = color,
+                reflection = reflection,
+                faceTint = faceTint,
+                press = press,
+            )
+        }
+
+        if (status == SimpleConnectionStatus.CONNECTING) {
+            ConnectingSweep(size = size, color = color)
+        }
+
         Text(
-            text = "PARSCLOUD  •  اتصال امن و پایدار",
-            color = Color(0xFF7795B8),
-            fontSize = 10.sp,
-            letterSpacing = 0.5.sp,
+            text = label,
+            color = color.copy(alpha = if (enabled) 1f else 0.45f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            modifier = Modifier
+                .offset(y = size * (146f / 224f) - 7.dp)
+                .graphicsLayer { translationY = press * 2.2f * unitPx },
         )
+
+        androidx.compose.material3.Button(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier
+                .size(size)
+                .semantics { contentDescription = label },
+            shape = CircleShape,
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = Color.Transparent,
+                contentColor = Color.White,
+                disabledContainerColor = Color.Transparent,
+                disabledContentColor = Color.White,
+            ),
+            contentPadding = PaddingValues(0.dp),
+            interactionSource = interaction,
+        ) {}
+    }
+}
+
+@Composable
+private fun HeroGlow(size: Dp, color: Color, alpha: Float) {
+    Canvas(modifier = Modifier.size(size)) {
+        val u = this.size.width / 224f
+        val c = Offset(this.size.width / 2f, this.size.width / 2f)
+        if (alpha > 0.01f) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(color.copy(alpha = alpha), Color.Transparent),
+                    center = c,
+                    radius = 134f * u,
+                ),
+                radius = 134f * u,
+                center = c,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PulsingHeroGlow(size: Dp, color: Color, alpha: Float) {
+    val transition = rememberInfiniteTransition()
+    val factor by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0.5f,
+        animationSpec = infiniteRepeatable(tween(1300), RepeatMode.Reverse),
+    )
+    HeroGlow(size = size, color = color, alpha = alpha * factor)
+}
+
+/** Light sweeping around the chrome rim while connecting. Only composed in that state. */
+@Composable
+private fun ConnectingSweep(size: Dp, color: Color) {
+    val transition = rememberInfiniteTransition()
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing)),
+    )
+    Canvas(modifier = Modifier.size(size)) {
+        val u = this.size.width / 224f
+        val c = Offset(this.size.width / 2f, this.size.width / 2f)
+        rotate(degrees = angle, pivot = c) {
+            drawCircle(
+                brush = Brush.sweepGradient(
+                    0f to Color.Transparent,
+                    0.62f to Color.Transparent,
+                    1f to color,
+                    center = c,
+                ),
+                radius = 95f * u,
+                center = c,
+                style = Stroke(width = 12f * u),
+                blendMode = BlendMode.Screen,
+            )
+        }
+    }
+}
+
+/**
+ * Draws the layered chrome button on a square of width = size.width (extra height below is used
+ * for the floor shadow). All measures are in "design units": 224 units = button width.
+ * Layers: floor shadow, outer chrome ring, reversed inner chrome ring, dark groove, graphite
+ * glass face with gloss, constant power glyph.
+ */
+private fun DrawScope.drawChromeButton(
+    stateColor: Color,
+    reflection: Float,
+    faceTint: Float,
+    press: Float,
+) {
+    val u = size.width / 224f
+    val c = Offset(size.width / 2f, size.width / 2f)
+    val cx = c.x
+    val cy = c.y
+
+    // Floor shadow under the whole button.
+    val floorC = Offset(cx, cy + 114f * u)
+    withTransform({ scale(1f, 0.14f, floorC) }) {
+        drawCircle(
+            brush = Brush.radialGradient(
+                listOf(Color(0xCC000000), Color.Transparent),
+                center = floorC,
+                radius = 96f * u,
+            ),
+            radius = 96f * u,
+            center = floorC,
+        )
+    }
+
+    // Outer chrome ring: bright top, dark horizon band, bright bottom.
+    drawCircle(
+        brush = Brush.verticalGradient(
+            0f to Color(0xFFFFFFFF),
+            0.28f to Color(0xFFB4BCC8),
+            0.50f to Color(0xFF3A414D),
+            0.55f to Color(0xFF262C36),
+            0.76f to Color(0xFFB9C2CE),
+            1f to Color(0xFFF1F4F8),
+            startY = cy - 100f * u,
+            endY = cy + 100f * u,
+        ),
+        radius = 100f * u,
+        center = c,
+    )
+    // Inner chrome ring with reversed reflection, so the rim reads as a rounded, raised edge.
+    drawCircle(
+        brush = Brush.verticalGradient(
+            0f to Color(0xFFFFFFFF),
+            0.40f to Color(0xFF2A313C),
+            0.65f to Color(0xFF7B8696),
+            1f to Color(0xFFDFE5ED),
+            startY = cy - 88f * u,
+            endY = cy + 88f * u,
+        ),
+        radius = 88f * u,
+        center = c,
+    )
+    // Raised edge: bright top rim and dark bottom rim on the outer ring.
+    drawCircle(
+        brush = Brush.verticalGradient(
+            0f to Color(0xF2FFFFFF),
+            0.45f to Color.Transparent,
+            startY = cy - 100f * u,
+            endY = cy + 100f * u,
+        ),
+        radius = 99f * u,
+        center = c,
+        style = Stroke(2f * u),
+    )
+    drawCircle(
+        brush = Brush.verticalGradient(
+            0.6f to Color.Transparent,
+            1f to Color(0x73000000),
+            startY = cy - 100f * u,
+            endY = cy + 100f * u,
+        ),
+        radius = 99f * u,
+        center = c,
+        style = Stroke(2.4f * u),
+    )
+    // Light of the current state reflected on the lower chrome edge.
+    if (reflection > 0.01f) {
+        val reflC = Offset(cx, cy + 108f * u)
+        clipPath(Path().apply { addOval(Rect(c, 100f * u)) }) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(stateColor.copy(alpha = reflection), Color.Transparent),
+                    center = reflC,
+                    radius = 88f * u,
+                ),
+                radius = 88f * u,
+                center = reflC,
+                blendMode = BlendMode.Screen,
+            )
+        }
+    }
+
+    // Dark groove the face sits in, with a soft inner shadow at the top.
+    drawCircle(color = Color(0xFF05080D), radius = 79f * u, center = c)
+    drawCircle(
+        brush = Brush.verticalGradient(
+            0f to Color(0xCC000000),
+            0.5f to Color.Transparent,
+            startY = cy - 79f * u,
+            endY = cy + 79f * u,
+        ),
+        radius = 77.5f * u,
+        center = c,
+        style = Stroke(3f * u),
+    )
+
+    // Glass face, glyph and gloss. They sink slightly while pressed.
+    withTransform({
+        translate(left = 0f, top = 2.2f * u * press)
+        scale(1f - 0.015f * press, 1f - 0.015f * press, c)
+    }) {
+        drawCircle(
+            brush = Brush.radialGradient(
+                0f to Color(0xFF2F3948),
+                0.45f to Color(0xFF141A24),
+                1f to Color(0xFF090D13),
+                center = Offset(cx - 14.6f * u, cy - 32f * u),
+                radius = 131f * u,
+            ),
+            radius = 73f * u,
+            center = c,
+        )
+        if (faceTint > 0.01f) {
+            val tintC = Offset(cx, cy + 18f * u)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    listOf(stateColor.copy(alpha = faceTint), Color.Transparent),
+                    center = tintC,
+                    radius = 101f * u,
+                ),
+                radius = 73f * u,
+                center = c,
+            )
+        }
+        // Thin inner ring on the face.
+        drawCircle(color = Color(0x1FFFFFFF), radius = 60f * u, center = c, style = Stroke(1f * u))
+
+        // Power glyph: same shape and position in every state, only colour and glow change.
+        val arcR = 22f * u
+        val arcCenter = Offset(cx, cy - 8f * u)
+        fun glyph(color: Color, strokeWidth: Float) {
+            drawArc(
+                color = color,
+                startAngle = 305f,
+                sweepAngle = 290f,
+                useCenter = false,
+                topLeft = Offset(arcCenter.x - arcR, arcCenter.y - arcR),
+                size = Size(arcR * 2f, arcR * 2f),
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
+            )
+            drawLine(
+                color = color,
+                start = Offset(cx, cy - 38f * u),
+                end = Offset(cx, cy - 12f * u),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round,
+            )
+        }
+        glyph(stateColor.copy(alpha = 0.26f), 14f * u)
+        glyph(stateColor, 6f * u)
+
+        // Glossy highlight on the upper left of the face.
+        val glossC = Offset(cx - 20f * u, cy - 46f * u)
+        clipPath(Path().apply { addOval(Rect(c, 73f * u)) }) {
+            rotate(degrees = -22f, pivot = glossC) {
+                drawOval(
+                    color = Color(0x40FFFFFF),
+                    topLeft = Offset(glossC.x - 38f * u, glossC.y - 12f * u),
+                    size = Size(76f * u, 24f * u),
+                )
+            }
+        }
+        // Fine outline that catches the light on the face edge.
+        drawCircle(color = Color(0x47FFFFFF), radius = 73f * u, center = c, style = Stroke(1f * u))
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Bottom action bar helpers (visual only; callbacks and enabled rules come from the caller).
+// ---------------------------------------------------------------------------------------------
+@Composable
+private fun ActionBarContainer(content: @Composable RowScope.() -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 14.dp)
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(LineColor)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun BottomAction(
+    label: String,
+    glyph: ActionGlyph,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    tint: Color = TextPrimary,
+) {
+    val alpha = if (enabled) 1f else 0.4f
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        ActionGlyphIcon(glyph = glyph, color = tint.copy(alpha = alpha), modifier = Modifier.size(24.dp))
+        Text(label, color = TextSecondary.copy(alpha = alpha), fontSize = 12.sp, maxLines = 1)
+    }
+}
+
+private enum class ActionGlyph { CROWN, ACTIVITY, STOP, REFRESH, TRASH, PLUS }
+
+/** Small line icons drawn on a Canvas so no icon library dependency is needed. */
+@Composable
+private fun ActionGlyphIcon(glyph: ActionGlyph, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val u = size.minDimension / 24f
+        val stroke = Stroke(width = 1.9f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        fun p(x: Float, y: Float) = Offset(x * u, y * u)
+        when (glyph) {
+            ActionGlyph.PLUS -> {
+                drawLine(color = color, start = p(6f, 12f), end = p(18f, 12f), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
+                drawLine(color = color, start = p(12f, 6f), end = p(12f, 18f), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
+            }
+            ActionGlyph.REFRESH -> {
+                val r = 7.5f * u
+                val center = p(12f, 12f)
+                drawArc(
+                    color = color,
+                    startAngle = 20f,
+                    sweepAngle = 290f,
+                    useCenter = false,
+                    topLeft = Offset(center.x - r, center.y - r),
+                    size = Size(r * 2f, r * 2f),
+                    style = stroke,
+                )
+                val a = 310.0 * PI / 180.0
+                val ex = center.x + r * cos(a).toFloat()
+                val ey = center.y + r * sin(a).toFloat()
+                val tx = (-sin(a)).toFloat()
+                val ty = cos(a).toFloat()
+                val nx = cos(a).toFloat()
+                val ny = sin(a).toFloat()
+                val head = Path().apply {
+                    moveTo(ex + tx * 3.6f * u, ey + ty * 3.6f * u)
+                    lineTo(ex + nx * 3f * u, ey + ny * 3f * u)
+                    lineTo(ex - nx * 3f * u, ey - ny * 3f * u)
+                    close()
+                }
+                drawPath(head, color)
+            }
+            ActionGlyph.ACTIVITY -> {
+                val path = Path().apply {
+                    moveTo(3f * u, 12f * u)
+                    lineTo(8f * u, 12f * u)
+                    lineTo(10.5f * u, 6f * u)
+                    lineTo(13.5f * u, 18f * u)
+                    lineTo(16f * u, 12f * u)
+                    lineTo(21f * u, 12f * u)
+                }
+                drawPath(path, color, style = stroke)
+            }
+            ActionGlyph.CROWN -> {
+                val path = Path().apply {
+                    moveTo(4f * u, 17f * u)
+                    lineTo(4f * u, 8f * u)
+                    lineTo(8.5f * u, 12f * u)
+                    lineTo(12f * u, 6f * u)
+                    lineTo(15.5f * u, 12f * u)
+                    lineTo(20f * u, 8f * u)
+                    lineTo(20f * u, 17f * u)
+                    close()
+                }
+                drawPath(path, color, style = stroke)
+                drawLine(color = color, start = p(4.5f, 20f), end = p(19.5f, 20f), strokeWidth = 1.9f * u, cap = StrokeCap.Round)
+            }
+            ActionGlyph.TRASH -> {
+                drawLine(color = color, start = p(5f, 7f), end = p(19f, 7f), strokeWidth = 1.9f * u, cap = StrokeCap.Round)
+                val handle = Path().apply {
+                    moveTo(9.5f * u, 7f * u)
+                    lineTo(9.5f * u, 4.5f * u)
+                    lineTo(14.5f * u, 4.5f * u)
+                    lineTo(14.5f * u, 7f * u)
+                }
+                drawPath(handle, color, style = stroke)
+                val body = Path().apply {
+                    moveTo(6.5f * u, 7f * u)
+                    lineTo(7.5f * u, 19.5f * u)
+                    lineTo(16.5f * u, 19.5f * u)
+                    lineTo(17.5f * u, 7f * u)
+                }
+                drawPath(body, color, style = stroke)
+            }
+            ActionGlyph.STOP -> {
+                drawRoundRect(
+                    color = color,
+                    topLeft = p(6.5f, 6.5f),
+                    size = Size(11f * u, 11f * u),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f * u, 2f * u),
+                    style = stroke,
+                )
+            }
+        }
     }
 }
