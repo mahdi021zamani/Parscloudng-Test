@@ -110,6 +110,26 @@ class SubscriptionLicenseRepositoryTest {
     }
 
     @Test
+    fun deviceLimitResponseIsRejected() {
+        val result = SubscriptionLicenseRepository.parseValidationResponse(
+            403,
+            """{"valid":false,"status":"device_limit","deviceCount":2,"maxDevices":2}""",
+            serverNow,
+        )
+        assertEquals(SubscriptionLicenseRepository.ValidationResult.Rejected("device_limit"), result)
+    }
+
+    @Test
+    fun removedDeviceResponseIsRejected() {
+        val result = SubscriptionLicenseRepository.parseValidationResponse(
+            403,
+            """{"valid":false,"status":"device_revoked"}""",
+            serverNow,
+        )
+        assertEquals(SubscriptionLicenseRepository.ValidationResult.Rejected("device_revoked"), result)
+    }
+
+    @Test
     fun serverFailureIsTreatedAsNetworkError() {
         val result = SubscriptionLicenseRepository.parseValidationResponse(
             503,
