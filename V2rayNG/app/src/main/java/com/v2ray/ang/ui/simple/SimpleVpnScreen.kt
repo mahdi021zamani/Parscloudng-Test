@@ -473,7 +473,10 @@ fun SimpleVpnScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .cardSurface(RoundedCornerShape(14.dp))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
