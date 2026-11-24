@@ -581,6 +581,8 @@
     <string name="simple_license_manage">Subscription</string>
     <string name="simple_license_invalid">This subscription key is invalid, expired, or revoked.</string>
     <string name="simple_license_network_error">Could not verify the subscription. Check your internet connection and try again.</string>
+    <string name="simple_license_device_limit">This subscription has reached its registered-device limit. Remove an old device or contact the administrator.</string>
+    <string name="simple_license_device_revoked">This app installation was removed from the subscription. Contact the administrator if this was a mistake.</string>
     <string name="simple_license_active">Subscription activated successfully.</string>
     <string name="simple_license_checking">Verifying subscription…</string>
     <string name="simple_license_key_required">Enter your subscription key.</string>
