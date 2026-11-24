@@ -1160,7 +1160,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     _uiState.update {
                         it.copy(
                             isValidatingLicense = false,
-                            message = app.getString(R.string.simple_license_invalid),
+                            message = licenseRejectedMessage(result.status),
                         )
                     }
                 }
@@ -1363,7 +1363,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                             licenseValid = false,
                             canConnect = false,
                             licenseDialogVisible = true,
-                            message = app.getString(R.string.simple_license_invalid),
+                            message = licenseRejectedMessage(result.status),
                         )
                     }
                 }
