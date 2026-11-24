@@ -56,6 +56,41 @@ object SimpleVpnRepository {
 
     data class PersonalSubscriptionTab(val id: String, val name: String)
 
+    data class PersonalSubscriptionUsage(
+        val uploadBytes: Long?,
+        val downloadBytes: Long?,
+        /** 0 means unlimited; null means the server did not provide this field. */
+        val totalBytes: Long?,
+        /** Unix seconds from the subscription-userinfo header; 0 means no expiry. */
+        val expiresAtSeconds: Long?,
+    ) {
+        val usedBytes: Long?
+            get() = if (uploadBytes != null && downloadBytes != null) uploadBytes + downloadBytes else null
+    }
+
+    /** Reads quota metadata only from a user-owned URL subscription. */
+    fun getPersonalSubscriptionUsage(sourceId: String): PersonalSubscriptionUsage? {
+        if (!sourceId.startsWith("personal_sub_")) return null
+        val header = MmkvManager.decodeSubscription(sourceId)?.subscriptionUserInfo
+            ?.takeIf { it.isNotBlank() } ?: return null
+        val fields = header.split(';').mapNotNull { part ->
+            val separator = part.indexOf('=')
+            if (separator <= 0) null else {
+                val key = part.substring(0, separator).trim().lowercase()
+                val value = part.substring(separator + 1).trim().toLongOrNull()
+                if (value == null || value < 0L) null else key to value
+            }
+        }.toMap()
+        if (fields.isEmpty()) return null
+        return PersonalSubscriptionUsage(
+            uploadBytes = fields["upload"],
+            downloadBytes = fields["download"],
+            totalBytes = fields["total"],
+            expiresAtSeconds = fields["expire"],
+        )
+    }
+
+
     data class SimpleServerUiModel(
         val guid: String,
         val displayName: String,
