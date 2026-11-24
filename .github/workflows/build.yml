@@ -26,6 +26,7 @@ on:
       - "debug/personal-import-background-trace-2026-11-22"
       - "debug/personal-import-lifecycle-trace-2-2026-11-22"
       - "debug/personal-import-final-process-trace-2026-11-22"
+      - "feature/parcloud-chrome-ui-complete-safe-merge-2026-11-24"
 
 permissions:
   contents: read
