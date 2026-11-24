@@ -578,6 +578,8 @@
     <string name="simple_license_manage">اشتراک</string>
     <string name="simple_license_invalid">این کلید اشتراک نامعتبر است، منقضی شده یا لغو شده است.</string>
     <string name="simple_license_network_error">بررسی اشتراک انجام نشد. اتصال اینترنت را بررسی و دوباره تلاش کنید.</string>
+    <string name="simple_license_device_limit">ظرفیت دستگاه‌های این اشتراک تکمیل شده است. یک دستگاه قبلی را از پنل حذف کنید یا با مدیر تماس بگیرید.</string>
+    <string name="simple_license_device_revoked">این نصب از اشتراک حذف شده است. اگر این کار اشتباه بوده، با مدیر تماس بگیرید.</string>
     <string name="simple_license_active">اشتراک با موفقیت فعال شد.</string>
     <string name="simple_license_checking">در حال بررسی اشتراک…</string>
     <string name="simple_license_key_required">کلید اشتراک را وارد کنید.</string>
