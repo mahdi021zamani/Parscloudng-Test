@@ -1000,15 +1000,15 @@ private fun ConnectionBar(
             remainingDays > 0L -> "${remainingDays.toString().toPersianDigits()} روز باقی‌مانده"
             else -> "منقضی‌شده"
         }
+        val personalUsedBytes = personalSubscriptionUsage?.usedBytes
         val personalVolumeText = when {
             !isPersonalSource -> "نامحدود"
-            personalSubscriptionUsage == null -> "نامشخص"
-            personalSubscriptionUsage.usedBytes == null -> "نامشخص"
+            personalSubscriptionUsage == null || personalUsedBytes == null -> "نامشخص"
             personalSubscriptionUsage.totalBytes == 0L ->
-                "${formatSubscriptionBytes(personalSubscriptionUsage.usedBytes)} / نامحدود"
+                "${formatSubscriptionBytes(personalUsedBytes)} / نامحدود"
             personalSubscriptionUsage.totalBytes != null ->
-                "${formatSubscriptionBytes(personalSubscriptionUsage.usedBytes)} / ${formatSubscriptionBytes(personalSubscriptionUsage.totalBytes)}"
-            else -> "${formatSubscriptionBytes(personalSubscriptionUsage.usedBytes)} / نامشخص"
+                "${formatSubscriptionBytes(personalUsedBytes)} / ${formatSubscriptionBytes(personalSubscriptionUsage.totalBytes)}"
+            else -> "${formatSubscriptionBytes(personalUsedBytes)} / نامشخص"
         }
         Row(
             modifier = Modifier.fillMaxWidth(),
