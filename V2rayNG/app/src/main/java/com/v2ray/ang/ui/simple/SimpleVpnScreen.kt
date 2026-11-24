@@ -1042,9 +1042,9 @@ private fun ConnectionBar(
                 Text(if (isPersonalSource) "مصرف / کل حجم" else "حجم مصرفی", color = TextDim, fontSize = 12.sp)
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CardGlyph(type = CardGlyphType.INFINITY, color = Turquoise, modifier = Modifier.size(18.dp))
+                    CardGlyph(type = if (isPersonalSource) CardGlyphType.DATA else CardGlyphType.INFINITY, color = Turquoise, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text(personalVolumeText, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text(personalVolumeText, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -1067,7 +1067,7 @@ private fun String.toPersianDigits(): String {
     return map { char -> if (char in '0'..'9') persianDigits[char - '0'] else char }.joinToString("")
 }
 
-private enum class CardGlyphType { CLOCK, INFINITY }
+private enum class CardGlyphType { CLOCK, INFINITY, DATA }
 
 /** Small line glyphs for the credit and volume cards, drawn on a Canvas (no icon library). */
 @Composable
@@ -1084,6 +1084,12 @@ private fun CardGlyph(type: CardGlyphType, color: Color, modifier: Modifier = Mo
                     lineTo(15.2f * u, 14f * u)
                 }
                 drawPath(hands, color, style = stroke)
+            }
+            CardGlyphType.DATA -> {
+                drawLine(color, Offset(4f * u, 18f * u), Offset(20f * u, 18f * u), stroke.width, cap = StrokeCap.Round)
+                drawLine(color, Offset(6f * u, 15f * u), Offset(6f * u, 11f * u), stroke.width, cap = StrokeCap.Round)
+                drawLine(color, Offset(12f * u, 15f * u), Offset(12f * u, 7f * u), stroke.width, cap = StrokeCap.Round)
+                drawLine(color, Offset(18f * u, 15f * u), Offset(18f * u, 4f * u), stroke.width, cap = StrokeCap.Round)
             }
             CardGlyphType.INFINITY -> {
                 val loop = Path().apply {
