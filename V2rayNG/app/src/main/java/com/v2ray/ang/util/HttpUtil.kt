@@ -19,6 +19,8 @@ import java.net.URI
 import java.net.URL
 import java.util.concurrent.TimeUnit
 
+data class UrlContentResponse(val body: String, val subscriptionUserInfo: String?)
+
 object HttpUtil {
 
     /**
@@ -161,7 +163,12 @@ object HttpUtil {
      * @throws IOException If an I/O error occurs.
      */
     @Throws(IOException::class)
-    fun getUrlContentWithUserAgent(request: UrlContentRequest): String {
+    fun getUrlContentWithUserAgent(request: UrlContentRequest): String =
+        getUrlContentWithUserAgentResponse(request).body
+
+    /** Includes quota metadata from the final successful redirect response. */
+    @Throws(IOException::class)
+    fun getUrlContentWithUserAgentResponse(request: UrlContentRequest): UrlContentResponse {
         var currentUrl = request.url
         var redirects = 0
         val maxRedirects = 3
@@ -218,7 +225,10 @@ object HttpUtil {
                     }
 
                     response.isSuccessful -> {
-                        return response.body?.string() ?: ""
+                        return UrlContentResponse(
+                            body = response.body?.string() ?: "",
+                            subscriptionUserInfo = response.header("subscription-userinfo"),
+                        )
                     }
 
                     else -> {
