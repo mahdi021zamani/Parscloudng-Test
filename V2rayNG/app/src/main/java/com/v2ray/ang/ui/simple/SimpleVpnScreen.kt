@@ -383,7 +383,6 @@ fun SimpleVpnScreen(
             // Hero: power button, selected server, status + timer, credit and volume cards.
             ConnectionBar(
                 status = uiState.status,
-                selectedServerName = uiState.servers.firstOrNull { it.guid == uiState.selectedGuid }?.displayName,
                 profileLabel = selectedProfileLabel,
                 canConnect = uiState.canConnect && uiState.selectedGuid != null,
                 licenseExpiresAtMillis = uiState.licenseExpiresAtMillis,
@@ -857,7 +856,6 @@ private fun DelayLabel(delayMillis: Long?, testing: Boolean) {
 @Composable
 private fun ConnectionBar(
     status: SimpleConnectionStatus,
-    selectedServerName: String?,
     profileLabel: String?,
     canConnect: Boolean,
     licenseExpiresAtMillis: Long?,
@@ -913,41 +911,15 @@ private fun ConnectionBar(
         )
 
         Spacer(modifier = Modifier.height(2.dp))
-        val serverName = selectedServerName?.takeIf { it.isNotBlank() }
-        if (serverName != null) {
-            // Server names are Latin in most profiles: keep "name  profile" reading left-to-right.
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = serverName,
-                        color = TextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (!profileLabel.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = profileLabel,
-                            color = TextDim,
-                            fontSize = 13.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-            }
-        } else {
-            Text(
-                text = "یک سرور انتخاب کن",
-                color = TextPrimary,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-            )
-        }
+        Text(
+            text = profileLabel?.takeIf { it.isNotBlank() } ?: "یک پروفایل انتخاب کن",
+            color = TextPrimary,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+        )
         Spacer(modifier = Modifier.height(6.dp))
 
         // Keep the status centered; show the timer beside it only while connected.
