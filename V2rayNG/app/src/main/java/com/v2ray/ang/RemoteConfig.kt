@@ -23,14 +23,10 @@ object RemoteConfig {
     /** Full custom Xray JSON profiles for Services for Iran. */
     const val SERVICES_FOR_IRAN_URL = "https://raw.githubusercontent.com/mahdi021zamani/parscloud-sub/main/Services%20for%20Iran"
 
-    /**
-     * Optional private proxy endpoint that returns the emergency paid-panel feed.
-     * Keep blank until the secret source URL is configured server-side. Never put
-     * the original tokenized subscription URL in the APK or a public repository.
-     */
-    const val EMERGENCY_FALLBACK_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/fallback-config"
+    /** One-time challenge endpoint for a Keystore-backed installation identity. */
+    const val SUBSCRIPTION_DEVICE_CHALLENGE_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/device-challenge"
 
-    /** HTTPS endpoint used to verify each customer subscription key. */
+    /** HTTPS endpoint used to verify each customer subscription key and device proof. */
     const val SUBSCRIPTION_VALIDATE_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/validate"
 
     /** How long a successfully downloaded source remains connectable. */
