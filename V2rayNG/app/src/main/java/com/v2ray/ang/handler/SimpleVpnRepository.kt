@@ -24,6 +24,7 @@ object SimpleVpnRepository {
     const val COMBINED_SUB_ID = "simple_combined"
     const val SERVICES_SUB_ID = "simple_services_iran"
     const val PERSONAL_SUB_ID = "simple_personal"
+    private const val RETIRED_EMERGENCY_SOURCE_ID = "simple_emergency"
 
     private enum class SourceKind { V2RAY, AETHER, CUSTOM_JSON }
 
@@ -136,8 +137,9 @@ object SimpleVpnRepository {
     /** Backwards-compatible initializer used by older call sites. */
     fun ensureSubscription(): SubscriptionCache = ensureSubscription(primarySources.first())
 
-    /** Initialize all central source identities without performing any network request. */
+    /** Remove the retired emergency cache once, then initialize active GitHub sources. */
     fun ensureSubscriptions() {
+        MmkvManager.removeSubscription(RETIRED_EMERGENCY_SOURCE_ID)
         primarySources.forEach { ensureSubscription(it) }
     }
 
