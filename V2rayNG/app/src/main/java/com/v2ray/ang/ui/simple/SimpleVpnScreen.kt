@@ -385,7 +385,9 @@ fun SimpleVpnScreen(
                 status = uiState.status,
                 profileLabel = selectedProfileLabel,
                 canConnect = uiState.canConnect && uiState.selectedGuid != null,
+                sourceId = uiState.selectedSourceId,
                 licenseExpiresAtMillis = uiState.licenseExpiresAtMillis,
+                personalSubscriptionUsage = uiState.personalSubscriptionUsage,
                 onConnectClick = onConnectClick,
             )
 
@@ -873,7 +875,9 @@ private fun ConnectionBar(
     status: SimpleConnectionStatus,
     profileLabel: String?,
     canConnect: Boolean,
+    sourceId: String,
     licenseExpiresAtMillis: Long?,
+    personalSubscriptionUsage: SimpleVpnRepository.PersonalSubscriptionUsage?,
     onConnectClick: () -> Unit,
 ) {
     var elapsedSeconds by remember { mutableStateOf(0L) }
@@ -977,10 +981,35 @@ private fun ConnectionBar(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        val remainingMillis = (licenseExpiresAtMillis ?: 0L) - System.currentTimeMillis()
-        val remainingDays = if (licenseExpiresAtMillis != null && remainingMillis > 0L) {
+        val isPersonalSource = sourceId == SimpleVpnRepository.PERSONAL_SUB_ID ||
+            sourceId.startsWith("personal_sub_")
+        val personalExpiryMillis = personalSubscriptionUsage?.expiresAtSeconds
+            ?.takeIf { it > 0L }?.let { it * 1000L }
+        val expiryMillis = if (isPersonalSource) personalExpiryMillis else licenseExpiresAtMillis
+        val remainingMillis = (expiryMillis ?: 0L) - System.currentTimeMillis()
+        val remainingDays = if (expiryMillis != null && remainingMillis > 0L) {
             (remainingMillis + 86_399_999L) / 86_400_000L
         } else 0L
+        val expiryText = if (!isPersonalSource) {
+            if (licenseExpiresAtMillis == null) "در حال دریافت اطلاعات"
+            else if (remainingDays > 0L) "${remainingDays.toString().toPersianDigits()} روز باقی‌مانده"
+            else "منقضی‌شده"
+        } else when {
+            personalSubscriptionUsage?.expiresAtSeconds == 0L -> "نامحدود"
+            personalSubscriptionUsage?.expiresAtSeconds == null -> "نامشخص"
+            remainingDays > 0L -> "${remainingDays.toString().toPersianDigits()} روز باقی‌مانده"
+            else -> "منقضی‌شده"
+        }
+        val personalVolumeText = when {
+            !isPersonalSource -> "نامحدود"
+            personalSubscriptionUsage == null -> "نامشخص"
+            personalSubscriptionUsage.usedBytes == null -> "نامشخص"
+            personalSubscriptionUsage.totalBytes == 0L ->
+                "${formatSubscriptionBytes(personalSubscriptionUsage.usedBytes)} / نامحدود"
+            personalSubscriptionUsage.totalBytes != null ->
+                "${formatSubscriptionBytes(personalSubscriptionUsage.usedBytes)} / ${formatSubscriptionBytes(personalSubscriptionUsage.totalBytes)}"
+            else -> "${formatSubscriptionBytes(personalSubscriptionUsage.usedBytes)} / نامشخص"
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -991,16 +1020,14 @@ private fun ConnectionBar(
                     .cardSurface(RoundedCornerShape(14.dp))
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Text("اعتبار PARSCLOUD", color = TextDim, fontSize = 12.sp)
+                Text(if (isPersonalSource) "اعتبار اشتراک" else "اعتبار PARSCLOUD", color = TextDim, fontSize = 12.sp)
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CardGlyph(type = CardGlyphType.CLOCK, color = Gold, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        if (licenseExpiresAtMillis == null) "در حال دریافت اطلاعات"
-                        else if (remainingDays > 0L) "${remainingDays.toString().toPersianDigits()} روز باقی‌مانده"
-                        else "منقضی‌شده",
-                        color = if (remainingDays > 0L) TextPrimary else Color(0xFFFF9AA8),
+                        expiryText,
+                        color = if (expiryText == "منقضی‌شده") Color(0xFFFF9AA8) else TextPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -1012,16 +1039,27 @@ private fun ConnectionBar(
                     .cardSurface(RoundedCornerShape(14.dp))
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Text("حجم مصرفی", color = TextDim, fontSize = 12.sp)
+                Text(if (isPersonalSource) "مصرف / کل حجم" else "حجم مصرفی", color = TextDim, fontSize = 12.sp)
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CardGlyph(type = CardGlyphType.INFINITY, color = Turquoise, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("نامحدود", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text(personalVolumeText, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
     }
+}
+
+private fun formatSubscriptionBytes(bytes: Long): String {
+    val gb = 1024.0 * 1024.0 * 1024.0
+    val mb = 1024.0 * 1024.0
+    val (value, unit) = when {
+        bytes >= gb -> bytes / gb to "GB"
+        bytes >= mb -> bytes / mb to "MB"
+        else -> bytes / 1024.0 to "KB"
+    }
+    return String.format(java.util.Locale.US, "%.2f", value).toPersianDigits() + " " + unit
 }
 
 private fun String.toPersianDigits(): String {
