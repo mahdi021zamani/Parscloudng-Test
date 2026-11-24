@@ -184,7 +184,7 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod 755 gradlew
           ./gradlew testFdroidDebugUnitTest testPlaystoreDebugUnitTest :app:compilePlaystoreDebugKotlin licenseFdroidReleaseReport assembleFdroidRelease \
-            -PpattngVersion="${{ inputs.release_tag || 'V26.10.11-test' }}" \
+            -PpattngVersion="${{ inputs.release_tag || 'V26.11.24-device-limits-test' }}" \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/android_keystore.jks" \
             -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="parscloud-test" \
@@ -194,6 +194,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v7
         with:
-          name: arm64-v8a
+          name: PARSCLOUD-Build-138-Device-Limits-TEST-arm64-v8a
           path: V2rayNG/app/build/outputs/apk/*/release/*arm64-v8a*.apk
           retention-days: 3
