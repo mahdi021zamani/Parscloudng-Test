@@ -691,6 +691,10 @@ private fun ServerList(
                                     if (pingIsRunning) onCancelPingSubscription?.invoke(subscriptionId)
                                     else onTestPingSubscription?.invoke(subscriptionId)
                                 },
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(CardColor)
+                                    .border(1.dp, LineColor, RoundedCornerShape(50)),
                                 colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
                                     contentColor = Color(0xFF7FDCF5),
                                 ),
@@ -698,6 +702,10 @@ private fun ServerList(
                             if (subscriptionId.startsWith("personal_sub_")) TextButton(
                                 onClick = { onRefreshSubscription?.invoke(subscriptionId) },
                                 enabled = subscriptionId !in refreshingSubscriptionIds,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(CardColor)
+                                    .border(1.dp, LineColor, RoundedCornerShape(50)),
                                 colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
                                     contentColor = Color(0xFF7FDCF5),
                                 ),
@@ -715,6 +723,10 @@ private fun ServerList(
                             if (subscriptionId.startsWith("personal_sub_")) {
                                 TextButton(
                                     onClick = { onDeleteSubscription?.invoke(subscriptionId) },
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(CardColor)
+                                        .border(1.dp, LineColor, RoundedCornerShape(50)),
                                     colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
                                         contentColor = Color(0xFFFF8D9A),
                                     ),
