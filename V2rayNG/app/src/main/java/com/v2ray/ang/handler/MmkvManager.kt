@@ -59,7 +59,6 @@ object MmkvManager {
         "simple_aether",
         "simple_combined",
         "simple_services_iran",
-        "simple_emergency",
         "PARSCLOUD_AETHER_FEED",
     )
 
@@ -291,8 +290,6 @@ object MmkvManager {
      * process-wide active profile used by LauncherManager.
      *
      * The old global selection is migrated only when it belongs to this feed.
-     * A V2Ray feed may also display the emergency profile while both V2Ray feeds
-     * are unavailable, so that legacy selection is accepted for those two feeds.
      */
     fun getSelectServer(subscriptionId: String): String? {
         val key = KEY_SELECTED_SERVER_SOURCE_PREFIX + getSubscriptionId(subscriptionId)
@@ -300,9 +297,7 @@ object MmkvManager {
 
         val legacyGuid = getSelectServer() ?: return null
         val legacySubscriptionId = decodeServerConfig(legacyGuid)?.subscriptionId
-        val belongsToSource = legacySubscriptionId == subscriptionId ||
-            (subscriptionId in setOf("simple_free_vpn", "simple_hamrah") &&
-                legacySubscriptionId == "simple_emergency")
+        val belongsToSource = legacySubscriptionId == subscriptionId
         if (!belongsToSource) return null
 
         withProfileIndexLock {
