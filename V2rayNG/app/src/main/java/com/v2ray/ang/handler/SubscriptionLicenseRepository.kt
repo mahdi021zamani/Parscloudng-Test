@@ -244,7 +244,7 @@ object SubscriptionLicenseRepository {
         if (!isValidKeyFormat(key)) return ValidationResult.Rejected("invalid")
 
         return try {
-            val (publicKey, _) = signDeviceChallenge("keypair-check")
+            val publicKey = Base64.encodeToString(getOrCreateDeviceKeyPair().second.encoded, Base64.NO_WRAP)
             val challengeBody = JsonObject().apply {
                 addProperty("subscriptionKey", key)
                 addProperty("devicePublicKey", publicKey)
