@@ -72,6 +72,7 @@ data class SimpleVpnUiState(
     val isValidatingLicense: Boolean = false,
     val licenseValid: Boolean = false,
     val licenseExpiresAtMillis: Long? = null,
+    val personalSubscriptionUsage: SimpleVpnRepository.PersonalSubscriptionUsage? = null,
 )
 
 internal fun selectSimpleVpnSourceTab(
@@ -344,6 +345,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         _uiState.update {
             it.copy(
                 selectedSourceId = sourceId,
+                personalSubscriptionUsage = SimpleVpnRepository.getPersonalSubscriptionUsage(sourceId),
                 servers = servers,
                 selectedGuid = selected,
                 canConnect = canConnectForSource(sourceId) && _uiState.value.licenseValid,
@@ -407,7 +409,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             selectedGuid = selected,
             canConnect = (if (sourceId == SimpleVpnRepository.PERSONAL_SUB_ID) servers.isNotEmpty() else canConnectForSource(sourceId)) && current.licenseValid,
         ) ?: return
-        _uiState.value = next
+        _uiState.value = next.copy(
+            personalSubscriptionUsage = SimpleVpnRepository.getPersonalSubscriptionUsage(sourceId),
+        )
     }
 
 
@@ -484,6 +488,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                     _uiState.update {
                         it.copy(
                             selectedSourceId = targetSourceId,
+                            personalSubscriptionUsage = SimpleVpnRepository.getPersonalSubscriptionUsage(targetSourceId),
                             servers = servers,
                             selectedGuid = selected,
                             canConnect = servers.isNotEmpty() && it.licenseValid,
@@ -613,6 +618,9 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
             withContext(Dispatchers.Main) {
                 _uiState.update { state ->
                     state.copy(
+                        personalSubscriptionUsage = if (state.selectedSourceId == subscriptionId) {
+                            SimpleVpnRepository.getPersonalSubscriptionUsage(subscriptionId)
+                        } else state.personalSubscriptionUsage,
                         servers = if (state.selectedSourceId == subscriptionId) servers else state.servers,
                         selectedGuid = if (state.selectedSourceId == subscriptionId) {
                             state.selectedGuid?.takeIf { guid -> servers.any { it.guid == guid } }
