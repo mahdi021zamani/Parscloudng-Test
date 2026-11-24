@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -312,7 +313,15 @@ fun SimpleVpnScreen(
                 },
                 actions = {
                     TextButton(onClick = onExportDiagnosticClick) {
-                        Text("گزارش مشکل", fontSize = 11.sp, color = TextSecondary)
+                        Text(
+                            "گزارش مشکل",
+                            fontSize = 11.sp,
+                            color = TextSecondary,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .border(1.dp, LineColor, RoundedCornerShape(50))
+                                .padding(horizontal = 9.dp, vertical = 5.dp),
+                        )
                     }
                 },
                 colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
@@ -609,31 +618,31 @@ private fun ProfileTab(
     label: String,
     limitLines: Boolean = true,
 ) {
-    Tab(
-        selected = selected,
-        onClick = onClick,
+    Box(
         modifier = Modifier
             .padding(horizontal = 4.dp, vertical = 6.dp)
+            .height(36.dp)
             .clip(RoundedCornerShape(50))
             .background(if (selected) Color(0xFF0E2B2E) else CardColor)
             .border(
                 0.8.dp,
                 if (selected) Turquoise else LineColor,
                 RoundedCornerShape(50),
-            ),
-        selectedContentColor = Turquoise,
-        unselectedContentColor = TextSecondary,
-        text = {
-            Text(
-                label,
-                textAlign = TextAlign.Center,
-                maxLines = if (limitLines) 2 else Int.MAX_VALUE,
-                overflow = if (limitLines) TextOverflow.Ellipsis else TextOverflow.Clip,
-                fontSize = 13.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             )
-        },
-    )
+            .selectable(selected = selected, onClick = onClick, role = Role.Tab)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            textAlign = TextAlign.Center,
+            maxLines = if (limitLines) 2 else Int.MAX_VALUE,
+            overflow = if (limitLines) TextOverflow.Ellipsis else TextOverflow.Clip,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (selected) Turquoise else TextSecondary,
+        )
+    }
 }
 
 @Composable
@@ -651,7 +660,10 @@ private fun ServerList(
     onCancelPingSubscription: ((String) -> Unit)? = null,
     onDeleteSubscription: ((String) -> Unit)? = null,
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 4.dp)) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp),
+    ) {
         if (groupBySubscription) {
             servers.groupBy { it.subscriptionId }.forEach { (subscriptionId, groupServers) ->
                 item(key = "subscription-header:$subscriptionId") {
@@ -752,13 +764,14 @@ private fun ServerRow(
             .padding(horizontal = 14.dp, vertical = 4.dp)
             .cardSurface(RoundedCornerShape(16.dp), selected)
             .selectable(selected = selected, enabled = enabled, onClick = onSelect)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(
             selected = selected,
             enabled = enabled,
-            onClick = onSelect,
+            onClick = null,
             colors = androidx.compose.material3.RadioButtonDefaults.colors(
                 selectedColor = Turquoise,
                 unselectedColor = Color(0xFF5A6B88),
@@ -899,7 +912,7 @@ private fun ConnectionBar(
             size = if (compactScreen) 140.dp else 168.dp,
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(2.dp))
         val serverName = selectedServerName?.takeIf { it.isNotBlank() }
         if (serverName != null) {
             // Server names are Latin in most profiles: keep "name  profile" reading left-to-right.
@@ -937,46 +950,36 @@ private fun ConnectionBar(
         }
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Status on one side of a thin divider, timer on the other. Both sides are equal-width,
-        // so the timer appearing never moves the status text or the power button.
+        // Keep the status centered; show the timer beside it only while connected.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(22.dp),
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(9.dp)
-                            .clip(CircleShape)
-                            .background(stateColor)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = when (status) {
-                            SimpleConnectionStatus.DISCONNECTED -> "آماده اتصال"
-                            SimpleConnectionStatus.CONNECTING -> "در حال برقراری اتصال..."
-                            SimpleConnectionStatus.CONNECTED -> "متصل"
-                        },
-                        color = Color(0xFFC9D6E8),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = 12.dp)
-                    .width(1.dp)
-                    .height(14.dp)
-                    .background(if (status == SimpleConnectionStatus.CONNECTED) Color(0x2EFFFFFF) else Color.Transparent)
-            )
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(9.dp)
+                        .clip(CircleShape)
+                        .background(stateColor)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = when (status) {
+                        SimpleConnectionStatus.DISCONNECTED -> "آماده اتصال"
+                        SimpleConnectionStatus.CONNECTING -> "در حال برقراری اتصال..."
+                        SimpleConnectionStatus.CONNECTED -> "متصل"
+                    },
+                    color = Color(0xFFC9D6E8),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
                 if (status == SimpleConnectionStatus.CONNECTED) {
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = timerText,
+                        text = timerText.toPersianDigits(),
                         color = stateColor,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1008,7 +1011,7 @@ private fun ConnectionBar(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         if (licenseExpiresAtMillis == null) "در حال دریافت اطلاعات"
-                        else if (remainingDays > 0L) "$remainingDays روز باقی‌مانده"
+                        else if (remainingDays > 0L) "${remainingDays.toString().toPersianDigits()} روز باقی‌مانده"
                         else "منقضی‌شده",
                         color = if (remainingDays > 0L) TextPrimary else Color(0xFFFF9AA8),
                         fontSize = 15.sp,
@@ -1032,6 +1035,11 @@ private fun ConnectionBar(
             }
         }
     }
+}
+
+private fun String.toPersianDigits(): String {
+    val persianDigits = charArrayOf('۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹')
+    return map { char -> if (char in '0'..'9') persianDigits[char - '0'] else char }.joinToString("")
 }
 
 private enum class CardGlyphType { CLOCK, INFINITY }
@@ -1114,7 +1122,7 @@ private fun ChromePowerButton(
     )
     val density = LocalDensity.current
     val unitPx = with(density) { size.toPx() } / 224f
-    val floorExtra = 18.dp
+    val floorExtra = 10.dp
 
     Box(
         modifier = Modifier.size(width = size, height = size + floorExtra),
