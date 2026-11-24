@@ -1103,7 +1103,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         return when (status) {
             "device_limit" -> app.getString(R.string.simple_license_device_limit)
             "device_revoked" -> app.getString(R.string.simple_license_device_revoked)
-            else -> licenseRejectedMessage(result.status)
+            else -> app.getString(R.string.simple_license_invalid)
         }
     }
 
