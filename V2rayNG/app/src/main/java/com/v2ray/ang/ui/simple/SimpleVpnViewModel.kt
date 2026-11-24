@@ -1098,6 +1098,15 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
         _uiState.update { it.copy(licenseDialogVisible = false) }
     }
 
+    private fun licenseRejectedMessage(status: String): String {
+        val app = getApplication<Application>()
+        return when (status) {
+            "device_limit" -> app.getString(R.string.simple_license_device_limit)
+            "device_revoked" -> app.getString(R.string.simple_license_device_revoked)
+            else -> licenseRejectedMessage(result.status)
+        }
+    }
+
     fun activateLicense() {
         val app = getApplication<Application>()
         val key = _uiState.value.licenseKeyInput.trim()
@@ -1212,7 +1221,7 @@ class SimpleVpnViewModel(application: Application) : AndroidViewModel(applicatio
                         licenseValid = false,
                         canConnect = false,
                         licenseDialogVisible = showDialogOnFailure,
-                        message = getApplication<Application>().getString(R.string.simple_license_invalid),
+                        message = licenseRejectedMessage(result.status),
                     )
                 }
             }
