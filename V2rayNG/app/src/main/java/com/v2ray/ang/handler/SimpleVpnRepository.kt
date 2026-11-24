@@ -162,7 +162,7 @@ object SimpleVpnRepository {
 
     /**
      * Fresh primary feeds are exposed independently to their respective tabs.
-     * The emergency feed is hidden unless all primary feeds lack fresh usable data.
+     * Only the configured GitHub primary feeds are shown; there is no emergency source.
      */
     private fun visibleSourceIds(): List<String> {
         val freshPrimary = primarySources.filter(::sourceHasFreshConfigs)
@@ -176,9 +176,7 @@ object SimpleVpnRepository {
     }
 
     /**
-     * Returns only the profiles belonging to the requested primary tab.
-     * The emergency feed is shown in the V2Ray tab only when neither primary
-     * feed has fresh usable profiles.
+     * Returns only profiles belonging to the requested primary tab.
      */
     fun getServerGuidsForSource(sourceId: String): List<String> {
         val source = primarySources.firstOrNull { it.id == sourceId } ?: return emptyList()
@@ -380,8 +378,7 @@ object SimpleVpnRepository {
 
     /**
      * Refresh each primary independently. A bad/empty Aether response cannot
-     * erase healthy V2Ray profiles (and vice versa). Only when neither primary
-     * has fresh usable data is the optional emergency proxy attempted.
+     * erase healthy V2Ray profiles (and vice versa). No fallback source is used.
      */
     suspend fun refresh(context: Context): RefreshOutcome {
         var sawNetworkError = false
