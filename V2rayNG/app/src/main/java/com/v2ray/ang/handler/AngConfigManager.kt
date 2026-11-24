@@ -575,7 +575,7 @@ object AngConfigManager {
             val count = parseConfigViaSub(configText, it.guid, false)
             if (count > 0) {
                 if (it.guid.startsWith("personal_sub_")) {
-                    response.subscriptionUserInfo
+                    response?.subscriptionUserInfo
                         ?.takeIf { header -> header.isNotBlank() }
                         ?.let { header -> it.subscription.subscriptionUserInfo = header }
                 }
