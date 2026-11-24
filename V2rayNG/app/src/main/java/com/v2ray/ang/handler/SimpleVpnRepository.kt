@@ -11,9 +11,8 @@ import com.v2ray.ang.util.LogUtil
 /**
  * Coordinates independent remote feeds for the simplified PARSCLOUD client.
  *
- * Each source has its own subscription ID and cache. V2Ray and Aether are
- * presented in separate tabs; the emergency feed is shown in the V2Ray tab
- * only when neither primary feed has fresh usable data.
+ * Each GitHub source has its own subscription ID and cache. V2Ray and Aether
+ * are presented independently; customer-provided personal subscriptions remain separate.
  */
 object SimpleVpnRepository {
 
@@ -25,7 +24,6 @@ object SimpleVpnRepository {
     const val COMBINED_SUB_ID = "simple_combined"
     const val SERVICES_SUB_ID = "simple_services_iran"
     const val PERSONAL_SUB_ID = "simple_personal"
-    const val EMERGENCY_SUB_ID = "simple_emergency"
 
     private enum class SourceKind { V2RAY, AETHER, CUSTOM_JSON }
 
@@ -47,12 +45,6 @@ object SimpleVpnRepository {
             Source(COMBINED_SUB_ID, "PARSCLOUD • Combined", RemoteConfig.COMBINED_AETHER_SERVER_LIST_URL, SourceKind.AETHER),
             Source(SERVICES_SUB_ID, "PARSCLOUD • Services for Iran", RemoteConfig.SERVICES_FOR_IRAN_URL, SourceKind.CUSTOM_JSON),
         )
-
-    /** Empty until a private server-side proxy is configured for the secret panel URL. */
-    private val emergencySource: Source?
-        get() = RemoteConfig.EMERGENCY_FALLBACK_URL
-            .takeIf { it.isNotBlank() }
-            ?.let { Source(EMERGENCY_SUB_ID, "PARSCLOUD • Backup", it, SourceKind.V2RAY) }
 
     data class PersonalSubscriptionTab(val id: String, val name: String)
 
@@ -147,11 +139,9 @@ object SimpleVpnRepository {
     /** Initialize all central source identities without performing any network request. */
     fun ensureSubscriptions() {
         primarySources.forEach { ensureSubscription(it) }
-        emergencySource?.let(::ensureSubscription)
     }
 
-    private fun allConfiguredSources(): List<Source> =
-        primarySources + listOfNotNull(emergencySource)
+    private fun allConfiguredSources(): List<Source> = primarySources
 
     private fun isCacheExpired(sub: SubscriptionItem?): Boolean {
         if (sub == null || sub.lastUpdated <= 0L) return true
@@ -177,14 +167,7 @@ object SimpleVpnRepository {
     private fun visibleSourceIds(): List<String> {
         val freshPrimary = primarySources.filter(::sourceHasFreshConfigs)
         if (freshPrimary.isNotEmpty()) return freshPrimary.map { it.id }
-
-        emergencySource?.takeIf(::sourceHasFreshConfigs)?.let { return listOf(it.id) }
-
-        // Preserve stale cached entries for visibility and offline use. Freshness
-        // determines whether a refresh is due, not whether cached profiles can connect.
-        val cachedPrimary = primarySources.filter(::sourceHasCachedProfiles)
-        if (cachedPrimary.isNotEmpty()) return cachedPrimary.map { it.id }
-        return listOfNotNull(emergencySource?.takeIf(::sourceHasCachedProfiles)?.id)
+        return primarySources.filter(::sourceHasCachedProfiles).map { it.id }
     }
 
     fun getServerGuids(): List<String> {
@@ -205,12 +188,6 @@ object SimpleVpnRepository {
         val cached = sourceGuids(source).filter { MmkvManager.decodeServerConfig(it) != null }
         if (cached.isNotEmpty()) return cached.distinct()
 
-        // The emergency feed is a V2Ray-only fallback, shared by the two V2Ray subtabs.
-        if (source.kind == SourceKind.V2RAY && v2raySources.none(::sourceHasFreshConfigs)) {
-            return emergencySource?.let(::sourceGuids).orEmpty()
-                .filter { MmkvManager.decodeServerConfig(it) != null }
-                .distinct()
-        }
         return emptyList()
     }
 
@@ -303,17 +280,7 @@ object SimpleVpnRepository {
 
     fun canConnect(sourceId: String): Boolean {
         val source = primarySources.firstOrNull { it.id == sourceId } ?: return false
-
-        // Every profile tab owns its cache independently. Freshness only decides
-        // whether a manual refresh is due; it does not disable a cached profile.
-        if (sourceHasCachedProfiles(source)) return true
-
-        // Emergency fallback is exposed only inside V2Ray, when neither V2Ray
-        // subfeed has a fresh usable cache.
-        if (source.kind == SourceKind.V2RAY && v2raySources.none(::sourceHasFreshConfigs)) {
-            return emergencySource?.let(::sourceHasCachedProfiles) == true
-        }
-        return false
+        return sourceHasCachedProfiles(source)
     }
 
     private fun clearSourceCache(source: Source) {
@@ -388,9 +355,7 @@ object SimpleVpnRepository {
             }
             AngConfigManager.SimpleRefreshResult.EmptyResponse -> {
                 clearSourceCache(source)
-                if (primarySources.none(::sourceHasCachedProfiles) &&
-                    emergencySource?.let(::sourceHasCachedProfiles) != true
-                ) {
+                if (primarySources.none(::sourceHasCachedProfiles)) {
                     LauncherManager.stopService(context)
                 }
                 return RefreshOutcome.EmptiedByServer
@@ -446,26 +411,8 @@ object SimpleVpnRepository {
             .filter(::sourceHasFreshConfigs)
             .flatMap(::sourceGuids)
             .distinct()
-
         if (freshPrimaryGuids.isNotEmpty()) {
             return RefreshOutcome.Updated(freshPrimaryGuids.size, aetherFailure)
-        }
-
-        val fallback = emergencySource
-        if (fallback != null) {
-            when (refreshSource(fallback).result) {
-                is AngConfigManager.SimpleRefreshResult.Success -> Unit
-                AngConfigManager.SimpleRefreshResult.EmptyResponse -> {
-                    clearSourceCache(fallback)
-                    sawSuccessfulEmpty = true
-                }
-                AngConfigManager.SimpleRefreshResult.InvalidContent,
-                AngConfigManager.SimpleRefreshResult.NetworkError -> sawNetworkError = true
-            }
-            val fallbackGuids = sourceGuids(fallback)
-            if (fallbackGuids.isNotEmpty() && sourceHasFreshConfigs(fallback)) {
-                return RefreshOutcome.Updated(fallbackGuids.size)
-            }
         }
 
         val explicitAetherLicenseFailure = aetherFailure in setOf(
@@ -481,19 +428,7 @@ object SimpleVpnRepository {
             .flatMap(::sourceGuids)
             .distinct()
         if (cachedPrimaryGuids.isNotEmpty()) {
-            // Temporary network/HTTP/content errors do not invalidate a previously
-            // downloaded profile. A definitive Aether entitlement failure blocks
-            // only Aether, not the independent V2Ray source.
             return RefreshOutcome.Updated(cachedPrimaryGuids.size, aetherFailure)
-        }
-
-        val cachedFallbackGuids = if (primarySources.none(::sourceHasFreshConfigs)) {
-            fallback?.takeIf(::sourceHasCachedProfiles)?.let(::sourceGuids).orEmpty()
-        } else {
-            emptyList()
-        }
-        if (cachedFallbackGuids.isNotEmpty()) {
-            return RefreshOutcome.Updated(cachedFallbackGuids.size, aetherFailure)
         }
 
         if (sawNetworkError) {
@@ -501,13 +436,10 @@ object SimpleVpnRepository {
             return RefreshOutcome.CacheUnavailableAfterNetworkError(aetherFailure)
         }
 
-        // Empty/invalid feeds are cleared per-source. Do not disconnect if another
-        // source still has a usable cache.
-        if (sawSuccessfulEmpty || allConfiguredSources().none { sourceGuids(it).isNotEmpty() }) {
+        if (sawSuccessfulEmpty || primarySources.none { sourceGuids(it).isNotEmpty() }) {
             LauncherManager.stopService(context)
             return RefreshOutcome.EmptiedByServer
         }
-
         return RefreshOutcome.CacheUnavailableAfterNetworkError()
     }
 }
