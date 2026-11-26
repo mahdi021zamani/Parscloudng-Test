@@ -23,11 +23,14 @@ object RemoteConfig {
     /** Full custom Xray JSON profiles for Services for Iran. */
     const val SERVICES_FOR_IRAN_URL = "https://raw.githubusercontent.com/mahdi021zamani/parscloud-sub/main/Services%20for%20Iran"
 
+    /** Worker base URL is compile-time configurable for isolated test builds; production is the default. */
+    private val SUBSCRIPTION_WORKER_BASE_URL = BuildConfig.SUBSCRIPTION_WORKER_BASE_URL.trimEnd('/')
+
     /** One-time challenge endpoint for a Keystore-backed installation identity. */
-    const val SUBSCRIPTION_DEVICE_CHALLENGE_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/device-challenge"
+    val SUBSCRIPTION_DEVICE_CHALLENGE_URL = "$SUBSCRIPTION_WORKER_BASE_URL/v1/device-challenge"
 
     /** HTTPS endpoint used to verify each customer subscription key and device proof. */
-    const val SUBSCRIPTION_VALIDATE_URL = "https://parscloud-subscription-server.mahdi021zamani.workers.dev/v1/validate"
+    val SUBSCRIPTION_VALIDATE_URL = "$SUBSCRIPTION_WORKER_BASE_URL/v1/validate"
 
     /** How long a successfully downloaded source remains connectable. */
     const val REMOTE_DATA_EXPIRY_MINUTES = 30
