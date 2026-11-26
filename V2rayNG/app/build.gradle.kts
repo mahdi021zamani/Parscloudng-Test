@@ -16,6 +16,15 @@ android {
         versionCode = 747
         versionName = (project.findProperty("pattngVersion") as? String)?.takeIf { it.isNotBlank() } ?: "2.3.6"
 
+        // Optional isolated Worker endpoint for test APKs. Production remains the default.
+        val requestedWorkerBase = (project.findProperty("parscloudWorkerBaseUrl") as? String)
+            ?.trim()
+            ?.trimEnd('/')
+        val workerBaseUrl = requestedWorkerBase
+            ?.takeIf { it.matches(Regex("^https://[A-Za-z0-9.-]+(?::[0-9]+)?$")) }
+            ?: "https://parscloud-subscription-server.mahdi021zamani.workers.dev"
+        buildConfigField("String", "SUBSCRIPTION_WORKER_BASE_URL", "\\"$workerBaseUrl\\"")
+
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
         splits {
             abi {
