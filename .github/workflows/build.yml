@@ -13,6 +13,11 @@ on:
         required: false
         default: V26.11.24-device-limits-test
         type: string
+      test_worker_url:
+        description: Isolated test Worker HTTPS base URL (leave blank to disable registration)
+        required: false
+        default: ""
+        type: string
   push:
     branches:
       - "work/parscloud-preservation-and-hardening"
@@ -183,8 +188,13 @@ jobs:
           cd V2rayNG
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod 755 gradlew
+          GRADLE_ARGS=()
+          if [[ -n "${{ inputs.test_worker_url }}" ]]; then
+            GRADLE_ARGS+=("-PparscloudWorkerBaseUrl=${{ inputs.test_worker_url }}")
+          fi
           ./gradlew testFdroidDebugUnitTest testPlaystoreDebugUnitTest :app:compilePlaystoreDebugKotlin licenseFdroidReleaseReport assembleFdroidRelease \
             -PpattngVersion="${{ inputs.release_tag || 'V26.11.24-device-limits-test' }}" \
+            "${GRADLE_ARGS[@]}" \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/android_keystore.jks" \
             -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="parscloud-test" \
