@@ -21,7 +21,7 @@ android {
             ?.trim()
             ?.trimEnd('/')
         val workerBaseUrl = if (requestedWorkerBase == null) {
-            "https://parscloud-subscription-server.mahdi021zamani.workers.dev"
+            "https://device-limits-worker-not-configured.invalid"
         } else {
             require(requestedWorkerBase.matches(Regex("^https://[A-Za-z0-9.-]+(?::[0-9]+)?$"))) {
                 "Invalid parscloudWorkerBaseUrl: use an HTTPS hostname only, without paths"
