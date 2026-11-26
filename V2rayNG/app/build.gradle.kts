@@ -20,9 +20,14 @@ android {
         val requestedWorkerBase = (project.findProperty("parscloudWorkerBaseUrl") as? String)
             ?.trim()
             ?.trimEnd('/')
-        val workerBaseUrl = requestedWorkerBase
-            ?.takeIf { it.matches(Regex("^https://[A-Za-z0-9.-]+(?::[0-9]+)?$")) }
-            ?: "https://parscloud-subscription-server.mahdi021zamani.workers.dev"
+        val workerBaseUrl = if (requestedWorkerBase == null) {
+            "https://parscloud-subscription-server.mahdi021zamani.workers.dev"
+        } else {
+            require(requestedWorkerBase.matches(Regex("^https://[A-Za-z0-9.-]+(?::[0-9]+)?$"))) {
+                "Invalid parscloudWorkerBaseUrl: use an HTTPS hostname only, without paths"
+            }
+            requestedWorkerBase
+        }
         buildConfigField("String", "SUBSCRIPTION_WORKER_BASE_URL", "\\"$workerBaseUrl\\"")
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
