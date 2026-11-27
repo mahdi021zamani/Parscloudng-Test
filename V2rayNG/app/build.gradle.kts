@@ -28,7 +28,7 @@ android {
             }
             requestedWorkerBase
         }
-        buildConfigField("String", "SUBSCRIPTION_WORKER_BASE_URL", "\\"$workerBaseUrl\\"")
+        buildConfigField("String", "SUBSCRIPTION_WORKER_BASE_URL", "\"$workerBaseUrl\"")
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
         splits {
